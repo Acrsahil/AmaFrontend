@@ -12,15 +12,16 @@ import { getCurrentUser } from "@/auth/auth";
 import { useOrdersWebSocket } from "@/hooks/useOrdersWebSocket";
 import { formatDistanceToNow } from "date-fns";
 
-type Tab = "mine" | "all";
+type MainTab = "mine" | "all";
+type SubTab = "pending" | "completed";
 
 export default function OrderStatus() {
   const navigate = useNavigate();
   const [allOrders, setAllOrders] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<Tab>("mine");
-  const [statusTab, setStatusTab] = useState<"ready" | "completed">("ready");
+  const [activeTab, setActiveTab] = useState<MainTab>("mine");
+  const [activeSubTab, setActiveSubTab] = useState<SubTab>("pending");
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const currentUser = getCurrentUser();
@@ -49,25 +50,13 @@ export default function OrderStatus() {
     loadData();
   }, [loadData]);
 
-  // Play notification sound
-  const playNotificationSound = useCallback(() => {
-    try {
-      const audio = new Audio("/noti.mp3");
-      audio.play().catch(() => {
-        // Autoplay may be blocked by browser until user interaction
-      });
-    } catch {
-      // Ignore audio errors
-    }
-  }, []);
 
   // WebSocket: auto-refresh when invoice created or status updated (e.g. kitchen marks ready)
   useOrdersWebSocket(
     useCallback(
       (data) => {
         if (data.type === "invoice_updated" && data.status === "READY") {
-          // Order is ready - play notification sound
-          playNotificationSound();
+          // Order is ready
           toast.success("A kitchen order is ready for pickup!", {
             icon: <ChefHat className="h-5 w-5 text-success" />
           });
@@ -76,35 +65,42 @@ export default function OrderStatus() {
           loadData();
         }
       },
-      [loadData, playNotificationSound]
+      [loadData]
     )
   );
 
-  // "Your Orders" — only this waiter's orders
-  const myOrders = allOrders.filter(
-    (o) => String(o.created_by) === String(currentUser?.id)
-  );
+  // Filtering logic
+  const displayOrders = allOrders.filter((o) => {
+    const isMine = String(o.created_by) === String(currentUser?.id);
+    const isCompleted = o?.invoice_status === "COMPLETED" || o?.invoice_status === "CANCELLED";
+    const isPending = !isCompleted;
 
-  // Orders to display based on tab
-  const displayOrders = activeTab === "mine" ? myOrders : allOrders;
+    const matchesMain = activeTab === "mine" ? isMine : true;
+    const matchesSub = activeSubTab === "pending" ? isPending : isCompleted;
 
-  const readyOrders = displayOrders.filter(
-    (o) => o?.invoice_status === "READY"
-  );
-  const doneOrders = displayOrders.filter(
-    (o) => o?.invoice_status === "COMPLETED" || o?.invoice_status === "CANCELLED"
-  );
+    return matchesMain && matchesSub;
+  });
 
-  // Deduplicate notifications per order ID (keep most recent) and filter by current order status
+  const readyOrders = displayOrders.filter(o => o?.invoice_status === "READY");
+  const otherActiveOrders = displayOrders.filter(o => o?.invoice_status !== "READY" && o?.invoice_status !== "COMPLETED" && o?.invoice_status !== "CANCELLED");
+  const doneOrders = displayOrders.filter(o => o?.invoice_status === "COMPLETED" || o?.invoice_status === "CANCELLED");
+  const isCompletedTab = activeSubTab === "completed";
+  const isOrderTab = activeSubTab === "pending";
+  const isAllTab = activeTab === "all";
+
+  // Deduplicate notifications per order ID and filter by tab/status
   const filteredDeduplicatedNotifications = notifications.reduce((acc: any[], current: any) => {
     const order = allOrders.find(o => String(o.id) === String(current.invoice));
 
     // Only keep if the order exists and is currently READY
     if (!order || order.invoice_status !== "READY") return acc;
 
+    // Filter by waiter if in "my" tab
+    const isMine = String(order.created_by) === String(currentUser?.id);
+    if (activeTab === "mine" && !isMine) return acc;
+
     const existingIdx = acc.findIndex(n => String(n.invoice) === String(current.invoice));
     if (existingIdx > -1) {
-      // Keep the one with higher ID (more recent)
       if (current.id > acc[existingIdx].id) {
         acc[existingIdx] = current;
       }
@@ -130,7 +126,7 @@ export default function OrderStatus() {
       <MobileHeader title="Orders" showBack={false} />
 
       <main className="p-4 space-y-4">
-        {/* Tabs */}
+        {/* Main Tabs */}
         <div className="flex gap-1 p-1 bg-muted rounded-xl">
           <button
             onClick={() => setActiveTab("mine")}
@@ -142,15 +138,7 @@ export default function OrderStatus() {
             )}
           >
             <User className="h-4 w-4" />
-            Your Orders
-            {myOrders.length > 0 && (
-              <span className={cn(
-                "text-[10px] font-black px-1.5 py-0.5 rounded-full min-w-[18px] text-center",
-                activeTab === "mine" ? "bg-primary text-white" : "bg-muted-foreground/20 text-muted-foreground"
-              )}>
-                {myOrders.length}
-              </span>
-            )}
+            My Order
           </button>
           <button
             onClick={() => setActiveTab("all")}
@@ -162,16 +150,34 @@ export default function OrderStatus() {
             )}
           >
             <Users className="h-4 w-4" />
-            All Orders
-            {allOrders.length > 0 && (
-              <span className={cn(
-                "text-[10px] font-black px-1.5 py-0.5 rounded-full min-w-[18px] text-center",
-                activeTab === "all" ? "bg-primary text-white" : "bg-muted-foreground/20 text-muted-foreground"
-              )}>
-                {allOrders.length}
-              </span>
-            )}
+            All Order
           </button>
+        </div>
+
+        {/* Sub Tabs */}
+        <div className="flex gap-2 mb-2 overflow-x-auto pb-2 hide-scrollbar -mx-1 px-1">
+          <Button
+            onClick={() => setActiveSubTab("pending")}
+            variant={activeSubTab === "pending" ? "default" : "outline"}
+            size="sm"
+            className={cn(
+              "rounded-xl font-bold whitespace-nowrap px-4",
+              activeSubTab === "pending" ? "bg-success hover:bg-success/90 text-white" : "bg-white text-slate-600"
+            )}
+          >
+            Pending {allOrders.filter(o => (activeTab === "mine" ? String(o.created_by) === String(currentUser?.id) : true) && o.invoice_status !== "COMPLETED" && o.invoice_status !== "CANCELLED").length > 0 && `(${allOrders.filter(o => (activeTab === "mine" ? String(o.created_by) === String(currentUser?.id) : true) && o.invoice_status !== "COMPLETED" && o.invoice_status !== "CANCELLED").length})`}
+          </Button>
+          <Button
+            onClick={() => setActiveSubTab("completed")}
+            variant={activeSubTab === "completed" ? "default" : "outline"}
+            size="sm"
+            className={cn(
+              "rounded-xl font-bold whitespace-nowrap px-4",
+              activeSubTab === "completed" ? "bg-slate-800 hover:bg-slate-900 text-white" : "bg-white text-slate-600"
+            )}
+          >
+            Completed {allOrders.filter(o => (activeTab === "mine" ? String(o.created_by) === String(currentUser?.id) : true) && (o.invoice_status === "COMPLETED" || o.invoice_status === "CANCELLED")).length > 0 && `(${allOrders.filter(o => (activeTab === "mine" ? String(o.created_by) === String(currentUser?.id) : true) && (o.invoice_status === "COMPLETED" || o.invoice_status === "CANCELLED")).length})`}
+          </Button>
         </div>
 
         {loading ? (
@@ -181,39 +187,13 @@ export default function OrderStatus() {
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Status Tabs */}
-            <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar -mx-1 px-1">
-              <button
-                onClick={() => setStatusTab("ready")}
-                className={cn(
-                  "px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all border shadow-sm",
-                  statusTab === "ready"
-                    ? "bg-success text-white border-success"
-                    : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
-                )}
-              >
-                Ready to Pickup {readyOrders.length > 0 && `(${readyOrders.length})`}
-              </button>
-              <button
-                onClick={() => setStatusTab("completed")}
-                className={cn(
-                  "px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all border shadow-sm",
-                  statusTab === "completed"
-                    ? "bg-slate-800 text-white border-slate-800"
-                    : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
-                )}
-              >
-                Completed {doneOrders.length > 0 && `(${doneOrders.length})`}
-              </button>
-            </div>
 
-            {/* Ready Section */}
-            {statusTab === "ready" && (
-              <>
-                {/* Ready Orders via Notifications */}
-                {(filteredDeduplicatedNotifications.length > 0 || readyOrders.filter(o => !filteredDeduplicatedNotifications.some(n => String(n.invoice) === String(o.id))).length > 0) && (
+            {/* Active Orders Section */}
+            {isOrderTab && (
+              <div className="space-y-4">
+                {/* 1. Ready Orders via Notifications (Grouped by Floor) */}
+                {filteredDeduplicatedNotifications.length > 0 && (
                   <div className="space-y-4">
-                    {/* Group notifications by floor */}
                     {Object.entries(notificationsByFloor).map(([floorName, floorNotifications]: [string, any[]]) => (
                       <section key={floorName}>
                         <h2 className="text-xs font-bold mb-2 text-success uppercase tracking-widest flex items-center gap-1.5">
@@ -231,80 +211,53 @@ export default function OrderStatus() {
                                 key={`notif-${notif.id}`}
                                 order={order}
                                 notification={notif}
-                                showWaiter={activeTab === "all"}
+                                showWaiter={isAllTab}
                                 activeTab={activeTab}
                                 products={products}
                                 categories={categories}
-                                onDismiss={async () => {
-                                  try {
-                                    // 1. Mark the invoice as COMPLETED (this auto-sets received_by_waiter on the backend)
-                                    await updateInvoiceStatus(order.id, "COMPLETED");
-
-                                    // 2. Mark ALL notifications for this order as read/received
-                                    const orderNotifs = notifications.filter(n => String(n.invoice) === String(order.id));
-                                    await Promise.all(orderNotifs.map(n => markNotificationRead(n.id, true)));
-
-                                    toast.success("Order marked as picked up!");
-                                    loadData();
-                                  } catch (err: any) {
-                                    toast.error(err.message || "Failed to mark as picked up");
-                                  }
-                                }}
                               />
                             );
                           })}
                         </div>
                       </section>
                     ))}
-
-                    {/* Fallback for Ready Orders without a specific notification */}
-                    {readyOrders
-                      .filter(o => !notifications.some(n => String(n.invoice) === String(o.id)))
-                      .length > 0 && (
-                        <section>
-                          <h2 className="text-xs font-bold mb-2 text-success/70 uppercase tracking-widest flex items-center gap-1.5">
-                            <span className="h-4 w-4 rounded-full bg-success/70 inline-flex items-center justify-center text-white text-[9px] font-black">
-                              {readyOrders.filter(o => !filteredDeduplicatedNotifications.some(n => String(n.invoice) === String(o.id))).length}
-                            </span>
-                            Other Ready Orders
-                          </h2>
-                          <div className="space-y-3">
-                            {readyOrders
-                              .filter(o => !filteredDeduplicatedNotifications.some(n => String(n.invoice) === String(o.id)))
-                              .map((order) => (
-                                <OrderCard
-                                  key={`order-${order.id}`}
-                                  order={order}
-                                  showWaiter={activeTab === "all"}
-                                  activeTab={activeTab}
-                                  products={products}
-                                  categories={categories}
-                                  onDismiss={async () => {
-                                    try {
-                                      await updateInvoiceStatus(order.id, "COMPLETED");
-                                      toast.success("Order marked as picked up!");
-                                      loadData();
-                                    } catch (err: any) {
-                                      toast.error(err.message || "Failed to mark as picked up");
-                                    }
-                                  }}
-                                />
-                              ))}
-                          </div>
-                        </section>
-                      )}
                   </div>
                 )}
 
-                {filteredDeduplicatedNotifications.length === 0 && readyOrders.filter(o => !filteredDeduplicatedNotifications.some(n => String(n.invoice) === String(o.id))).length === 0 && (
-                  <div className="py-8 text-center text-muted-foreground text-sm">No orders ready for pickup</div>
+                {/* 2. All Other Active Orders (Pending, Processing, or Ready without notification) */}
+                {(otherActiveOrders.length > 0 || readyOrders.filter(o => !filteredDeduplicatedNotifications.some(n => String(n.invoice) === String(o.id))).length > 0) && (
+                  <section>
+                    <h2 className="text-xs font-bold mb-2 text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                      <span className="h-4 w-4 rounded-full bg-slate-400 inline-flex items-center justify-center text-white text-[9px] font-black">
+                        {otherActiveOrders.length + readyOrders.filter(o => !filteredDeduplicatedNotifications.some(n => String(n.invoice) === String(o.id))).length}
+                      </span>
+                      Active Orders
+                    </h2>
+                    <div className="space-y-3">
+                      {[...otherActiveOrders, ...readyOrders.filter(o => !filteredDeduplicatedNotifications.some(n => String(n.invoice) === String(o.id)))].map((order) => (
+                        <OrderCard
+                          key={`order-${order.id}`}
+                          order={order}
+                          showWaiter={isAllTab}
+                          activeTab={activeTab}
+                          products={products}
+                          categories={categories}
+                        />
+                      ))}
+                    </div>
+                  </section>
                 )}
-              </>
+
+                {/* 3. Empty State for Order Tabs */}
+                {filteredDeduplicatedNotifications.length === 0 && otherActiveOrders.length === 0 && readyOrders.filter(o => !filteredDeduplicatedNotifications.some(n => String(n.invoice) === String(o.id))).length === 0 && (
+                  <div className="py-8 text-center text-muted-foreground text-sm">No active orders to show</div>
+                )}
+              </div>
             )}
 
 
             {/* Completed / Paid Orders */}
-            {statusTab === "completed" && (
+            {isCompletedTab && (
               <>
                 {doneOrders.length > 0 ? (
                   <section>
@@ -316,7 +269,7 @@ export default function OrderStatus() {
                         <OrderCard
                           key={order.id}
                           order={order}
-                          showWaiter={activeTab === "all"}
+                          showWaiter={isAllTab}
                           activeTab={activeTab}
                           products={products}
                           categories={categories}
@@ -372,7 +325,6 @@ function OrderCard({
   activeTab,
   products = [],
   categories = [],
-  onDismiss,
   onUndo,
 }: {
   order: any;
@@ -381,14 +333,13 @@ function OrderCard({
   activeTab?: string;
   products?: any[];
   categories?: any[];
-  onDismiss?: () => void;
   onUndo?: () => void;
 }) {
   const currentUser = getCurrentUser();
   const isReady = order.invoice_status === "READY";
   const isCompleted = order.invoice_status === "COMPLETED";
   const isPaid = order.payment_status === "PAID" || order.payment_status === "WAITER RECEIVED" || isCompleted;
-  const [showItems, setShowItems] = useState(false);
+  const [showItems, setShowItems] = useState(true);
 
   // Check if current user is the one who picked it up
   const isMyPickUp = String(order.received_by_waiter) === String(currentUser?.id);
@@ -551,17 +502,6 @@ function OrderCard({
           </span>
         </div>
 
-        {/* Action Button */}
-        {isReady && onDismiss && (
-          <div className="pt-3 pb-1">
-            <Button
-              onClick={onDismiss}
-              className="w-full bg-success/10 hover:bg-success text-success hover:text-white font-bold h-10 rounded-xl transition-all"
-            >
-              Mark Picked Up
-            </Button>
-          </div>
-        )}
 
         {isCompleted && onUndo && isMyPickUp && (
           <div className="pt-3 pb-1">

@@ -48,6 +48,7 @@ export default function CounterOrders() {
     const [orders, setOrders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
+    const [statusFilter, setStatusFilter] = useState<"ALL" | "PAID" | "UNPAID" | "PARTIAL" | "PENDING">("ALL");
 
     // Payment States
     const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -208,6 +209,151 @@ export default function CounterOrders() {
         }
     };
 
+    const handlePrint = () => {
+        if (!selectedOrder) return;
+        const subtotal = parseFloat(selectedOrder.total_amount) - parseFloat(selectedOrder.tax_amount || 0) + parseFloat(selectedOrder.discount || 0);
+        const taxAmount = parseFloat(selectedOrder.tax_amount || 0);
+        const discountAmount = parseFloat(selectedOrder.discount || 0);
+        const total = parseFloat(selectedOrder.total_amount);
+
+        const itemRows = selectedOrder.items?.map((item: any, index: number) => {
+            const productName = item.product_name || productsMap[String(item.product)]?.name || `Product #${item.product}`;
+            return `
+            <div class="receipt-item-grid">
+                <div>${index + 1}</div>
+                <div>
+                    ${productName}
+                    ${item.description ? `<div style="font-size: 8pt; text-transform: none; margin-top: 1mm;">"${item.description}"</div>` : ""}
+                </div>
+                <div>${item.quantity}</div>
+                <div style="text-align: right;">${(parseFloat(item.unit_price) * item.quantity).toFixed(2)}</div>
+            </div>
+        `}).join("") || "";
+
+        const taxRow = taxAmount > 0 ? `
+            <div class="thermal-row">
+                <span>TAX</span>
+                <span>${taxAmount.toFixed(2)}</span>
+            </div>` : "";
+
+        const discountRow = discountAmount > 0 ? `
+            <div class="thermal-row" style="color: #dc2626 !important;">
+                <span>DISCOUNT</span>
+                <span>-${discountAmount.toFixed(2)}</span>
+            </div>` : "";
+
+        const html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8"/>
+    <title>Receipt - Ama Bakery</title>
+    <link href="https://fonts.googleapis.com/css2?family=Libre+Barcode+39&display=swap" rel="stylesheet">
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; color: black !important; background: white !important; font-family: 'Courier New', Courier, monospace !important; }
+        body { width: 80mm; padding: 4mm; }
+        .thermal-header { text-align: center; margin-bottom: 4mm; }
+        .thermal-title { font-size: 16pt; font-weight: bold; margin-bottom: 1mm; letter-spacing: 1px; text-transform: uppercase; }
+        .thermal-subtitle { font-size: 9pt; margin-bottom: 2mm; text-align: center; }
+        .thermal-info-grid { display: grid; grid-template-columns: 1fr 1fr; font-size: 9pt; margin-bottom: 4mm; line-height: 1.4; gap: 2mm; }
+        .thermal-info-left { text-align: left; }
+        .thermal-info-right { text-align: right; }
+        .thermal-row { display: flex; justify-content: space-between; margin-bottom: 1mm; font-size: 10pt; }
+        .thermal-divider { border-top: 1px dashed black; margin: 3mm 0; }
+        .thermal-total-row { font-size: 14pt; font-weight: bold; display: flex; justify-content: space-between; margin-top: 2mm; border-top: 1px dashed black; padding-top: 2mm; }
+        .receipt-item-grid { display: grid; grid-template-columns: 6mm 1fr 10mm 18mm; gap: 1mm; font-size: 9pt; margin-bottom: 1mm; text-transform: uppercase; }
+        .thermal-footer { text-align: center; margin-top: 6mm; font-size: 9pt; font-weight: bold; text-transform: uppercase; }
+        .thermal-barcode { text-align: center; margin-top: 4mm; font-family: 'Libre Barcode 39', monospace !important; font-size: 30pt; }
+        .thermal-branding { text-align: center; font-size: 7pt; color: #aaa !important; margin-top: 2mm; }
+        
+        @media print {
+            @page { size: 80mm auto; margin: 0; }
+            body { width: 80mm; padding: 4mm; }
+        }
+    </style>
+</head>
+<body>
+    <div class="thermal-header">
+        <div class="thermal-title">AMA BAKERY</div>
+        <div class="thermal-subtitle">Tel: 9816020731</div>
+    </div>
+    
+    <div class="thermal-divider"></div>
+
+    <div class="thermal-info-grid">
+        <div class="thermal-info-left">
+            <div>INV: #${selectedOrder.invoice_number}</div>
+            <div>DATE: ${selectedOrder.created_at ? format(parseISO(selectedOrder.created_at), 'dd/MM/yyyy HH:mm') : new Date().toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+        </div>
+        <div class="thermal-info-right">
+            <div>CSHR: ${currentUser?.name || "Counter"}</div>
+            <div>CUST: ${selectedOrder.customer_name || "Walk-in"}</div>
+        </div>
+    </div>
+
+    <div class="thermal-divider"></div>
+    
+    <div class="receipt-item-grid" style="font-weight: bold;">
+        <div>SN</div>
+        <div>ITEM</div>
+        <div>QTY</div>
+        <div style="text-align: right;">TOTAL</div>
+    </div>
+    
+    ${itemRows}
+
+    <div class="thermal-divider"></div>
+
+    <div style="font-size: 10pt; line-height: 1.5;">
+        <div class="thermal-row">
+            <span>SUBTOTAL</span>
+            <span>${subtotal.toFixed(2)}</span>
+        </div>
+        ${taxRow}
+        ${discountRow}
+        <div class="thermal-divider"></div>
+        <div class="thermal-total-row">
+            <span>TOTAL</span>
+            <span>${total.toFixed(2)}</span>
+        </div>
+        <div class="thermal-divider"></div>
+        <div class="thermal-row">
+            <span>STATUS</span>
+            <span>${selectedOrder.payment_status}</span>
+        </div>
+        <div class="thermal-divider"></div>
+        
+        <div class="thermal-row" style="font-size: 9pt; opacity: 0.8;">
+            <span>PAID AMOUNT</span>
+            <span>${parseFloat(selectedOrder.paid_amount || 0).toFixed(2)}</span>
+        </div>
+        ${parseFloat(selectedOrder.due_amount) > 0 ? `
+        <div class="thermal-row" style="font-size: 9pt; font-weight: bold;">
+            <span>BALANCE DUE</span>
+            <span>${parseFloat(selectedOrder.due_amount).toFixed(2)}</span>
+        </div>` : ""}
+    </div>
+
+    <div class="thermal-footer">
+        THANK YOU FOR YOUR VISIT!
+    </div>
+    <div class="thermal-barcode">
+        *AMA-POS-BILL*
+    </div>
+    <div class="thermal-branding">
+        POS-BY: nishchalacharya.com.np
+    </div>
+
+    <script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};</script>
+</body>
+</html>`;
+
+        const win = window.open('', '_blank', 'width=400,height=700');
+        if (win) {
+            win.document.write(html);
+            win.document.close();
+        }
+    };
+
     const getDisplayStatus = (order: any) => {
         if ((order.payment_status === 'PAID' || order.payment_status === 'WAITER RECEIVED') && order.received_by_waiter && !order.received_by_counter) {
             return 'waiter-paid'; // maps to 'Waiter Received' label in StatusBadge
@@ -217,15 +363,31 @@ export default function CounterOrders() {
 
     const filteredOrders = useMemo(() => {
         if (!Array.isArray(orders)) return [];
-        return orders.filter(order =>
-            (order.invoice_number?.toLowerCase() || "").includes(searchQuery.toLowerCase()) ||
-            (order.customer_name?.toLowerCase() || "").includes(searchQuery.toLowerCase())
-        ).sort((a, b) => {
+        let result = orders;
+
+        // 1. Status Filter
+        if (statusFilter !== "ALL") {
+            result = result.filter(order => order.payment_status === statusFilter);
+        }
+
+        // 2. Search Query
+        if (searchQuery.trim()) {
+            const query = searchQuery.toLowerCase();
+            result = result.filter(order =>
+                (order.invoice_number?.toLowerCase() || "").includes(query) ||
+                (order.customer_name?.toLowerCase() || "").includes(query) ||
+                (String(order.table_no || "")).includes(query) ||
+                (order.invoice_description?.toLowerCase() || "").includes(query)
+            );
+        }
+
+        // 3. Sort (newest first)
+        return result.sort((a, b) => {
             const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
             const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
             return dateB - dateA;
         });
-    }, [orders, searchQuery]);
+    }, [orders, searchQuery, statusFilter]);
 
     return (
         <div className="h-screen bg-stone-50 flex flex-col overflow-hidden font-sans">
@@ -298,16 +460,41 @@ export default function CounterOrders() {
                 <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                     <Input
-                        placeholder="Search by Order ID or Table Number..."
+                        placeholder="Search ID, Table, Customer or Mode..."
                         className="pl-10 h-10 rounded-lg border-slate-200 bg-white shadow-sm focus-visible:ring-1"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                     />
                 </div>
-                <Button variant="outline" className="h-10 px-4 rounded-lg font-medium border-slate-200 hover:bg-slate-50 gap-2 shadow-sm">
-                    <Filter className="h-4 w-4" />
-                    Filters
-                </Button>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="outline" className={cn(
+                            "h-10 px-4 rounded-lg font-medium border-slate-200 hover:bg-slate-50 gap-2 shadow-sm",
+                            statusFilter !== "ALL" && "border-primary text-primary bg-primary/5"
+                        )}>
+                            <Filter className="h-4 w-4" />
+                            {statusFilter === "ALL" ? "Filters" : statusFilter.charAt(0) + statusFilter.slice(1).toLowerCase()}
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48 rounded-xl p-2 font-bold z-[100]">
+                        <DropdownMenuItem className="h-10 rounded-lg" onClick={() => setStatusFilter("ALL")}>
+                            All Orders
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="h-10 rounded-lg text-emerald-600" onClick={() => setStatusFilter("PAID")}>
+                            Paid
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="h-10 rounded-lg text-blue-600" onClick={() => setStatusFilter("PENDING")}>
+                            Pending
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="h-10 rounded-lg text-amber-600" onClick={() => setStatusFilter("PARTIAL")}>
+                            Partial
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="h-10 rounded-lg text-red-600" onClick={() => setStatusFilter("UNPAID")}>
+                            Unpaid
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </div>
 
             {/* Orders Table */}
@@ -700,88 +887,124 @@ export default function CounterOrders() {
                 </DialogContent>
             </Dialog>
 
-            {/* Receipt Dialog */}
+            {/* Receipt View logic updated for professional thermal look */}
             <Dialog open={showReceipt} onOpenChange={setShowReceipt}>
-                <DialogContent className="max-w-[400px] p-0 bg-transparent border-none shadow-none no-print-close">
-                    <div className="bg-white p-8 rounded-[2.5rem] shadow-3xl text-center space-y-6 relative overflow-hidden printable-receipt">
-                        <div className="absolute top-0 left-0 w-full h-2 bg-primary" />
-                        <div className="space-y-4 pt-4">
-                            <div className="h-20 w-20 mx-auto rounded-2xl border border-slate-100 p-1 flex items-center justify-center overflow-hidden">
-                                <img src="/logos/logo1white.jfif" className="h-full w-full object-cover" />
-                            </div>
-                            <div className="space-y-1">
-                                <h1 className="text-2xl font-black tracking-tight text-primary">AMA BAKERY</h1>
-                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Fresh & Daily Bakery</p>
-                            </div>
+                <DialogContent className="max-w-[400px] w-[95vw] p-0 border-none bg-transparent shadow-none overflow-visible max-h-[95vh] flex flex-col">
+                    <DialogTitle className="sr-only">Digital Receipt</DialogTitle>
+                    <div className="flex justify-end mb-2 no-print">
+                        <button
+                            onClick={() => setShowReceipt(false)}
+                            className="h-10 w-10 flex items-center justify-center rounded-full bg-slate-900/80 text-white backdrop-blur-sm shadow-xl z-50 transition-all active:scale-95"
+                        >
+                            <X className="h-6 w-6" />
+                        </button>
+                    </div>
+
+                    <div className="bg-white rounded-2xl overflow-y-auto shadow-2xl relative custom-scrollbar flex flex-col">
+                        <div className="no-print p-4 bg-slate-50 border-b flex justify-between items-center">
+                            <span className="text-xs font-bold text-slate-500 uppercase">Receipt Preview</span>
+                            <Button size="sm" onClick={() => handlePrint()} className="h-8 text-xs font-bold px-4">
+                                <Printer className="h-3.5 w-3.5 mr-1.5" />
+                                Print
+                            </Button>
                         </div>
-
-                        <Separator />
-
-                        <div className="space-y-2 text-left font-mono text-xs">
-                            <div className="flex justify-between">
-                                <span>Receipt:</span>
-                                <span>#{selectedOrder?.invoice_number}</span>
+                        <div className="thermal-receipt printable-receipt" id="bill-print-root">
+                            <div className="thermal-header">
+                                <h1 className="thermal-title">AMA BAKERY</h1>
+                                <div className="thermal-subtitle">Tel: 9816020731</div>
                             </div>
-                            <div className="flex justify-between">
-                                <span>Date:</span>
-                                <span>{selectedOrder?.created_at ? format(parseISO(selectedOrder.created_at), 'yyyy-MM-dd HH:mm') : new Date().toLocaleString()}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span>Customer:</span>
-                                <span className="truncate ml-4">{selectedOrder?.customer_name || "Walk-in"}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span>Operator:</span>
-                                <span>{currentUser?.name}</span>
-                            </div>
-                        </div>
 
-                        <Separator className="border-dashed" />
+                            <div className="thermal-divider"></div>
 
-                        <div className="space-y-2">
+                            <div className="thermal-info-grid">
+                                <div className="thermal-info-left">
+                                    <div>INV: #{selectedOrder?.invoice_number}</div>
+                                    <div>DATE: {selectedOrder?.created_at ? format(parseISO(selectedOrder.created_at), 'dd/MM/yyyy HH:mm') : new Date().toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                                </div>
+                                <div className="thermal-info-right">
+                                    <div>CSHR: {currentUser?.name || "Counter"}</div>
+                                    <div>CUST: {selectedOrder?.customer_name || "Walk-in"}</div>
+                                </div>
+                            </div>
+
+                            <div className="thermal-divider"></div>
+
+                            <div className="receipt-item-grid" style={{ fontWeight: 'bold' }}>
+                                <div>SN</div>
+                                <div>ITEM</div>
+                                <div>QTY</div>
+                                <div style={{ textAlign: 'right' }}>TOTAL</div>
+                            </div>
+
+                            <div className="thermal-divider"></div>
+
                             {selectedOrder?.items?.map((item: any, idx: number) => {
                                 const productName = item.product_name || productsMap[String(item.product)]?.name || `Product #${item.product}`;
                                 return (
-                                    <div key={idx} className="flex justify-between text-sm">
-                                        <span className="text-left flex-1 font-medium">{productName} x {item.quantity}</span>
-                                        <span className="font-bold">Rs.{(parseFloat(item.unit_price) * item.quantity).toFixed(2)}</span>
+                                    <div key={idx} className="receipt-item-grid">
+                                        <div>{idx + 1}</div>
+                                        <div>
+                                            {productName}
+                                            {item.description && <div style={{ fontSize: '8pt', textTransform: 'none', marginTop: '1mm' }}>"{item.description}"</div>}
+                                        </div>
+                                        <div>{item.quantity}</div>
+                                        <div style={{ textAlign: 'right' }}>{(parseFloat(item.unit_price) * item.quantity).toFixed(2)}</div>
                                     </div>
                                 );
                             })}
-                        </div>
 
-                        <Separator className="border-dashed" />
+                            <div className="thermal-divider"></div>
 
-                        <div className="space-y-1">
-                            <div className="flex justify-between text-sm">
-                                <span className="text-slate-400 font-bold uppercase text-[10px]">Subtotal</span>
-                                <span className="font-bold">Rs.{(parseFloat(selectedOrder?.total_amount || 0) - parseFloat(selectedOrder?.tax_amount || 0)).toFixed(2)}</span>
-                            </div>
-                            {parseFloat(selectedOrder?.tax_amount || 0) > 0 && (
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-slate-400 font-bold uppercase text-[10px]">Tax</span>
-                                    <span className="font-bold">Rs.{parseFloat(selectedOrder?.tax_amount || 0).toFixed(2)}</span>
+                            <div style={{ fontSize: '10pt', lineHeight: '1.5' }}>
+                                <div className="thermal-row">
+                                    <span>SUBTOTAL</span>
+                                    <span>{(parseFloat(selectedOrder?.total_amount || 0) - parseFloat(selectedOrder?.tax_amount || 0) + parseFloat(selectedOrder?.discount || 0)).toFixed(2)}</span>
                                 </div>
-                            )}
-                            <div className="flex justify-between text-lg font-black pt-2">
-                                <span className="text-slate-400">Total</span>
-                                <span className="text-primary text-2xl">Rs.{selectedOrder?.total_amount}</span>
+                                {parseFloat(selectedOrder?.tax_amount || 0) > 0 && (
+                                    <div className="thermal-row">
+                                        <span>TAX</span>
+                                        <span>{parseFloat(selectedOrder?.tax_amount || 0).toFixed(2)}</span>
+                                    </div>
+                                )}
+                                {parseFloat(selectedOrder?.discount || 0) > 0 && (
+                                    <div className="thermal-row text-red-600 font-bold">
+                                        <span>DISCOUNT</span>
+                                        <span>-{parseFloat(selectedOrder?.discount || 0).toFixed(2)}</span>
+                                    </div>
+                                )}
+                                <div className="thermal-divider"></div>
+                                <div className="thermal-total-row">
+                                    <span>TOTAL</span>
+                                    <span>{selectedOrder?.total_amount}</span>
+                                </div>
+                                <div className="thermal-divider"></div>
+                                <div className="thermal-row">
+                                    <span>STATUS</span>
+                                    <span>{selectedOrder?.payment_status}</span>
+                                </div>
+                                <div className="thermal-divider"></div>
+                                
+                                <div className="thermal-row" style={{ fontSize: '9pt', opacity: 0.8 }}>
+                                    <span>PAID AMOUNT</span>
+                                    <span>{parseFloat(selectedOrder?.paid_amount || 0).toFixed(2)}</span>
+                                </div>
+                                {parseFloat(selectedOrder?.due_amount) > 0 && (
+                                    <div className="thermal-row" style={{ fontSize: '9pt', fontWeight: 'bold' }}>
+                                        <span>BALANCE DUE</span>
+                                        <span>{parseFloat(selectedOrder?.due_amount).toFixed(2)}</span>
+                                    </div>
+                                )}
                             </div>
-                            <div className="flex justify-between text-sm pt-1 border-t border-dashed mt-2">
-                                <span className="text-slate-400 font-bold uppercase text-[10px]">Paid Amount</span>
-                                <span className="font-bold">Rs.{parseFloat(selectedOrder?.paid_amount || 0).toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                                <span className="text-slate-400 font-bold uppercase text-[10px]">Balance Due</span>
-                                <span className="font-bold text-primary">Rs.{parseFloat(selectedOrder?.due_amount || 0).toFixed(2)}</span>
-                            </div>
-                        </div>
 
-                        <div className="pt-8 flex gap-3 no-print">
-                            <Button className="flex-1 h-14 rounded-2xl font-black gradient-warm shadow-lg" onClick={() => window.print()}>
-                                <Printer className="h-5 w-5 mr-2" />
-                                Print Bill
-                            </Button>
+                            <div className="thermal-footer">
+                                THANK YOU FOR YOUR VISIT!
+                            </div>
+                            <div className="thermal-barcode">
+                                *AMA-POS-BILL*
+                            </div>
+                            <div className="thermal-branding">
+                                POS-BY: nishchalacharya.com.np
+                            </div>
                         </div>
                     </div>
                 </DialogContent>

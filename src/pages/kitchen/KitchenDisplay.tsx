@@ -16,7 +16,6 @@ import {
   Loader2,
   Layers,
   ChevronDown,
-  Volume2,
   Clock
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
@@ -59,18 +58,6 @@ export default function KitchenDisplay() {
     loadData();
   }, []);
 
-  // Play notification sound
-  const playNotificationSound = () => {
-    try {
-      const audio = new Audio("/noti.mp3");
-      audio.volume = 1.0;
-      audio.play().catch((err) => {
-        console.warn("Audio play blocked:", err);
-      });
-    } catch (err) {
-      console.error("Audio error:", err);
-    }
-  };
 
   // WebSocket: listen for new invoices and refresh kitchen data
   useEffect(() => {
@@ -86,8 +73,7 @@ export default function KitchenDisplay() {
         const data = JSON.parse(event.data);
         console.log("[Kitchen WS] Message:", data);
         if (data.type === "invoice_created") {
-          // New order placed - play sound, show toast, and refresh
-          playNotificationSound();
+          // New order placed - show toast and refresh
           toast.success("New Order Received!", {
             description: "A new order has been placed",
             icon: <Bell className="h-5 w-5 text-primary" />,
@@ -154,7 +140,7 @@ export default function KitchenDisplay() {
             status: inv.invoice_status === 'PENDING' ? 'new' :
               inv.invoice_status === 'READY' ? 'ready' : 'completed',
             total: parseFloat(inv.total_amount || "0"),
-            notes: inv.notes || "",
+            notes: inv.notes || (inv.description?.includes('| NOTE:') ? inv.description.split('| NOTE:')[1].trim() : ""),
             items: (inv.items || []).map((item: any) => {
               const product = productsMap[String(item.product)];
               return {
@@ -350,18 +336,6 @@ export default function KitchenDisplay() {
           </div>
 
           <div className="flex items-center gap-8">
-            <div className="flex items-center gap-3">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={playNotificationSound}
-                className="text-primary hover:bg-primary hover:text-white font-bold transition-all px-3 gap-2 rounded-xl border-slate-200"
-                title="Test notification sound"
-              >
-                <Volume2 className="h-4 w-4" />
-                Test Sound
-              </Button>
-            </div>
             <div className="flex items-center gap-3 text-xs text-muted-foreground font-medium">
               {/* Completed Orders Sheet */}
               <Sheet>

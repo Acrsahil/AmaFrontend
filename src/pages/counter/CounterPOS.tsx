@@ -18,6 +18,7 @@ import {
     Printer,
     X,
     CheckCircle2,
+    Percent,
     ChevronRight,
     ChevronLeft,
     Monitor,
@@ -28,7 +29,8 @@ import {
     Sandwich,
     Soup,
     Pencil,
-    LayoutDashboard
+    LayoutDashboard,
+    IndianRupee
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -73,6 +75,7 @@ export default function CounterPOS() {
     const [cart, setCart] = useState<CartItemData[]>([]);
     const [taxEnabled, setTaxEnabled] = useState(false);
     const [taxRate, setTaxRate] = useState(5);
+    const [discountPercent, setDiscountPercent] = useState(0);
 
     // Billing States
     const [customer, setCustomer] = useState<any>(null);
@@ -235,7 +238,13 @@ export default function CounterPOS() {
         taxEnabled ? subtotal * (taxRate / 100) : 0,
         [subtotal, taxEnabled, taxRate]
     );
-    const total = subtotal + taxAmount;
+
+    const discountAmount = useMemo(() =>
+        (subtotal * discountPercent) / 100,
+        [subtotal, discountPercent]
+    );
+
+    const total = subtotal + taxAmount - discountAmount;
 
     const addToCart = (item: MenuItem) => {
         setCart(prev => {
@@ -317,7 +326,7 @@ export default function CounterPOS() {
                 invoice_type: "SALE",
                 description: "Counter Sale",
                 tax_amount: taxAmount,
-                discount: 0,
+                discount: discountAmount,
                 paid_amount: paymentMethod === 'cash' ? Math.min(total, parseFloat(cashReceived) || total) : total,
                 payment_method: paymentMethod === 'cash' ? "CASH" : "QR",
                 items: cart.map(c => ({
@@ -348,11 +357,139 @@ export default function CounterPOS() {
         setTableNo("1");
         setPaymentMethod(null);
         setCashReceived("");
+        setDiscountPercent(0);
         setShowSuccessModal(false);
     };
 
     const handleLogout = () => {
         logout();
+    };
+
+    const handlePrint = () => {
+        const itemRows = cart.map((item, index) => `
+            <div class="receipt-item-grid">
+                <div>${index + 1}</div>
+                <div>
+                    ${item.item.name}
+                    ${item.notes ? `<div style="font-size: 8pt; text-transform: none; margin-top: 1mm;">"${item.notes}"</div>` : ""}
+                </div>
+                <div>${item.quantity}</div>
+                <div style="text-align: right;">${(item.item.price * item.quantity).toFixed(2)}</div>
+            </div>
+        `).join("") || "";
+
+        const taxRow = taxAmount > 0 ? `
+            <div class="thermal-row">
+                <span>TAX (${taxRate}%)</span>
+                <span>${taxAmount.toFixed(2)}</span>
+            </div>` : "";
+
+        const discountRow = discountAmount > 0 ? `
+            <div class="thermal-row" style="color: #dc2626 !important;">
+                <span>DISCOUNT</span>
+                <span>-${discountAmount.toFixed(2)}</span>
+            </div>` : "";
+
+        const html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8"/>
+    <title>Receipt - Ama Bakery</title>
+    <link href="https://fonts.googleapis.com/css2?family=Libre+Barcode+39&display=swap" rel="stylesheet">
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; color: black !important; background: white !important; font-family: 'Courier New', Courier, monospace !important; }
+        body { width: 80mm; padding: 4mm; }
+        .thermal-header { text-align: center; margin-bottom: 4mm; }
+        .thermal-title { font-size: 16pt; font-weight: bold; margin-bottom: 1mm; letter-spacing: 1px; text-transform: uppercase; }
+        .thermal-subtitle { font-size: 9pt; margin-bottom: 2mm; text-align: center; }
+        .thermal-info-grid { display: grid; grid-template-columns: 1fr 1fr; font-size: 9pt; margin-bottom: 4mm; line-height: 1.4; gap: 2mm; }
+        .thermal-info-left { text-align: left; }
+        .thermal-info-right { text-align: right; }
+        .thermal-row { display: flex; justify-content: space-between; margin-bottom: 1mm; font-size: 10pt; }
+        .thermal-divider { border-top: 1px dashed black; margin: 3mm 0; }
+        .thermal-total-row { font-size: 14pt; font-weight: bold; display: flex; justify-content: space-between; margin-top: 2mm; border-top: 1px dashed black; padding-top: 2mm; }
+        .receipt-item-grid { display: grid; grid-template-columns: 6mm 1fr 10mm 18mm; gap: 1mm; font-size: 9pt; margin-bottom: 1mm; text-transform: uppercase; }
+        .thermal-footer { text-align: center; margin-top: 6mm; font-size: 9pt; font-weight: bold; text-transform: uppercase; }
+        .thermal-barcode { text-align: center; margin-top: 4mm; font-family: 'Libre Barcode 39', monospace !important; font-size: 30pt; }
+        .thermal-branding { text-align: center; font-size: 7pt; color: #aaa !important; margin-top: 2mm; }
+        
+        @media print {
+            @page { size: 80mm auto; margin: 0; }
+            body { width: 80mm; padding: 4mm; }
+        }
+    </style>
+</head>
+<body>
+    <div class="thermal-header">
+        <div class="thermal-title">AMA BAKERY</div>
+        <div class="thermal-subtitle">Tel: 9816020731</div>
+    </div>
+    
+    <div class="thermal-divider"></div>
+    
+    <div class="thermal-info-grid">
+        <div class="thermal-info-left">
+            <div>INV: #POS-${Date.now().toString().slice(-6)}</div>
+            <div>DATE: ${new Date().toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+        </div>
+        <div class="thermal-info-right">
+            <div>CSHR: ${operator?.name || "Counter"}</div>
+            <div>CUST: ${customer ? customer.name : "Walk-in"}</div>
+        </div>
+    </div>
+
+    <div class="thermal-divider"></div>
+    
+    <div class="receipt-item-grid" style="font-weight: bold;">
+        <div>SN</div>
+        <div>ITEM</div>
+        <div>QTY</div>
+        <div style="text-align: right;">TOTAL</div>
+    </div>
+    
+    ${itemRows}
+
+    <div class="thermal-divider"></div>
+
+    <div style="font-size: 10pt; line-height: 1.5;">
+        <div class="thermal-row">
+            <span>SUBTOTAL</span>
+            <span>${subtotal.toFixed(2)}</span>
+        </div>
+        ${taxRow}
+        ${discountRow}
+        <div class="thermal-divider"></div>
+        <div class="thermal-total-row">
+            <span>TOTAL</span>
+            <span>${total.toFixed(2)}</span>
+        </div>
+        <div class="thermal-divider"></div>
+        <div class="thermal-row">
+            <span>STATUS</span>
+            <span>PAID</span>
+        </div>
+        <div class="thermal-divider"></div>
+    </div>
+
+    <div class="thermal-footer">
+        THANK YOU FOR YOUR VISIT!
+    </div>
+    <div class="thermal-barcode">
+        *AMA-POS-BILL*
+    </div>
+    <div class="thermal-branding">
+        POS-BY: nishchalacharya.com.np
+    </div>
+
+    <script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};</script>
+</body>
+</html>`;
+
+        const win = window.open('', '_blank', 'width=400,height=700');
+        if (win) {
+            win.document.write(html);
+            win.document.close();
+        }
     };
 
     return (
@@ -680,6 +817,47 @@ export default function CounterPOS() {
                                     </div>
                                 )}
                             </div>
+
+                            <div className="space-y-3 pb-2">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2 text-sm font-medium text-slate-500">
+                                        <Percent className="h-4 w-4" />
+                                        <span>Discount</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <div className="flex items-center bg-white rounded-lg px-2 border w-24">
+                                            <Input
+                                                type="number"
+                                                value={discountPercent || ""}
+                                                onChange={(e) => setDiscountPercent(Math.min(100, Math.max(0, Number(e.target.value))))}
+                                                className="w-12 h-7 p-0 text-center border-none bg-transparent text-xs font-bold focus-visible:ring-0"
+                                                placeholder="0"
+                                            />
+                                            <span className="text-[10px] font-bold text-slate-400">%</span>
+                                        </div>
+                                        <span className="font-bold text-emerald-600">
+                                            {discountAmount > 0 && `-Rs.${discountAmount.toFixed(2)}`}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="flex gap-1 justify-end">
+                                    {[0, 5, 10, 15].map((percent) => (
+                                        <button
+                                            key={percent}
+                                            onClick={() => setDiscountPercent(percent)}
+                                            className={cn(
+                                                "px-2 py-1 rounded text-[10px] font-bold transition-all",
+                                                discountPercent === percent
+                                                    ? "bg-emerald-500 text-white shadow-sm"
+                                                    : "bg-white text-slate-500 hover:bg-slate-50 border border-slate-100"
+                                            )}
+                                        >
+                                            {percent}%
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
                             <Separator />
                             <div className="flex justify-between items-center pt-2">
                                 <span className="text-lg font-black text-slate-800">Total Amount</span>
@@ -742,6 +920,47 @@ export default function CounterPOS() {
                                             <QrCode className={cn("h-8 w-8", paymentMethod === 'qr' ? "text-primary" : "text-slate-300")} />
                                             <span className={cn("text-xs font-black uppercase", paymentMethod === 'qr' ? "text-primary" : "text-slate-400")}>QR Payment</span>
                                         </button>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4 pt-4 border-t border-slate-100 italic">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Discount (Optional)</Label>
+                                        <span className="text-xs font-bold text-emerald-600">
+                                            {discountAmount > 0 && `-Rs.${discountAmount.toFixed(2)}`}
+                                        </span>
+                                    </div>
+                                    <div className="flex gap-3">
+                                        <div className="flex-1">
+                                            <div className="relative">
+                                                <Input
+                                                    type="number"
+                                                    min="0"
+                                                    max="100"
+                                                    placeholder="0"
+                                                    value={discountPercent || ""}
+                                                    onChange={(e) => setDiscountPercent(Math.min(100, Math.max(0, Number(e.target.value))))}
+                                                    className="h-11 pl-4 pr-8 font-bold"
+                                                />
+                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">%</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            {[5, 10, 15].map((percent) => (
+                                                <Button
+                                                    key={percent}
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => setDiscountPercent(percent)}
+                                                    className={cn(
+                                                        "h-11 min-w-[50px] font-bold rounded-xl",
+                                                        discountPercent === percent && "bg-emerald-50 border-emerald-200 text-emerald-600"
+                                                    )}
+                                                >
+                                                    {percent}%
+                                                </Button>
+                                            ))}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -895,81 +1114,123 @@ export default function CounterPOS() {
                 </DialogContent>
             </Dialog>
 
-            {/* Receipt View logic would go here, similar to Checkout.tsx but adapted for desktop */}
+            {/* Receipt View logic updated for professional thermal look */}
             <Dialog open={showReceipt} onOpenChange={setShowReceipt}>
-                <DialogContent className="max-w-[400px] p-0 bg-transparent border-none shadow-none no-print-close">
-                    <div className="bg-white p-8 rounded-[2.5rem] shadow-3xl text-center space-y-6 relative overflow-hidden printable-receipt">
-                        <div className="absolute top-0 left-0 w-full h-2 bg-primary" />
+                <DialogContent className="max-w-[400px] w-[95vw] p-0 border-none bg-transparent shadow-none overflow-visible max-h-[95vh] flex flex-col">
+                    <DialogTitle className="sr-only">Digital Receipt</DialogTitle>
+                    <div className="flex justify-end mb-2 no-print">
+                        <button
+                            onClick={() => setShowReceipt(false)}
+                            className="h-10 w-10 flex items-center justify-center rounded-full bg-slate-900/80 text-white backdrop-blur-sm shadow-xl z-50 transition-all active:scale-95"
+                        >
+                            <X className="h-6 w-6" />
+                        </button>
+                    </div>
 
-                        <div className="space-y-4">
-                            <div className="h-20 w-20 mx-auto rounded-2xl border border-slate-100 p-1 flex items-center justify-center overflow-hidden">
-                                <img src="/logos/logo1white.jfif" className="h-full w-full object-cover" />
-                            </div>
-                            <div className="space-y-1">
-                                <h1 className="text-2xl font-black tracking-tight text-primary">AMA BAKERY</h1>
-                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Fresh & Daily Bakery</p>
-                            </div>
-                        </div>
-
-                        <Separator />
-
-                        <div className="space-y-2 text-left font-mono text-xs">
-                            <div className="flex justify-between">
-                                <span>Receipt:</span>
-                                <span>#POS-{Date.now().toString().slice(-6)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span>Date:</span>
-                                <span>{new Date().toLocaleString()}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span>Customer:</span>
-                                <span className="truncate ml-4">{customer?.name || "Walk-in"}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span>Operator:</span>
-                                <span>{operator?.name}</span>
-                            </div>
-                        </div>
-
-                        <Separator className="border-dashed" />
-
-                        <div className="space-y-2">
-                            {cart.map((ci, idx) => (
-                                <div key={idx} className="flex justify-between text-sm">
-                                    <span className="text-left flex-1 font-medium">{ci.item.name} x {ci.quantity}</span>
-                                    <span className="font-bold">Rs.{(ci.item.price * ci.quantity).toFixed(2)}</span>
-                                </div>
-                            ))}
-                        </div>
-
-                        <Separator className="border-dashed" />
-
-                        <div className="space-y-1 text-lg">
-                            <div className="flex justify-between font-black">
-                                <span className="text-slate-400">Total</span>
-                                <span className="text-primary text-2xl">Rs.{total.toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between text-sm pt-1 border-t border-dashed mt-2">
-                                <span className="text-slate-400 font-bold uppercase text-[10px]">Paid Amount</span>
-                                <span className="font-bold">Rs.{paidAmount > 0 ? paidAmount.toFixed(2) : parseFloat(cashReceived || "0").toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-
-                                {dueAmount > 0 && (
-                                    <>
-                                        <span className="text-slate-400 font-bold uppercase text-[10px]">Balance Due</span>
-                                        <span className="font-bold text-primary">Rs.{dueAmount.toFixed(2)}</span>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="pt-8 flex gap-3 no-print">
-                            <Button className="flex-1 h-14 rounded-2xl font-black gradient-warm shadow-lg" onClick={() => window.print()}>
-                                <Printer className="h-5 w-5 mr-2" />
-                                Print Bill
+                    <div className="bg-white rounded-2xl overflow-y-auto shadow-2xl relative custom-scrollbar flex flex-col">
+                        <div className="no-print p-4 bg-slate-50 border-b flex justify-between items-center">
+                            <span className="text-xs font-bold text-slate-500 uppercase">Receipt Preview</span>
+                            <Button size="sm" onClick={() => handlePrint()} className="h-8 text-xs font-bold px-4">
+                                <Printer className="h-3.5 w-3.5 mr-1.5" />
+                                Print
                             </Button>
+                        </div>
+                        <div className="thermal-receipt printable-receipt" id="bill-print-root">
+                            <div className="thermal-receipt printable-receipt" id="bill-print-root">
+                                <div className="thermal-header">
+                                    <h1 className="thermal-title">AMA BAKERY</h1>
+                                    <div className="thermal-subtitle">Tel: 9816020731</div>
+                                </div>
+
+                                <div className="thermal-divider"></div>
+
+                                <div className="thermal-info-grid">
+                                    <div className="thermal-info-left">
+                                        <div>INV: #POS-{Date.now().toString().slice(-6)}</div>
+                                        <div>DATE: {new Date().toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                                    </div>
+                                    <div className="thermal-info-right">
+                                        <div>CSHR: {operator?.name || "Counter"}</div>
+                                        <div>CUST: {customer ? customer.name : "Walk-in"}</div>
+                                    </div>
+                                </div>
+
+                                <div className="thermal-divider"></div>
+
+                                <div className="receipt-item-grid" style={{ fontWeight: 'bold' }}>
+                                    <div>SN</div>
+                                    <div>ITEM</div>
+                                    <div>QTY</div>
+                                    <div style={{ textAlign: 'right' }}>TOTAL</div>
+                                </div>
+
+                                <div className="thermal-divider"></div>
+
+                                {cart.map((item, idx) => (
+                                    <div key={idx} className="receipt-item-grid">
+                                        <div>{idx + 1}</div>
+                                        <div>
+                                            {item.item.name}
+                                            {item.notes && <div style={{ fontSize: '8pt', textTransform: 'none', marginTop: '1mm' }}>"{item.notes}"</div>}
+                                        </div>
+                                        <div>{item.quantity}</div>
+                                        <div style={{ textAlign: 'right' }}>{(item.item.price * item.quantity).toFixed(2)}</div>
+                                    </div>
+                                ))}
+
+                                <div className="thermal-divider"></div>
+
+                                <div style={{ fontSize: '10pt', lineHeight: '1.5' }}>
+                                    <div className="thermal-row">
+                                        <span>SUBTOTAL</span>
+                                        <span>{subtotal.toFixed(2)}</span>
+                                    </div>
+                                    {taxAmount > 0 && (
+                                        <div className="thermal-row">
+                                            <span>TAX ({taxRate}%)</span>
+                                            <span>{taxAmount.toFixed(2)}</span>
+                                        </div>
+                                    )}
+                                    {discountAmount > 0 && (
+                                        <div className="thermal-row text-red-600 font-bold">
+                                            <span>DISCOUNT ({discountPercent}%)</span>
+                                            <span>-{discountAmount.toFixed(2)}</span>
+                                        </div>
+                                    )}
+                                    <div className="thermal-divider"></div>
+                                    <div className="thermal-total-row">
+                                        <span>TOTAL</span>
+                                        <span>{total.toFixed(2)}</span>
+                                    </div>
+                                    <div className="thermal-divider"></div>
+                                    <div className="thermal-row">
+                                        <span>STATUS</span>
+                                        <span>PAID</span>
+                                    </div>
+                                    <div className="thermal-divider"></div>
+                                    
+                                    <div className="thermal-row" style={{ fontSize: '9pt', opacity: 0.8 }}>
+                                        <span>CASH RECEIVED</span>
+                                        <span>{parseFloat(cashReceived || "0").toFixed(2)}</span>
+                                    </div>
+                                    {parseFloat(cashReceived) > total && (
+                                        <div className="thermal-row" style={{ fontSize: '9pt', fontWeight: 'bold' }}>
+                                            <span>CHANGE RETURNED</span>
+                                            <span>{(parseFloat(cashReceived) - total).toFixed(2)}</span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="thermal-footer">
+                                    THANK YOU FOR YOUR VISIT!
+                                </div>
+                                <div className="thermal-barcode">
+                                    *AMA-POS-BILL*
+                                </div>
+                                <div className="thermal-branding">
+                                    POS-BY: nishchalacharya.com.np
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </DialogContent>

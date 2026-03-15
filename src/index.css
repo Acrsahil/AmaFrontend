@@ -248,75 +248,156 @@
   .shadow-warm-xl {
     box-shadow: 0 20px 40px -10px rgba(234, 88, 12, 0.4), 0 10px 15px -8px rgba(234, 88, 12, 0.3);
   }
+}
 
-  /* Print Utilities */
-  @media print {
-    @page {
-      margin: 10mm;
-      size: auto;
-    }
+/* Thermal Receipt Formatting */
+@import url('https://fonts.googleapis.com/css2?family=Libre+Barcode+39&display=swap');
 
-    /* Hide main UI elements */
-    #root,
-    header,
-    nav,
-    aside,
-    footer,
-    .no-print,
-    .no-print-close button {
-      display: none !important;
-    }
+.thermal-receipt {
+  width: 100%;
+  max-width: 80mm;
+  margin: 0 auto;
+  padding: 5mm;
+  background: white !important;
+  color: black !important;
+  font-family: 'Courier New', Courier, monospace !important;
+  line-height: 1.4;
+}
 
-    /* Ensure body allows printing */
-    body {
-      background: white !important;
-      overflow: visible !important;
-    }
+.thermal-receipt * {
+  background: transparent !important;
+  color: black !important;
+  box-shadow: none !important;
+  border-color: black !important;
+  font-family: 'Courier New', Courier, monospace !important;
+}
 
-    /* Ensure radix portals and their children are visible */
-    [data-radix-portal],
-    [data-radix-portal] *,
-    div[role="dialog"],
-    .no-print-close {
-      visibility: visible !important;
-      display: block !important;
-    }
+.thermal-header {
+  text-align: center;
+  margin-bottom: 4mm;
+}
 
-    .printable-receipt {
-      display: block !important;
-      visibility: visible !important;
-      position: static !important;
-      margin: 0 auto !important;
-      padding: 0 !important;
-      width: 100% !important;
-      max-width: 400px !important;
-      background: white !important;
-      box-shadow: none !important;
-      border: none !important;
-      transform: none !important;
-    }
+.thermal-title {
+  font-size: 16pt;
+  font-weight: bold;
+  margin-bottom: 1mm;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
 
-    /* Ensure all children are visible */
-    .printable-receipt,
-    .printable-receipt * {
-      visibility: visible !important;
-      color: black !important;
-    }
+.thermal-subtitle {
+  font-size: 9pt;
+  margin-bottom: 2mm;
+  text-align: center;
+}
 
-    .printable-receipt .text-primary {
-      color: #d19d2a !important;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-    }
+.thermal-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  font-size: 9pt;
+  margin-bottom: 4mm;
+  line-height: 1.4;
+  gap: 2mm;
+}
 
-    /* Border preservation */
-    .printable-receipt .border-dashed {
-      border-style: dashed !important;
-      border-color: #eee !important;
-    }
+.thermal-info-left {
+  text-align: left;
+}
 
-    body {
-      background: white !important;
-    }
+.thermal-info-right {
+  text-align: right;
+}
+
+.thermal-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 1mm;
+  font-size: 10pt;
+}
+
+.thermal-divider {
+  border-top: 1px dashed black;
+  margin: 3mm 0;
+}
+
+.thermal-total-row {
+  font-size: 14pt;
+  font-weight: bold;
+  display: flex;
+  justify-content: space-between;
+  margin-top: 2mm;
+  border-top: 1px dashed black;
+  padding-top: 2mm;
+}
+
+.receipt-item-grid {
+  display: grid;
+  grid-template-columns: 6mm 1fr 10mm 18mm;
+  gap: 1mm;
+  font-size: 9pt;
+  margin-bottom: 1mm;
+  text-transform: uppercase;
+}
+
+.thermal-footer {
+  text-align: center;
+  margin-top: 6mm;
+  font-size: 9pt;
+}
+
+.thermal-barcode {
+  text-align: center;
+  margin-top: 4mm;
+  font-family: 'Libre Barcode 39', monospace !important;
+  font-size: 30pt;
+}
+
+.thermal-branding {
+  text-align: center;
+  font-size: 7pt;
+  color: #888 !important;
+  margin-top: 2mm;
+}
+
+@media print {
+  @page {
+    margin: 0;
+    size: 80mm auto;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    background: white !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .printable-receipt {
+    display: block !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 80mm;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 4mm !important;
+    visibility: visible !important;
+  }
+
+  /* Hide all UI except the receipt */
+  #root>*:not(.printable-receipt),
+  div[role="dialog"]>*:not(.printable-receipt),
+  [data-radix-portal]>*:not(.printable-receipt) {
+    display: none !important;
+  }
+
+  /* Ensure the receipt and its children are visible */
+  .printable-receipt,
+  .printable-receipt * {
+    visibility: visible !important;
+    opacity: 1 !important;
   }
 }

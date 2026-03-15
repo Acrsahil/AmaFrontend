@@ -30,8 +30,9 @@ export default defineConfig(({ mode }) => ({
     allowedHosts: [
       // "amabakery.nishchalacharya.com.np",
       // "amabakerypos-production.up.railway.app/"
-      "amabakeryhouse.com/",
-      "api.amabakeryhouse.com/"
+      "amabakeryhouse.com",
+      "www.amabakeryhouse.com",
+      "api.amabakeryhouse.com"
     ],
   },
   plugins: [

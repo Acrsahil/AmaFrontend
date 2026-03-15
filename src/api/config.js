@@ -4,7 +4,7 @@
  */
 
 // const RAW_BASE = import.meta.env.VITE_API_BASE_URL || "https://amabakerypos-production.up.railway.app";
-const RAW_BASE = import.meta.env.VITE_API_BASE_URL || "https://api.amabakery.com";
+const RAW_BASE = import.meta.env.VITE_API_BASE_URL || "https://api.amabakeryhouse.com";
 
 
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
     Store,
@@ -133,20 +133,17 @@ export default function SuperAdminOverview() {
         manager_phone: "",
     });
 
-    // Poll dashboard data
+    // Poll dashboard data — runs immediately on mount, then every 30s.
+    // Re-runs when timeframe or dateRange changes.
     useDashboardPolling(
         async () => {
             setPollingActive(true);
             await loadData();
             setTimeout(() => setPollingActive(false), 1000);
         },
-        45000, // 45 seconds for superadmin overview
+        30000,
         [timeframe, dateRange]
     );
-
-    useEffect(() => {
-        loadData();
-    }, [timeframe, dateRange]);
 
     const getFilters = () => {
         const params: any = { timeframe };

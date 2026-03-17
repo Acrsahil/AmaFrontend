@@ -1,5 +1,5 @@
 import { StatCard } from "@/components/admin/StatCard";
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { fetchDashboardDetails, fetchInvoices, fetchTables } from "@/api/index.js";
 import { getCurrentUser } from "../../auth/auth";
@@ -79,26 +79,21 @@ export default function AdminDashboard() {
     to: undefined
   });
 
-  // Poll dashboard data
+  // Poll dashboard data — runs immediately on mount, then every 30s.
+  // Re-runs when user/timeframe/dateRange changes.
   useDashboardPolling(
     async () => {
       setPollingActive(true);
       await Promise.all([
         loadDashboardData(),
-        loadRecentOrders()
+        loadRecentOrders(),
+        loadTableData(),
       ]);
-      // Small timeout to show the "Live" pulse briefly or just keep it active
       setTimeout(() => setPollingActive(false), 1000);
     },
-    30000, // 30 seconds for dashboard stats
+    30000,
     [user?.branch_id, timeframe, dateRange]
   );
-
-  useEffect(() => {
-    loadDashboardData();
-    loadRecentOrders();
-    loadTableData();
-  }, [user?.branch_id, timeframe, dateRange]);
 
   const getFilters = () => {
     const params: any = { timeframe };

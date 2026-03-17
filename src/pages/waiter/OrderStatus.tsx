@@ -46,17 +46,12 @@ export default function OrderStatus() {
     }
   }, []);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-
-  // Polling: background refresh for order status updates
+  // Polling: background refresh for order status updates (runs immediately + every 10s)
   useOrdersPolling(
     useCallback(() => {
       loadData();
     }, [loadData]),
-    15000 // 15 seconds for waiter status
+    10000
   );
 
   // Filtering logic

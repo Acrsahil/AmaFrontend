@@ -47,24 +47,18 @@ export default function KitchenDisplay() {
   });
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [socketConnected, setSocketConnected] = useState(false);
 
   const handleFloorChange = (id: number | 'all') => {
     setSelectedFloorId(id);
     localStorage.setItem('kitchenFloorFilter', id.toString());
   };
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-
-  // Polling: background refresh for new orders
+  // Polling: background refresh for new orders (runs immediately + every 10s)
   useOrdersPolling(
     useCallback(() => {
       loadData();
     }, []),
-    10000 // 10 seconds interval
+    10000
   );
 
   const loadData = async () => {
@@ -228,7 +222,6 @@ export default function KitchenDisplay() {
                     </div>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground font-medium">
                       <div className="flex items-center gap-2">
-                        <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                         Live Feed • {userName}
                       </div>
                     </div>

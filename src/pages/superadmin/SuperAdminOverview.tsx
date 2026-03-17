@@ -32,7 +32,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
-import { useDashboardSSE } from "@/hooks/useDashboardSSE";
+import { useDashboardPolling } from "@/hooks/useDashboardPolling";
 import {
     BarChart,
     Bar,
@@ -113,7 +113,7 @@ export default function SuperAdminOverview() {
     const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [sseConnected, setSSEConnected] = useState(false);
+    const [pollingActive, setPollingActive] = useState(false);
 
     // Filter states
     const [timeframe, setTimeframe] = useState("monthly");
@@ -133,37 +133,15 @@ export default function SuperAdminOverview() {
         manager_phone: "",
     });
 
-    const handleSSEUpdate = useCallback((data: any) => {
-        if (data.success) {
-            setDashboardData((prev: any) => ({
-                ...prev,
-                ...data,
-            }));
-
-            // Update branch revenue in real-time if performance data is present
-            if (data.top_perfomance_branch) {
-                setBranches((prevBranches) =>
-                    prevBranches.map((branch) => {
-                        const performance = data.top_perfomance_branch.find(
-                            (p: any) => p.id === branch.id
-                        );
-                        return performance
-                            ? { ...branch, revenue: performance.total_sales_per_branch }
-                            : branch;
-                    })
-                );
-            }
-
-            setSSEConnected(true);
-        }
-    }, []);
-
-    useDashboardSSE(
-        null,
-        handleSSEUpdate,
-        timeframe,
-        dateRange.from ? format(dateRange.from, "yyyy-MM-dd") : undefined,
-        dateRange.to ? format(dateRange.to, "yyyy-MM-dd") : undefined
+    // Poll dashboard data
+    useDashboardPolling(
+        async () => {
+            setPollingActive(true);
+            await loadData();
+            setTimeout(() => setPollingActive(false), 1000);
+        },
+        45000, // 45 seconds for superadmin overview
+        [timeframe, dateRange]
     );
 
     useEffect(() => {
@@ -265,9 +243,9 @@ export default function SuperAdminOverview() {
                 <div>
                     <h1 className="text-3xl font-black tracking-tighter text-slate-900">ENTERPRISE OVERVIEW</h1>
                     <div className="flex items-center gap-2 mt-1">
-                        <div className={cn("h-1.5 w-1.5 rounded-full", sseConnected ? "bg-emerald-500 animate-pulse" : "bg-slate-300")} />
+                        <div className={cn("h-1.5 w-1.5 rounded-full bg-emerald-500", pollingActive && "animate-pulse")} />
                         <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                            {sseConnected ? "Live Network Sync" : "Connecting..."}
+                            Enterprise Polling Active
                         </span>
                         <span className="text-slate-200 mx-2">|</span>
                         <span className="text-[10px] font-black uppercase tracking-widest text-primary capitaize">{timeframe} Snapshot</span>

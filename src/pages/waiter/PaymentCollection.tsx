@@ -45,28 +45,12 @@ export default function PaymentCollection() {
     }
   }, []);
 
-  useEffect(() => {
-    loadInvoices();
-  }, [loadInvoices]);
-
-  // Play notification sound
-  const playNotificationSound = useCallback(() => {
-    try {
-      const audio = new Audio("/noti.mp3");
-      audio.play().catch(() => {
-        // Autoplay may be blocked by browser until user interaction
-      });
-    } catch {
-      // Ignore audio errors
-    }
-  }, []);
-
-  // Polling: background refresh for pending payments
+  // Polling: background refresh for pending payments (runs immediately + every 10s)
   useOrdersPolling(
     useCallback(() => {
       loadInvoices();
     }, [loadInvoices]),
-    20000 // 20 seconds for payment collection
+    10000
   );
 
   const handlePaymentClick = (order: any) => {

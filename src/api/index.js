@@ -1,5 +1,5 @@
-import { API_BASE_URL, WS_BASE_URL, DASHBOARD_POLL_INTERVAL } from "./config";
-export { API_BASE_URL, WS_BASE_URL, DASHBOARD_POLL_INTERVAL };
+import { API_BASE_URL, DASHBOARD_POLL_INTERVAL } from "./config";
+export { API_BASE_URL, DASHBOARD_POLL_INTERVAL };
 
 const apiBaseUrl = API_BASE_URL; // Internal helper name
 

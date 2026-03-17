@@ -1,42 +1,33 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef } from "react";
 
 type PollingCallback = () => void;
 
 /**
- * A hook that provides a reliable way to sweep for order updates
- * when WebSockets are unavailable or unreliable (e.g. cPanel).
- * 
- * @param onUpdate Callback function to trigger when an update is needed (e.g. loadInvoices)
- * @param interval Frequency of sweep in milliseconds (default: 10 seconds)
+ * Reliable polling hook — runs callback immediately on mount,
+ * then repeats every `interval` ms.
+ *
+ * @param onUpdate Callback to run (e.g. loadInvoices / loadData)
+ * @param interval Polling interval in ms (default: 10 000 ms = 10s)
  */
 export function useOrdersPolling(onUpdate: PollingCallback, interval: number = 10000) {
-    const timerRef = useRef<NodeJS.Timeout | null>(null);
     const savedCallback = useRef<PollingCallback>(onUpdate);
 
-    // Keep the latest callback reference
+    // Keep callback ref up to date without restarting the interval
     useEffect(() => {
         savedCallback.current = onUpdate;
-    }, [onUpdate]);
+    });
 
     useEffect(() => {
-        // Initial run
-        const tick = () => {
-            savedCallback.current();
-        };
+        // Run immediately on mount
+        savedCallback.current();
 
-        // Set up the interval
-        timerRef.current = setInterval(tick, interval);
+        // Then run every `interval` ms
+        const id = setInterval(() => savedCallback.current(), interval);
 
-        // Cleanup on unmount
-        return () => {
-            if (timerRef.current) {
-                clearInterval(timerRef.current);
-            }
-        };
+        return () => clearInterval(id);
     }, [interval]);
 
     return {
-        // Manual trigger if needed
         refresh: () => savedCallback.current()
     };
 }

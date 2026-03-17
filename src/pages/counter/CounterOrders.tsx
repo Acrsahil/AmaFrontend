@@ -121,29 +121,13 @@ export default function CounterOrders() {
         }
     }, []);
 
-    useEffect(() => {
-        loadInvoices();
-        loadProducts();
-    }, [loadInvoices, loadProducts]);
-
-    // Play notification sound
-    const playNotificationSound = useCallback(() => {
-        try {
-            const audio = new Audio("/noti.mp3");
-            audio.play().catch(() => {
-                // Autoplay may be blocked by browser until user interaction
-            });
-        } catch {
-            // Ignore audio errors
-        }
-    }, []);
-
-    // Polling: background refresh for new orders
+    // Polling: background refresh for new orders (runs immediately + every 10s)
     useOrdersPolling(
         useCallback(() => {
             loadInvoices();
-        }, [loadInvoices]),
-        12000 // 12 seconds for counter
+            loadProducts();
+        }, [loadInvoices, loadProducts]),
+        10000
     );
 
     const handlePayOpen = (order: any) => {

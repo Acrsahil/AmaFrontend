@@ -13,7 +13,7 @@ import {
     Calendar as CalendarIcon,
     LayoutDashboard
 } from "lucide-react";
-import { useDashboardSSE } from "@/hooks/useDashboardSSE";
+import { useDashboardPolling } from "@/hooks/useDashboardPolling";
 import {
     XAxis,
     YAxis,
@@ -50,7 +50,7 @@ const COLORS = ["#d97706", "#b45309", "#92400e", "#78350f", "#451a03"];
 export default function SuperAdminAnalytics() {
     const [loading, setLoading] = useState(true);
     const [data, setData] = useState<any>(null);
-    const [sseConnected, setSSEConnected] = useState(false);
+    const [pollingActive, setPollingActive] = useState(false);
 
     // Filter states
     const [timeframe, setTimeframe] = useState("monthly");
@@ -59,17 +59,16 @@ export default function SuperAdminAnalytics() {
         to: undefined
     });
 
-    const handleSSEUpdate = useCallback((sseData: any) => {
-        if (sseData.success) {
-            setData((prev: any) => ({
-                ...prev,
-                ...sseData,
-            }));
-            setSSEConnected(true);
-        }
-    }, []);
-
-    useDashboardSSE(null, handleSSEUpdate);
+    // Poll dashboard data
+    useDashboardPolling(
+        async () => {
+            setPollingActive(true);
+            await loadData();
+            setTimeout(() => setPollingActive(false), 1000);
+        },
+        60000, // 60 seconds for analytics (less critical)
+        [timeframe, dateRange]
+    );
 
     useEffect(() => {
         loadData();
@@ -114,10 +113,10 @@ export default function SuperAdminAnalytics() {
                         <h1 className="text-4xl font-black tracking-tighter text-slate-900 uppercase">Global Analytics</h1>
                         <div className={cn(
                             "px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border flex items-center gap-1.5",
-                            sseConnected ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-slate-50 text-slate-400 border-slate-200"
+                            "bg-emerald-50 text-emerald-600 border-emerald-100"
                         )}>
-                            <div className={cn("h-1 w-1 rounded-full", sseConnected ? "bg-emerald-500 animate-pulse" : "bg-slate-300")} />
-                            {sseConnected ? "Live" : "Offline"}
+                            <div className={cn("h-1 w-1 rounded-full bg-emerald-500", pollingActive && "animate-pulse")} />
+                            Polling
                         </div>
                     </div>
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Enterprise metrics for {timeframe} performance cycle</p>

@@ -13,7 +13,7 @@ import { useOrdersWebSocket } from "@/hooks/useOrdersWebSocket";
 import { formatDistanceToNow } from "date-fns";
 
 type MainTab = "mine" | "all";
-type SubTab = "pending" | "completed";
+
 
 export default function OrderStatus() {
   const navigate = useNavigate();
@@ -21,7 +21,7 @@ export default function OrderStatus() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<MainTab>("mine");
-  const [activeSubTab, setActiveSubTab] = useState<SubTab>("pending");
+
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const currentUser = getCurrentUser();
@@ -72,20 +72,13 @@ export default function OrderStatus() {
   // Filtering logic
   const displayOrders = allOrders.filter((o) => {
     const isMine = String(o.created_by) === String(currentUser?.id);
-    const isCompleted = o?.invoice_status === "COMPLETED" || o?.invoice_status === "CANCELLED";
-    const isPending = !isCompleted;
-
-    const matchesMain = activeTab === "mine" ? isMine : true;
-    const matchesSub = activeSubTab === "pending" ? isPending : isCompleted;
-
-    return matchesMain && matchesSub;
+    return activeTab === "mine" ? isMine : true;
   });
 
   const readyOrders = displayOrders.filter(o => o?.invoice_status === "READY");
   const otherActiveOrders = displayOrders.filter(o => o?.invoice_status !== "READY" && o?.invoice_status !== "COMPLETED" && o?.invoice_status !== "CANCELLED");
   const doneOrders = displayOrders.filter(o => o?.invoice_status === "COMPLETED" || o?.invoice_status === "CANCELLED");
-  const isCompletedTab = activeSubTab === "completed";
-  const isOrderTab = activeSubTab === "pending";
+
   const isAllTab = activeTab === "all";
 
   // Deduplicate notifications per order ID and filter by tab/status
@@ -154,31 +147,7 @@ export default function OrderStatus() {
           </button>
         </div>
 
-        {/* Sub Tabs */}
-        <div className="flex gap-2 mb-2 overflow-x-auto pb-2 hide-scrollbar -mx-1 px-1">
-          <Button
-            onClick={() => setActiveSubTab("pending")}
-            variant={activeSubTab === "pending" ? "default" : "outline"}
-            size="sm"
-            className={cn(
-              "rounded-xl font-bold whitespace-nowrap px-4",
-              activeSubTab === "pending" ? "bg-success hover:bg-success/90 text-white" : "bg-white text-slate-600"
-            )}
-          >
-            Pending {allOrders.filter(o => (activeTab === "mine" ? String(o.created_by) === String(currentUser?.id) : true) && o.invoice_status !== "COMPLETED" && o.invoice_status !== "CANCELLED").length > 0 && `(${allOrders.filter(o => (activeTab === "mine" ? String(o.created_by) === String(currentUser?.id) : true) && o.invoice_status !== "COMPLETED" && o.invoice_status !== "CANCELLED").length})`}
-          </Button>
-          <Button
-            onClick={() => setActiveSubTab("completed")}
-            variant={activeSubTab === "completed" ? "default" : "outline"}
-            size="sm"
-            className={cn(
-              "rounded-xl font-bold whitespace-nowrap px-4",
-              activeSubTab === "completed" ? "bg-slate-800 hover:bg-slate-900 text-white" : "bg-white text-slate-600"
-            )}
-          >
-            Completed {allOrders.filter(o => (activeTab === "mine" ? String(o.created_by) === String(currentUser?.id) : true) && (o.invoice_status === "COMPLETED" || o.invoice_status === "CANCELLED")).length > 0 && `(${allOrders.filter(o => (activeTab === "mine" ? String(o.created_by) === String(currentUser?.id) : true) && (o.invoice_status === "COMPLETED" || o.invoice_status === "CANCELLED")).length})`}
-          </Button>
-        </div>
+
 
         {loading ? (
           <div className="flex flex-col items-center justify-center py-16">
@@ -189,107 +158,94 @@ export default function OrderStatus() {
           <div className="space-y-4">
 
             {/* Active Orders Section */}
-            {isOrderTab && (
-              <div className="space-y-4">
-                {/* 1. Ready Orders via Notifications (Grouped by Floor) */}
-                {filteredDeduplicatedNotifications.length > 0 && (
-                  <div className="space-y-4">
-                    {Object.entries(notificationsByFloor).map(([floorName, floorNotifications]: [string, any[]]) => (
-                      <section key={floorName}>
-                        <h2 className="text-xs font-bold mb-2 text-success uppercase tracking-widest flex items-center gap-1.5">
-                          <span className="h-4 w-4 rounded-full bg-success inline-flex items-center justify-center text-white text-[9px] font-black">
-                            {floorNotifications.length}
-                          </span>
-                          Floor {floorName} • Ready for Pickup
-                        </h2>
-                        <div className="space-y-3">
-                          {floorNotifications.map((notif: any) => {
-                            const order = allOrders.find(o => String(o.id) === String(notif.invoice));
-                            if (!order) return null;
-                            return (
-                              <OrderCard
-                                key={`notif-${notif.id}`}
-                                order={order}
-                                notification={notif}
-                                showWaiter={isAllTab}
-                                activeTab={activeTab}
-                                products={products}
-                                categories={categories}
-                              />
-                            );
-                          })}
-                        </div>
-                      </section>
+            <div className="space-y-4">
+              {/* 1. Ready Orders via Notifications (Grouped by Floor) */}
+              {filteredDeduplicatedNotifications.length > 0 && (
+                <div className="space-y-4">
+                  {Object.entries(notificationsByFloor).map(([floorName, floorNotifications]: [string, any[]]) => (
+                    <section key={floorName}>
+                      <h2 className="text-xs font-bold mb-2 text-success uppercase tracking-widest flex items-center gap-1.5">
+                        <span className="h-4 w-4 rounded-full bg-success inline-flex items-center justify-center text-white text-[9px] font-black">
+                          {floorNotifications.length}
+                        </span>
+                        Floor {floorName} • Ready for Pickup
+                      </h2>
+                      <div className="space-y-3">
+                        {floorNotifications.map((notif: any) => {
+                          const order = allOrders.find(o => String(o.id) === String(notif.invoice));
+                          if (!order) return null;
+                          return (
+                            <OrderCard
+                              key={`notif-${notif.id}`}
+                              order={order}
+                              notification={notif}
+                              showWaiter={isAllTab}
+                              activeTab={activeTab}
+                              products={products}
+                              categories={categories}
+                            />
+                          );
+                        })}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              )}
+
+              {/* 2. All Other Active Orders (Pending, Processing, or Ready without notification) */}
+              {(otherActiveOrders.length > 0 || readyOrders.filter(o => !filteredDeduplicatedNotifications.some(n => String(n.invoice) === String(o.id))).length > 0) && (
+                <section>
+                  <h2 className="text-xs font-bold mb-2 text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                    <span className="h-4 w-4 rounded-full bg-slate-400 inline-flex items-center justify-center text-white text-[9px] font-black">
+                      {otherActiveOrders.length + readyOrders.filter(o => !filteredDeduplicatedNotifications.some(n => String(n.invoice) === String(o.id))).length}
+                    </span>
+                    Active Orders
+                  </h2>
+                  <div className="space-y-3">
+                    {[...otherActiveOrders, ...readyOrders.filter(o => !filteredDeduplicatedNotifications.some(n => String(n.invoice) === String(o.id)))].map((order) => (
+                      <OrderCard
+                        key={`order-${order.id}`}
+                        order={order}
+                        showWaiter={isAllTab}
+                        activeTab={activeTab}
+                        products={products}
+                        categories={categories}
+                      />
                     ))}
                   </div>
-                )}
-
-                {/* 2. All Other Active Orders (Pending, Processing, or Ready without notification) */}
-                {(otherActiveOrders.length > 0 || readyOrders.filter(o => !filteredDeduplicatedNotifications.some(n => String(n.invoice) === String(o.id))).length > 0) && (
-                  <section>
-                    <h2 className="text-xs font-bold mb-2 text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                      <span className="h-4 w-4 rounded-full bg-slate-400 inline-flex items-center justify-center text-white text-[9px] font-black">
-                        {otherActiveOrders.length + readyOrders.filter(o => !filteredDeduplicatedNotifications.some(n => String(n.invoice) === String(o.id))).length}
-                      </span>
-                      Active Orders
-                    </h2>
-                    <div className="space-y-3">
-                      {[...otherActiveOrders, ...readyOrders.filter(o => !filteredDeduplicatedNotifications.some(n => String(n.invoice) === String(o.id)))].map((order) => (
-                        <OrderCard
-                          key={`order-${order.id}`}
-                          order={order}
-                          showWaiter={isAllTab}
-                          activeTab={activeTab}
-                          products={products}
-                          categories={categories}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                )}
-
-                {/* 3. Empty State for Order Tabs */}
-                {filteredDeduplicatedNotifications.length === 0 && otherActiveOrders.length === 0 && readyOrders.filter(o => !filteredDeduplicatedNotifications.some(n => String(n.invoice) === String(o.id))).length === 0 && (
-                  <div className="py-8 text-center text-muted-foreground text-sm">No active orders to show</div>
-                )}
-              </div>
-            )}
+                </section>
+              )}
+            </div>
 
 
             {/* Completed / Paid Orders */}
-            {isCompletedTab && (
-              <>
-                {doneOrders.length > 0 ? (
-                  <section>
-                    <h2 className="text-xs font-bold mb-2 text-muted-foreground uppercase tracking-widest">
-                      Completed
-                    </h2>
-                    <div className="space-y-3">
-                      {doneOrders.map((order) => (
-                        <OrderCard
-                          key={order.id}
-                          order={order}
-                          showWaiter={isAllTab}
-                          activeTab={activeTab}
-                          products={products}
-                          categories={categories}
-                          onUndo={async () => {
-                            try {
-                              await updateInvoiceStatus(order.id, "READY", { received_by_waiter: null });
-                              toast.success("Pick up undone!");
-                              loadData();
-                            } catch (err: any) {
-                              toast.error(err.message || "Failed to undo pick up");
-                            }
-                          }}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                ) : (
-                  <div className="py-8 text-center text-muted-foreground text-sm">No completed orders to show</div>
-                )}
-              </>
+            {doneOrders.length > 0 && (
+              <section>
+                <h2 className="text-xs font-bold mb-2 text-muted-foreground uppercase tracking-widest">
+                  Completed
+                </h2>
+                <div className="space-y-3">
+                  {doneOrders.map((order) => (
+                    <OrderCard
+                      key={order.id}
+                      order={order}
+                      showWaiter={isAllTab}
+                      activeTab={activeTab}
+                      products={products}
+                      categories={categories}
+                      onUndo={async () => {
+                        try {
+                          await updateInvoiceStatus(order.id, "READY", { received_by_waiter: null });
+                          toast.success("Pick up undone!");
+                          loadData();
+                        } catch (err: any) {
+                          toast.error(err.message || "Failed to undo pick up");
+                        }
+                      }}
+                    />
+                  ))}
+                </div>
+              </section>
             )}
 
             {/* Global Empty State overrides if literally 0 orders exist across the board */}

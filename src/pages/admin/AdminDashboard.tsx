@@ -4,7 +4,7 @@ import { NavLink } from "react-router-dom";
 import { fetchDashboardDetails, fetchInvoices, fetchTables } from "@/api/index.js";
 import { getCurrentUser } from "../../auth/auth";
 import { toast } from "sonner";
-import { useDashboardSSE } from "@/hooks/useDashboardSSE";
+import { useDashboardWebSocket } from "@/hooks/useDashboardWebSocket";
 import {
   DollarSign,
   ShoppingBag,
@@ -79,34 +79,15 @@ export default function AdminDashboard() {
     to: undefined
   });
 
-  // SSE: Real-time dashboard updates
-  const handleSSEUpdate = useCallback((data: any) => {
-    if (data.success) {
-      setDashboardData((prev: any) => ({
-        ...prev,
-        ...data,
-      }));
-      setSSEConnected(true);
-
-      // If we have recent_orders/recent_activity in the SSE data, use them
-      if (data.recent_orders || data.recent_activity) {
-        const raw = data.recent_orders || data.recent_activity;
-        const sorted = [...raw].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        setRecentOrders(sorted.slice(0, 5));
-      } else {
-        // Fallback: refresh recent orders manually
-        loadRecentOrders();
-      }
-    }
+  // WebSocket: Real-time dashboard updates
+  const handleWSUpdate = useCallback(() => {
+    // Refresh all data when notified
+    loadDashboardData();
+    loadRecentOrders();
+    setSSEConnected(true);
   }, []);
 
-  useDashboardSSE(
-    user?.branch_id,
-    handleSSEUpdate,
-    timeframe,
-    dateRange.from ? format(dateRange.from, "yyyy-MM-dd") : undefined,
-    dateRange.to ? format(dateRange.to, "yyyy-MM-dd") : undefined
-  );
+  useDashboardWebSocket(user?.branch_id, handleWSUpdate);
 
   useEffect(() => {
     loadDashboardData();
@@ -211,7 +192,7 @@ export default function AdminDashboard() {
             sseConnected ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" : "bg-slate-100 text-slate-400 border border-slate-200"
           )}>
             <div className={cn("h-1.5 w-1.5 rounded-full", sseConnected ? "bg-emerald-500 animate-pulse" : "bg-slate-400")} />
-            {sseConnected ? "Live" : "Polling"}
+            {sseConnected ? "Live" : "WebSocket"}
           </div>
 
           {/* Timeframe Selector */}

@@ -32,7 +32,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
-import { useDashboardSSE } from "@/hooks/useDashboardSSE";
+import { useDashboardWebSocket } from "@/hooks/useDashboardWebSocket";
 import {
     BarChart,
     Bar,
@@ -133,38 +133,13 @@ export default function SuperAdminOverview() {
         manager_phone: "",
     });
 
-    const handleSSEUpdate = useCallback((data: any) => {
-        if (data.success) {
-            setDashboardData((prev: any) => ({
-                ...prev,
-                ...data,
-            }));
-
-            // Update branch revenue in real-time if performance data is present
-            if (data.top_perfomance_branch) {
-                setBranches((prevBranches) =>
-                    prevBranches.map((branch) => {
-                        const performance = data.top_perfomance_branch.find(
-                            (p: any) => p.id === branch.id
-                        );
-                        return performance
-                            ? { ...branch, revenue: performance.total_sales_per_branch }
-                            : branch;
-                    })
-                );
-            }
-
-            setSSEConnected(true);
-        }
+    // WebSocket: Real-time dashboard updates
+    const handleWSUpdate = useCallback(() => {
+        loadData();
+        setSSEConnected(true);
     }, []);
 
-    useDashboardSSE(
-        null,
-        handleSSEUpdate,
-        timeframe,
-        dateRange.from ? format(dateRange.from, "yyyy-MM-dd") : undefined,
-        dateRange.to ? format(dateRange.to, "yyyy-MM-dd") : undefined
-    );
+    useDashboardWebSocket(null, handleWSUpdate);
 
     useEffect(() => {
         loadData();
@@ -267,7 +242,7 @@ export default function SuperAdminOverview() {
                     <div className="flex items-center gap-2 mt-1">
                         <div className={cn("h-1.5 w-1.5 rounded-full", sseConnected ? "bg-emerald-500 animate-pulse" : "bg-slate-300")} />
                         <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                            {sseConnected ? "Live Network Sync" : "Connecting..."}
+                            {sseConnected ? "Live Network Sync" : "WebSocket Connected"}
                         </span>
                         <span className="text-slate-200 mx-2">|</span>
                         <span className="text-[10px] font-black uppercase tracking-widest text-primary capitaize">{timeframe} Snapshot</span>

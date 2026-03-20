@@ -13,7 +13,7 @@ import {
     Calendar as CalendarIcon,
     LayoutDashboard
 } from "lucide-react";
-import { useDashboardSSE } from "@/hooks/useDashboardSSE";
+import { useDashboardWebSocket } from "@/hooks/useDashboardWebSocket";
 import {
     XAxis,
     YAxis,
@@ -59,17 +59,13 @@ export default function SuperAdminAnalytics() {
         to: undefined
     });
 
-    const handleSSEUpdate = useCallback((sseData: any) => {
-        if (sseData.success) {
-            setData((prev: any) => ({
-                ...prev,
-                ...sseData,
-            }));
-            setSSEConnected(true);
-        }
+    // WebSocket: Real-time dashboard updates
+    const handleWSUpdate = useCallback(() => {
+        loadData();
+        setSSEConnected(true);
     }, []);
 
-    useDashboardSSE(null, handleSSEUpdate);
+    useDashboardWebSocket(null, handleWSUpdate);
 
     useEffect(() => {
         loadData();

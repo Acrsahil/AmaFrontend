@@ -62,10 +62,14 @@ export default function SuperAdminAnalytics() {
     // WebSocket: Real-time dashboard updates
     const handleWSUpdate = useCallback(() => {
         loadData();
-        setSSEConnected(true);
     }, []);
 
-    useDashboardWebSocket(null, handleWSUpdate);
+    const { isConnected: wsConnected } = useDashboardWebSocket(null, handleWSUpdate);
+
+    // Sync connection status to local state for UI
+    useEffect(() => {
+        setSSEConnected(wsConnected);
+    }, [wsConnected]);
 
     useEffect(() => {
         loadData();

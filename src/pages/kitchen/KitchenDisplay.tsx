@@ -31,7 +31,7 @@ import {
 import { toast } from "sonner";
 import { getCurrentUser, logout } from "../../auth/auth";
 import { ChangePasswordModal } from "@/components/auth/ChangePasswordModal";
-import { fetchInvoices, fetchProducts, fetchCategories, updateInvoiceStatus, fetchTables } from "../../api/index.js";
+import { fetchInvoices, fetchProducts, fetchCategories, updateInvoiceStatus, fetchTables, getAccessToken } from "../../api/index.js";
 import { WS_BASE_URL } from "../../api/config";
 
 export default function KitchenDisplay() {
@@ -61,44 +61,60 @@ export default function KitchenDisplay() {
 
   // WebSocket: listen for new invoices and refresh kitchen data
   useEffect(() => {
-    const socket = new WebSocket(WS_BASE_URL + "/ws/kitchen/");
+    let timeoutId: any;
+    const token = getAccessToken();
+    let wsUrl = WS_BASE_URL + "/ws/kitchen/";
 
-    socket.onopen = () => {
-      setSocketConnected(true);
-      console.log("[Kitchen WS] Connected");
-    };
+    if (token) {
+      wsUrl += `?token=${token}`;
+    }
 
-    socket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        console.log("[Kitchen WS] Message:", data);
-        if (data.type === "invoice_created") {
-          // New order placed - show toast and refresh
-          toast.success("New Order Received!", {
-            description: "A new order has been placed",
-            icon: <Bell className="h-5 w-5 text-primary" />,
-          });
-          loadData();
-        } else if (data.type === "invoice_updated") {
-          // Order updated - just refresh (no sound for updates in kitchen)
-          loadData();
+    const connect = () => {
+      console.log(`[Kitchen WS] Connecting to ${wsUrl.split('?')[0]}`);
+      const socket = new WebSocket(wsUrl);
+
+      socket.onopen = () => {
+        setSocketConnected(true);
+        console.log("[Kitchen WS] Connected successfully");
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === "invoice_created") {
+            toast.success("New Order Received!", {
+              description: "A new order has been placed",
+              icon: <Bell className="h-5 w-5 text-primary" />,
+            });
+            loadData();
+          } else if (data.type === "invoice_updated") {
+            loadData();
+          }
+        } catch {
+          // Ignore malformed messages
         }
-      } catch {
-        // Ignore malformed messages
-      }
+      };
+
+      socket.onclose = (event) => {
+        setSocketConnected(false);
+        if (!event.wasClean) {
+          console.warn("[Kitchen WS] Connection closed, reconnecting in 5s...");
+          timeoutId = setTimeout(connect, 5000);
+        }
+      };
+
+      socket.onerror = (err) => {
+        console.error("[Kitchen WS] Error:", err);
+        socket.close();
+      };
+
+      return socket;
     };
 
-    socket.onclose = () => {
-      setSocketConnected(false);
-      console.log("[Kitchen WS] Disconnected");
-    };
-
-    socket.onerror = (err) => {
-      setSocketConnected(false);
-      console.error("[Kitchen WS] Error:", err);
-    };
+    const socket = connect();
 
     return () => {
+      if (timeoutId) clearTimeout(timeoutId);
       socket.close();
     };
   }, []);

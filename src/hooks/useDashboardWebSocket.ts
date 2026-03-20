@@ -1,52 +1,75 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { WS_BASE_URL } from "../api/config";
+import { getAccessToken } from "../api/index.js";
 
 export function useDashboardWebSocket(branchId: number | string | null | undefined, onUpdate: () => void) {
     const socketRef = useRef<WebSocket | null>(null);
     const [isConnected, setIsConnected] = useState(false);
 
     const connect = useCallback(() => {
-        const wsUrl = branchId
+        const token = getAccessToken();
+        let wsUrl = branchId
             ? `${WS_BASE_URL}/ws/dashboard/${branchId}/`
             : `${WS_BASE_URL}/ws/dashboard/`;
 
-        console.log(`[WS] Attempting to connect to ${wsUrl}`);
-        const socket = new WebSocket(wsUrl);
+        // Append token if available for authentication in cross-origin production environments
+        if (token) {
+            wsUrl += `?token=${token}`;
+        }
 
-        socket.onopen = () => {
-            console.log(`[WS] Dashboard socket connected successfully`);
-            setIsConnected(true);
-        };
+        console.log(`[Dashboard WS] Connecting to ${wsUrl.split('?')[0]}`);
 
-        socket.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.type === "dashboard_update") {
-                    console.log("[WS] Dashboard update received");
-                    onUpdate();
+        try {
+            const socket = new WebSocket(wsUrl);
+
+            socket.onopen = () => {
+                console.log(`[Dashboard WS] Connected successfully`);
+                setIsConnected(true);
+            };
+
+            socket.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === "dashboard_update") {
+                        console.log("[Dashboard WS] Update received");
+                        onUpdate();
+                    }
+                } catch (err) {
+                    console.error("[Dashboard WS] Parse error:", err);
                 }
-            } catch (err) {
-                console.error("[WS] Failed to parse message:", err);
-            }
-        };
+            };
 
-        socket.onclose = () => {
-            setIsConnected(false);
-            console.warn(`[WS] Socket connection closed. Retrying in 5s...`);
-            setTimeout(connect, 5000);
-        };
+            socket.onclose = (event) => {
+                setIsConnected(false);
+                if (event.wasClean) {
+                    console.log(`[Dashboard WS] Connection closed cleanly`);
+                } else {
+                    console.warn(`[Dashboard WS] Connection died. Reconnecting in 5s...`);
+                    setTimeout(connect, 5000);
+                }
+            };
 
-        socket.onerror = (err) => {
-            console.error("[WS] Socket error:", err);
-            socket.close();
-        };
+            socket.onerror = (err) => {
+                console.error("[Dashboard WS] Error:", err);
+                // socket.close() will trigger onclose and then reconnect
+                socket.close();
+            };
 
-        socketRef.current = socket;
+            socketRef.current = socket;
+        } catch (err) {
+            console.error("[Dashboard WS] Connection failure:", err);
+            setTimeout(connect, 5000); // Retry on initial failure
+        }
     }, [branchId, onUpdate]);
 
     useEffect(() => {
         connect();
-        return () => socketRef.current?.close();
+        return () => {
+            if (socketRef.current) {
+                console.log("[Dashboard WS] Cleaning up connection");
+                socketRef.current.close();
+            }
+        };
     }, [connect]);
 
     return { socketRef, isConnected };

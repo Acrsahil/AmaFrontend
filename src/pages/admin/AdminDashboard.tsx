@@ -84,10 +84,14 @@ export default function AdminDashboard() {
     // Refresh all data when notified
     loadDashboardData();
     loadRecentOrders();
-    setSSEConnected(true);
   }, []);
 
-  useDashboardWebSocket(user?.branch_id, handleWSUpdate);
+  const { isConnected: wsConnected } = useDashboardWebSocket(user?.branch_id, handleWSUpdate);
+
+  // Sync wsConnected to sseConnected for UI compatibility
+  useEffect(() => {
+    setSSEConnected(wsConnected);
+  }, [wsConnected]);
 
   useEffect(() => {
     loadDashboardData();

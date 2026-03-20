@@ -6,16 +6,21 @@ const apiBaseUrl = API_BASE_URL; // Internal helper name
 // --- TOKEN MANAGEMENT ---
 // In-memory access token (more secure against XSS)
 let _accessToken = null;
+let _tokenExpiry = null;
 
 // Helper to save tokens
 function saveTokens(tokens) {
   _accessToken = tokens.access;
+  // Standard JWTs usually have an exp claim. For now, we'll just store the token.
+  // If the backend provides an expiry, we could use it to proactively refresh.
 }
 
 // Clear tokens (logout)
 export async function clearTokens() {
-  // 1. Clear local state (SYNCHRONOUS)
+  console.log("🧹 Clearing tokens and local state...");
   _accessToken = null;
+  _tokenExpiry = null;
+
   localStorage.removeItem("currentUser");
   localStorage.removeItem("currentWaiter");
   localStorage.removeItem("token");
@@ -46,12 +51,17 @@ export function getAccessToken() {
   return _accessToken;
 }
 
-// --- REFRESH TOKEN MUTEX (Auth Loop Fix) ---
+// Check if authenticated
+export function isAuthenticated() {
+  return !!_accessToken;
+}
+
+// --- REFRESH TOKEN MUTEX & QUEUE ---
 let isRefreshing = false;
 let refreshSubscribers = [];
 
 function onTokenRefreshed(newToken) {
-  refreshSubscribers.map(cb => cb(newToken));
+  refreshSubscribers.forEach(cb => cb(newToken));
   refreshSubscribers = [];
 }
 
@@ -72,28 +82,29 @@ export async function refreshAccessToken() {
   const url = apiBaseUrl + "/api/token/refresh/";
 
   try {
+    console.log("🔄 Refreshing access token...");
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      credentials: "include" // This is key to send the refresh cookie
+      credentials: "include" // Important to send the refresh cookie
     });
 
     if (res.status === 200) {
       const data = await res.json();
       _accessToken = data.access;
+      console.log("✅ Token refreshed successfully");
       onTokenRefreshed(_accessToken);
       return _accessToken;
     } else {
-      // 400/401 means session is truly dead
+      console.warn("❌ Token refresh failed (session expired)");
       _accessToken = null;
       localStorage.removeItem("currentUser");
       localStorage.removeItem("currentWaiter");
       onTokenRefreshed(null);
-      // Don't throw here to avoid unhandled rejections in parallel calls
       return null;
     }
   } catch (err) {
-    console.error("Token refresh network failure:", err);
+    console.error("🚨 Token refresh network failure:", err);
     onTokenRefreshed(null);
     return null;
   } finally {
@@ -105,29 +116,56 @@ export async function refreshAccessToken() {
 export async function initializeAuth() {
   if (_accessToken) return true;
 
-  // If the user just logged out, don't try to revive the session via cookie
-  // This prevents the loop if the cookie delete hasn't propagated yet
   if (localStorage.getItem("just_logged_out") === "true") {
     return false;
   }
 
   try {
-    // Attempt to refresh using cookie
     const token = await refreshAccessToken();
     return !!token;
   } catch (err) {
-    // No valid refresh cookie or refresh failed
     return false;
   }
 }
 
+// --- RETRY LOGIC WITH EXPONENTIAL BACKOFF ---
+const MAX_RETRIES = 3;
+const INITIAL_BACKOFF = 1000; // 1 second
+
+async function backoffFetch(url, options, retryCount = 0) {
+  try {
+    const response = await fetch(url, options);
+
+    // Retry on 429 (Too Many Requests) or 503 (Service Unavailable)
+    if ((response.status === 429 || response.status === 503) && retryCount < MAX_RETRIES) {
+      const delay = INITIAL_BACKOFF * Math.pow(2, retryCount);
+      console.warn(`⚠️ Rate limited (status ${response.status}). Retrying in ${delay}ms... (Attempt ${retryCount + 1}/${MAX_RETRIES})`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return backoffFetch(url, options, retryCount + 1);
+    }
+
+    return response;
+  } catch (error) {
+    if (retryCount < MAX_RETRIES) {
+      const delay = INITIAL_BACKOFF * Math.pow(2, retryCount);
+      console.error(`🚨 Network error. Retrying in ${delay}ms...`, error);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return backoffFetch(url, options, retryCount + 1);
+    }
+    throw error;
+  }
+}
+
 // --- SECURE FETCHER ---
-// This wrapper handles:
-// 1. Automatically adding Authorization header
-// 2. Handling 401 errors by attempting a token refresh
-// 3. Retrying the original request after refresh
 async function apiFetch(endpoint, options = {}) {
   const url = endpoint.startsWith("http") ? endpoint : apiBaseUrl + endpoint;
+
+  // 1. If a refresh is already in progress, wait for it before making ANY authenticated request
+  // (Exception: the token endpoints themselves don't need this)
+  if (isRefreshing && !endpoint.includes("/api/token/")) {
+    console.log("⏳ Waiting for token refresh before proceeding with request:", endpoint);
+    await new Promise(resolve => addRefreshSubscriber(resolve));
+  }
 
   // Prepare headers
   const headers = {
@@ -143,28 +181,25 @@ async function apiFetch(endpoint, options = {}) {
   const fetchOptions = {
     ...options,
     headers,
-    credentials: "include", // Always include cookies
+    credentials: "include",
   };
 
-  let response = await fetch(url, fetchOptions);
+  // Use backoff fetch for all requests
+  let response = await backoffFetch(url, fetchOptions);
 
   // If 401 Unauthorized, try to refresh token once
-  // EXCEPTION: Don't try to refresh if we're actually TRYING to login
   if (response.status === 401 && !endpoint.includes("/api/token/")) {
-    console.warn("Access token expired, attempting refresh for:", endpoint);
-    try {
-      const newToken = await refreshAccessToken();
-      if (newToken) {
-        // Retry with new token
-        headers["Authorization"] = `Bearer ${newToken}`;
-        response = await fetch(url, { ...fetchOptions, headers });
-      } else {
-        // Refresh failed (no login info)
-        window.dispatchEvent(new CustomEvent("unauthorized"));
-      }
-    } catch (refreshErr) {
-      console.error("Refresh logic error:", refreshErr);
+    console.warn("🔓 Access token expired, attempting refresh for:", endpoint);
+
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      // Retry with new token
+      headers["Authorization"] = `Bearer ${newToken}`;
+      return backoffFetch(url, { ...fetchOptions, headers });
+    } else {
+      // Refresh failed (session dead)
       window.dispatchEvent(new CustomEvent("unauthorized"));
+      return response;
     }
   }
 

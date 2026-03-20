@@ -568,7 +568,7 @@ export async function addPayment(invoiceId, paymentData) {
     body: JSON.stringify(paymentData),
   });
   const data = await safeJson(res);
-  if (!res.ok) throw new Error(data?.message || "Failed to add payment");
+  if (!res.ok) throw new Error(data?.message || data?.error || "Failed to add payment");
   return data;
 }
 

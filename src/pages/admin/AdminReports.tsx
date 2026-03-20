@@ -375,7 +375,7 @@ export default function AdminReports() {
                       borderRadius: '8px'
                     }}
                   />
-                  <Bar dataKey="total_orders" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="total_sold_units" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -386,7 +386,7 @@ export default function AdminReports() {
                   <tr>
                     <th className="px-6 py-4 text-left font-medium text-muted-foreground">Rank</th>
                     <th className="px-6 py-4 text-left font-medium text-muted-foreground">Item</th>
-                    <th className="px-6 py-4 text-left font-medium text-muted-foreground">Orders</th>
+                    <th className="px-6 py-4 text-left font-medium text-muted-foreground">Sold Units</th>
                     <th className="px-6 py-4 text-right font-medium text-muted-foreground">Revenue</th>
                   </tr>
                 </thead>
@@ -405,7 +405,7 @@ export default function AdminReports() {
                         </span>
                       </td>
                       <td className="px-6 py-4 font-medium">{item.product__name}</td>
-                      <td className="px-6 py-4">{item.total_orders}</td>
+                      <td className="px-6 py-4">{item.total_sold_units}</td>
                       <td className="px-6 py-4 text-right font-semibold text-primary">
                         Rs.{Number(item.total_sales || 0).toLocaleString()}
                       </td>

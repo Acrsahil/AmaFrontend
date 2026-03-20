@@ -10,10 +10,6 @@ export const API_BASE_URL = RAW_BASE.replace(/\/+$/, "");
 
 // Derive WebSocket URL: http -> ws, https -> wss
 // Using a more explicit replacement to avoid any ambiguity
-export const WS_BASE_URL = API_BASE_URL.startsWith('https') 
-    ? API_BASE_URL.replace(/^https/, 'wss') 
+export const WS_BASE_URL = API_BASE_URL.startsWith('https')
+    ? API_BASE_URL.replace(/^https/, 'wss')
     : API_BASE_URL.replace(/^http/, 'ws');
-
-// Dashboard Polling configuration (30 seconds)
-// This is kept as a fallback if WebSockets fail
-export const DASHBOARD_POLL_INTERVAL = 30000;

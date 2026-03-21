@@ -200,13 +200,7 @@ export default function AdminReports() {
 
           <div className="h-8 w-[1px] bg-slate-100 mx-2" />
 
-          <Button variant="outline" size="icon" className="h-11 w-11 rounded-xl border-2 border-slate-100 shadow-sm">
-            <Printer className="h-4 w-4" />
-          </Button>
-          <Button className="h-11 rounded-xl shadow-lg shadow-primary/20 px-6 font-bold gap-2">
-            <Download className="h-4 w-4" />
-            Export
-          </Button>
+
         </div>
       </div>
 

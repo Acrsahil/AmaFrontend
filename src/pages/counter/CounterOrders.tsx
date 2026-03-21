@@ -185,8 +185,12 @@ export default function CounterOrders() {
 
     const handlePaymentSubmit = async () => {
         if (!selectedOrder) return;
+        
+        const currentDue = parseFloat(selectedOrder?.due_amount || (selectedOrder ? (selectedOrder.total_amount - (selectedOrder.paid_amount || 0)) : 0));
+        
         // Allow 0 amount if we are just confirming waiter handover
-        const isConfirmingHandover = (selectedOrder.payment_status === 'PAID' || selectedOrder.payment_status === 'PARTIAL' || selectedOrder.payment_status === 'WAITER RECEIVED') && selectedOrder.received_by_waiter && !selectedOrder.received_by_counter && parseFloat(selectedOrder.due_amount || 0) <= 0;
+        const isConfirmingHandover = (selectedOrder.payment_status === 'PAID' || selectedOrder.payment_status === 'PARTIAL' || selectedOrder.payment_status === 'WAITER RECEIVED') && selectedOrder.received_by_waiter && !selectedOrder.received_by_counter && currentDue <= 0;
+        
         if (!isConfirmingHandover && (!paymentAmount || parseFloat(paymentAmount) <= 0)) {
             toast.error("Please enter a valid amount");
             return;
@@ -194,8 +198,11 @@ export default function CounterOrders() {
 
         setIsPaying(true);
         try {
+            // Cap the payment amount at the actual due amount for database accuracy
+            const actualPayment = Math.min(parseFloat(paymentAmount), currentDue);
+            
             await addPayment(selectedOrder.id, {
-                amount: parseFloat(paymentAmount),
+                amount: isConfirmingHandover ? 0 : actualPayment,
                 payment_method: paymentMethod,
                 notes: paymentNotes
             });
@@ -547,9 +554,13 @@ export default function CounterOrders() {
                                             <td className="px-6 py-5">
                                                 <div className="flex flex-col">
                                                     <span className="text-base font-bold text-slate-800">
-                                                        {order.customer_name || 'Walk-in'}
+                                                        {(() => {
+                                                            const tableMatch = (order.description || order.invoice_description || "").match(/Table (\d+)/);
+                                                            const tableNo = order.table_no || (tableMatch ? tableMatch[1] : null);
+                                                            return tableNo ? `Table ${tableNo}` : "Takeaway";
+                                                        })()}
                                                     </span>
-                                                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{order.invoice_description || 'Sale'}</span>
+                                                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{order.customer_name || 'Walk-in'}</span>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-5">
@@ -652,11 +663,22 @@ export default function CounterOrders() {
             <Dialog open={showDetailModal} onOpenChange={setShowDetailModal}>
                 <DialogContent className="max-w-[480px] p-0 overflow-hidden border-none shadow-3xl rounded-[2.5rem]">
                     <div className="bg-white">
-                        <div className="p-8 pb-4">
+                        <div className="p-6 pb-2">
                             <DialogHeader>
                                 <div className="flex justify-between items-start">
                                     <div>
-                                        <DialogTitle className="text-2xl font-black text-slate-800">Order Details</DialogTitle>
+                                        <div className="flex items-center gap-2">
+                                            <DialogTitle className="text-2xl font-black text-slate-800">Order Details</DialogTitle>
+                                            {(() => {
+                                                const tableMatch = (selectedOrder?.description || selectedOrder?.invoice_description || "").match(/Table (\d+)/);
+                                                const tableNo = selectedOrder?.table_no || (tableMatch ? tableMatch[1] : null);
+                                                return tableNo && (
+                                                    <span className="bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider">
+                                                        Table {tableNo}
+                                                    </span>
+                                                );
+                                            })()}
+                                        </div>
                                         <p className="text-sm text-slate-400 font-medium">#{selectedOrder?.invoice_number} • {selectedOrder?.customer_name || 'Walk-in'}</p>
                                     </div>
                                     <div className="text-right">
@@ -668,7 +690,7 @@ export default function CounterOrders() {
                         </div>
 
                         {/* Tabs */}
-                        <div className="px-8 flex border-b">
+                        <div className="px-6 flex border-b">
                             <button
                                 onClick={() => setActiveTab("payment")}
                                 className={cn(
@@ -691,7 +713,7 @@ export default function CounterOrders() {
                             </button>
                         </div>
 
-                        <div className="p-8 pt-6 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                        <div className="p-6 pt-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
                             {activeTab === "payment" ? (
                                 <div className="space-y-6">
                                     <div className="grid grid-cols-2 gap-4 bg-slate-50 p-6 rounded-[2rem] border border-slate-100">
@@ -723,88 +745,85 @@ export default function CounterOrders() {
                                                 )}
                                             </div>
                                         </div>
-                                    )}
-
-                                    {(selectedOrder?.payment_status !== 'PAID' && parseFloat(selectedOrder?.due_amount || "0") > 0) ? (
-                                        <div className="space-y-6 animate-in fade-in slide-in-from-top-4">
-                                            <div className="space-y-2">
-                                                <Label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Amount to Pay</Label>
-                                                <div className="relative">
-                                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-black text-slate-300">Rs.</span>
-                                                    <Input
-                                                        type="number"
-                                                        className="h-16 text-3xl font-black text-center border-2 border-primary/20 focus:border-primary rounded-2xl pl-10"
-                                                        value={paymentAmount}
-                                                        onChange={(e) => setPaymentAmount(e.target.value)}
-                                                    />
+                                    )}                                    {(selectedOrder?.payment_status !== 'PAID' && parseFloat(selectedOrder?.due_amount || "0") > 0) ? (() => {
+                                        const currentDue = parseFloat(selectedOrder?.due_amount || (selectedOrder ? (selectedOrder.total_amount - (selectedOrder.paid_amount || 0)) : 0));
+                                        const changeAmount = Math.max(0, parseFloat(paymentAmount || "0") - currentDue);
+                                        
+                                        return (
+                                            <div className="space-y-6 animate-in fade-in slide-in-from-top-4">
+                                                <div className="space-y-2">
+                                                    <Label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Amount to Pay</Label>
+                                                    <div className="relative">
+                                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-black text-slate-300">Rs.</span>
+                                                        <Input
+                                                            type="number"
+                                                            max="1000000"
+                                                            className="h-16 text-3xl font-black text-center border-2 border-primary/20 focus:border-primary rounded-2xl pl-10"
+                                                            value={paymentAmount}
+                                                            onChange={(e) => {
+                                                                const val = parseFloat(e.target.value);
+                                                                if (val > 1000000) return;
+                                                                setPaymentAmount(e.target.value);
+                                                            }}
+                                                        />
+                                                        {changeAmount > 0 && (
+                                                            <div className="absolute -bottom-5 right-2 text-emerald-600 font-black text-[15px] animate-in slide-in-from-top-1 fade-in">
+                                                                Return: Rs.{changeAmount.toLocaleString()}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                            </div>
-
-                                            <div className="space-y-2">
-                                                <Label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Payment Method</Label>
-                                                <div className="grid grid-cols-3 gap-3">
-                                                    {[
-                                                        { id: 'CASH', icon: Banknote, label: 'Cash' },
-                                                        { id: 'QR', icon: QrCode, label: 'QR' },
-                                                        { id: 'ONLINE', icon: CreditCard, label: 'Online' }
-                                                    ].map((method) => (
-                                                        <button
-                                                            key={method.id}
-                                                            onClick={() => setPaymentMethod(method.id as any)}
-                                                            className={cn(
-                                                                "flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all gap-1",
-                                                                paymentMethod === method.id ? "border-primary bg-primary/5 text-primary shadow-sm" : "border-slate-100 text-slate-400 hover:border-slate-200"
-                                                            )}
-                                                        >
-                                                            <method.icon className="h-6 w-6" />
-                                                            <span className="text-[10px] font-black uppercase tracking-tighter">{method.label}</span>
-                                                        </button>
-                                                    ))}
+                                                
+                                                <div className="space-y-2">
+                                                    <Label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Payment Method</Label>
+                                                    <div className="grid grid-cols-3 gap-3">
+                                                        {[
+                                                            { id: 'CASH', icon: Banknote, label: 'Cash' },
+                                                            { id: 'QR', icon: QrCode, label: 'QR' },
+                                                            { id: 'ONLINE', icon: CreditCard, label: 'Online' }
+                                                        ].map((method) => (
+                                                            <button
+                                                                key={method.id}
+                                                                onClick={() => setPaymentMethod(method.id as any)}
+                                                                className={cn(
+                                                                    "flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all gap-1",
+                                                                    paymentMethod === method.id ? "border-primary bg-primary/5 text-primary shadow-sm" : "border-slate-100 text-slate-400 hover:border-slate-200"
+                                                                )}
+                                                            >
+                                                                <method.icon className="h-6 w-6" />
+                                                                <span className="text-[10px] font-black uppercase tracking-tighter">{method.label}</span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
                                                 </div>
-                                            </div>
 
-                                            <div className="space-y-2">
-                                                <Label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Internal Notes</Label>
-                                                <Input
-                                                    placeholder="Add any internal payment notes..."
-                                                    className="h-12 rounded-xl"
-                                                    value={paymentNotes}
-                                                    onChange={(e) => setPaymentNotes(e.target.value)}
-                                                />
+                                                <Button
+                                                    className="w-full h-16 rounded-[1.5rem] font-black text-xl gradient-warm shadow-xl shadow-primary/20"
+                                                    onClick={handlePaymentSubmit}
+                                                    disabled={isPaying}
+                                                >
+                                                    {isPaying ? <Loader2 className="h-6 w-6 animate-spin" /> : "Receive Payment"}
+                                                </Button>
                                             </div>
-
-                                            <Button
-                                                className="w-full h-16 rounded-[1.5rem] font-black text-xl gradient-warm shadow-xl shadow-primary/20"
-                                                onClick={handlePaymentSubmit}
-                                                disabled={isPaying}
-                                            >
-                                                {isPaying ? <Loader2 className="h-6 w-6 animate-spin" /> : "Receive Payment"}
-                                            </Button>
-                                        </div>
-                                    ) : (
-                                        <div className="py-10 text-center space-y-6 bg-emerald-50 rounded-[2rem] border border-emerald-100 animate-in zoom-in-95">
-                                            <div className="h-16 w-16 bg-white rounded-full flex items-center justify-center mx-auto shadow-sm">
-                                                <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+                                        );
+                                    })() : (
+                                        <div className="py-4 text-center space-y-3 bg-emerald-50 rounded-[1.5rem] border border-emerald-100 animate-in zoom-in-95">
+                                            <div className="h-10 w-10 bg-white rounded-full flex items-center justify-center mx-auto shadow-sm">
+                                                <CheckCircle2 className="h-6 w-6 text-emerald-500" />
                                             </div>
-                                            <div className="px-6">
-                                                <p className="text-xl font-black text-emerald-800">Fully Paid</p>
-                                                <p className="text-sm text-emerald-600 font-medium">This order is fully paid by the customer.</p>
+                                            <div className="px-4">
+                                                <p className="text-lg font-black text-emerald-800 leading-tight">Fully Paid</p>
+                                                <p className="text-xs text-emerald-600 font-medium">This order is fully paid by the customer.</p>
 
                                                 {selectedOrder?.received_by_waiter && !selectedOrder?.received_by_counter && (
-                                                    <div className="mt-6 pt-6 border-t border-emerald-100 space-y-4">
+                                                    <div className="mt-4 pt-4 border-t border-emerald-100 space-y-3">
                                                         {selectedOrder.payment_methods?.includes('QR') ? (
-                                                            <>
-                                                                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700/50">Online Payment Received</p>
-                                                                <p className="text-xs text-emerald-700 font-bold italic">This order was paid via QR. Click below to verify and finalize receipt at the counter.</p>
-                                                            </>
+                                                            <p className="text-[11px] text-emerald-700 font-bold italic">Online payment (QR). Finalize receipt at counter.</p>
                                                         ) : (
-                                                            <>
-                                                                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700/50">Cash Handover Required</p>
-                                                                <p className="text-xs text-emerald-700 font-bold italic">Wait! The waiter ({selectedOrder.received_by_waiter_name}) still has this cash. Click below once you receive it at the counter.</p>
-                                                            </>
+                                                            <p className="text-[11px] text-emerald-700 font-bold italic">Waiter ({selectedOrder.received_by_waiter_name}) has cash. Confirm once received.</p>
                                                         )}
                                                         <Button
-                                                            className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 font-bold rounded-xl shadow-lg"
+                                                            className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 font-bold rounded-xl shadow-lg"
                                                             onClick={() => {
                                                                 const method = selectedOrder.payment_methods?.includes('QR') ? 'QR' : 'CASH';
                                                                 setPaymentMethod(method as any);
@@ -814,7 +833,7 @@ export default function CounterOrders() {
                                                             }}
                                                             disabled={isPaying}
                                                         >
-                                                            {isPaying ? <Loader2 className="h-4 w-4 animate-spin" /> : (selectedOrder.payment_methods?.includes('QR') ? "Finalize Receipt" : "Confirm Handover to Counter")}
+                                                            {isPaying ? <Loader2 className="h-4 w-4 animate-spin" /> : (selectedOrder.payment_methods?.includes('QR') ? "Finalize Receipt" : "Confirm Handover")}
                                                         </Button>
                                                     </div>
                                                 )}
@@ -880,7 +899,7 @@ export default function CounterOrders() {
                                 </div>
                             )}
                         </div>
-                        <div className="p-8 pt-0 flex gap-4">
+                        <div className="p-6 pt-0 flex gap-4">
                             <Button variant="ghost" className="h-12 flex-1 rounded-xl font-bold text-slate-400" onClick={() => setShowDetailModal(false)}>Close</Button>
                         </div>
                     </div>
@@ -983,7 +1002,7 @@ export default function CounterOrders() {
                                     <span>{selectedOrder?.payment_status}</span>
                                 </div>
                                 <div className="thermal-divider"></div>
-                                
+
                                 <div className="thermal-row" style={{ fontSize: '9pt', opacity: 0.8 }}>
                                     <span>PAID AMOUNT</span>
                                     <span>{parseFloat(selectedOrder?.paid_amount || 0).toFixed(2)}</span>

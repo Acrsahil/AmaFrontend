@@ -16,6 +16,8 @@ import {
     Trash2
 } from "lucide-react";
 import { fetchCustomers, createCustomer, updateCustomer, deleteCustomer, fetchInvoicesByCustomer, fetchBranches } from "../../api/index.js";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -47,6 +49,8 @@ interface Customer {
 export default function AdminCustomers() {
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [searchTerm, setSearchTerm] = useState("");
+    const [branchFilter, setBranchFilter] = useState<string>("all");
+    const [sortBy, setSortBy] = useState<string>("default");
     const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -215,11 +219,50 @@ export default function AdminCustomers() {
         }
     };
 
-    const filteredCustomers = customers.filter(c =>
-        c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.phone.includes(searchTerm)
-    );
+    const displayCustomers = [...customers]
+        .filter(c => {
+            const matchesSearch = 
+                c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                c.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                c.phone.includes(searchTerm);
+            
+            const matchesBranch = branchFilter === 'all' || String(c.branch) === branchFilter;
+            
+            return matchesSearch && matchesBranch;
+        })
+        .sort((a, b) => {
+            if (sortBy === 'max_spent') return b.totalSpent - a.totalSpent;
+            if (sortBy === 'max_orders') return b.totalOrders - a.totalOrders;
+            if (sortBy === 'newest') return b.id - a.id;
+            return 0;
+        });
+
+    const handleExport = () => {
+        try {
+            const exportData = displayCustomers.map(customer => ({
+                'Customer Name': customer.name,
+                'Email': customer.email || 'N/A',
+                'Phone': customer.phone || 'N/A',
+                'Address': customer.address || 'N/A',
+                'Total Orders': customer.totalOrders,
+                'Total Spent': `Rs. ${customer.totalSpent}`,
+                'Last Order Date': customer.lastOrderDate
+            }));
+
+            const worksheet = XLSX.utils.json_to_sheet(exportData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Customers");
+
+            const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+            const data = new Blob([excelBuffer], { type: 'application/octet-stream' });
+            saveAs(data, `Customers_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+
+            toast.success("Customer data exported successfully!");
+        } catch (error) {
+            console.error("Export failed:", error);
+            toast.error("Failed to export customers.");
+        }
+    };
 
     return (
         <div className="p-4 md:p-6 space-y-6">
@@ -230,7 +273,7 @@ export default function AdminCustomers() {
                     <p className="text-sm md:text-base text-muted-foreground">Manage your customer database and purchase history.</p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" className="hidden sm:flex">
+                    <Button variant="outline" size="sm" className="hidden sm:flex" onClick={handleExport} disabled={displayCustomers.length === 0}>
                         <Download className="h-4 w-4 mr-2" />
                         Export
                     </Button>
@@ -253,13 +296,40 @@ export default function AdminCustomers() {
                     />
                 </div>
                 <div className="flex items-center gap-2 w-full md:w-auto">
-                    <Button variant="outline" size="sm" className="flex-1 md:flex-none">
-                        <Filter className="h-4 w-4 mr-2" />
-                        Filters
-                    </Button>
+                    {(currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPER_ADMIN') && !branchId && (
+                        <Select value={branchFilter} onValueChange={setBranchFilter}>
+                            <SelectTrigger className="w-full md:w-40">
+                                <Filter className="h-4 w-4 mr-2" />
+                                <SelectValue placeholder="All Branches" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Branches</SelectItem>
+                                {branches.map((b) => (
+                                    <SelectItem key={b.id} value={b.id.toString()}>
+                                        {b.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    )}
+                    <div className="h-8 w-[1px] bg-border hidden md:block mx-2" />
+                    
+                    <Select value={sortBy} onValueChange={setSortBy}>
+                        <SelectTrigger className="w-full md:w-44">
+                            <span className="text-muted-foreground mr-2">Sort:</span>
+                            <SelectValue placeholder="Default" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="default">Default (Recent)</SelectItem>
+                            <SelectItem value="max_spent">Most Spent</SelectItem>
+                            <SelectItem value="max_orders">Most Orders</SelectItem>
+                            <SelectItem value="newest">Newest First</SelectItem>
+                        </SelectContent>
+                    </Select>
+
                     <div className="h-8 w-[1px] bg-border hidden md:block mx-2" />
                     <p className="text-sm text-muted-foreground whitespace-nowrap">
-                        Showing <span className="font-medium text-foreground">{filteredCustomers.length}</span> customers
+                        Showing <span className="font-medium text-foreground">{displayCustomers.length}</span> customers
                     </p>
                 </div>
             </div>
@@ -286,14 +356,14 @@ export default function AdminCustomers() {
                                         Loading customers...
                                     </td>
                                 </tr>
-                            ) : filteredCustomers.length === 0 ? (
+                            ) : displayCustomers.length === 0 ? (
                                 <tr>
                                     <td colSpan={6} className="px-6 py-10 text-center text-muted-foreground">
                                         No customers found.
                                     </td>
                                 </tr>
                             ) : (
-                                filteredCustomers.map((customer) => (
+                                displayCustomers.map((customer) => (
                                     <tr
                                         key={customer.id}
                                         className="hover:bg-muted/30 transition-colors group cursor-pointer"

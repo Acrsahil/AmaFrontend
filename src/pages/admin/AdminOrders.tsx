@@ -6,6 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Search, Filter, Download, Eye, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { format, parseISO } from "date-fns";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
 import { fetchInvoices, fetchProducts } from "@/api/index.js";
 import { toast } from "sonner";
 import { getCurrentUser } from "@/auth/auth";
@@ -15,6 +17,7 @@ export default function AdminOrders() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [dateFilter, setDateFilter] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [productsMap, setProductsMap] = useState<Record<string, any>>({});
   const currentUser = getCurrentUser();
@@ -63,8 +66,40 @@ export default function AdminOrders() {
       (order.created_by_name && order.created_by_name.toLowerCase().includes(searchTerm.toLowerCase()));
 
     const matchesStatus = statusFilter === 'all' || order.payment_status === statusFilter;
-    return matchesSearch && matchesStatus;
+    
+    const orderDate = order.created_at ? format(parseISO(order.created_at), 'yyyy-MM-dd') : null;
+    const matchesDate = !dateFilter || orderDate === dateFilter;
+    
+    return matchesSearch && matchesStatus && matchesDate;
   });
+
+  const handleExport = () => {
+    try {
+      const exportData = filteredOrders.map(order => ({
+        'Invoice #': order.invoice_number,
+        'Branch': order.branch_name || 'N/A',
+        'Created By': order.created_by_name || 'N/A',
+        'Customer': order.customer_name || 'Walk-in',
+        'Date': order.created_at ? format(parseISO(order.created_at), 'MMM d, yyyy h:mm a') : 'N/A',
+        'Status': order.payment_status || 'PENDING',
+        'Total Amount': `${order.total_amount}`
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Orders");
+
+      // Generate Excel file and trigger download
+      const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+      const data = new Blob([excelBuffer], { type: 'application/octet-stream' });
+      saveAs(data, `Orders_Report_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+
+      toast.success("Orders exported successfully!");
+    } catch (error) {
+      console.error("Export failed:", error);
+      toast.error("Failed to export orders. Please try again.");
+    }
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -74,7 +109,7 @@ export default function AdminOrders() {
           <h1 className="text-3xl font-bold text-foreground">Orders</h1>
           <p className="text-muted-foreground">View and manage all orders</p>
         </div>
-        <Button variant="outline">
+        <Button variant="outline" onClick={handleExport} disabled={filteredOrders.length === 0}>
           <Download className="h-4 w-4 mr-2" />
           Export
         </Button>
@@ -100,11 +135,17 @@ export default function AdminOrders() {
             <SelectItem value="all">All Status</SelectItem>
             <SelectItem value="PENDING">Pending</SelectItem>
             <SelectItem value="PAID">Paid</SelectItem>
+            <SelectItem value="WAITER RECEIVED">Waiter Received</SelectItem>
             <SelectItem value="PARTIAL">Partial</SelectItem>
             <SelectItem value="CANCELLED">Cancelled</SelectItem>
           </SelectContent>
         </Select>
-        <Input type="date" className="w-[180px]" />
+        <Input 
+          type="date" 
+          className="w-[180px]" 
+          value={dateFilter}
+          onChange={(e) => setDateFilter(e.target.value)}
+        />
       </div>
 
       {/* Orders Table */}

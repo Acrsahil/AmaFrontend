@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { WaiterBottomNav } from "@/components/waiter/WaiterBottomNav";
-import { CreditCard, Banknote, CheckCircle2, IndianRupee, Printer, Clock, X, Loader2, Wallet, QrCode } from "lucide-react";
+import { CreditCard, Banknote, CheckCircle2, IndianRupee, Printer, Clock, X, Loader2, Wallet, QrCode, ChevronDown, ChevronUp, User } from "lucide-react";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
@@ -173,51 +173,92 @@ export default function PaymentCollection() {
   const pendingOrdersList = orders.filter(o => !(o.payment_status === 'PAID' || o.payment_status === 'WAITER RECEIVED' || (o.payment_status === 'PARTIAL' && o.received_by_waiter)));
   const completedOrdersList = orders.filter(o => o.payment_status === 'PAID' || o.payment_status === 'WAITER RECEIVED' || (o.payment_status === 'PARTIAL' && o.received_by_waiter));
 
-  const renderOrderCard = (order: any) => (
-    <button
-      key={order.id}
-      className="card-elevated w-full text-left overflow-hidden transition-all active:scale-[0.98] mb-4"
-      onClick={() => handlePaymentClick(order)}
-    >
-      <div className="bg-slate-50/80 px-4 py-3 flex items-center justify-between border-b border-slate-100">
-        <div className="flex items-center gap-2">
-          <span className="font-bold text-base">Order #{order.invoice_number?.slice(-4) || '??'}</span>
-          <span className="text-[10px] bg-white border border-slate-200 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider text-slate-500">
-            Table {order.table_no || order.floor_name || '??'}
-          </span>
-        </div>
-        <StatusBadge
-          status={
-            (order.payment_status === 'PAID' || order.payment_status === 'WAITER RECEIVED' || (order.payment_status === 'PARTIAL' && order.received_by_waiter))
-              ? 'paid'
-              : order.payment_status?.toLowerCase() || 'pending'
-          }
-        />
-      </div>
+  // Extracted Order Card Component for better state management
+  const PaymentOrderCard = ({ order, onPaymentClick }: { order: any; onPaymentClick: (order: any) => void }) => {
+    const [showItems, setShowItems] = useState(false);
 
-      <div className="p-4">
-        <div className="space-y-1 mb-3">
-          {order.items?.map((item: any, idx: number) => (
-            <div key={idx} className="flex justify-between text-sm text-slate-600">
-              <span>{item.quantity}× {item.product_name || 'Item'}</span>
-              <span className="text-slate-400 tabular-nums">Rs.{Number(item.unit_price * item.quantity).toFixed(0)}</span>
+    return (
+      <div
+        className="card-elevated w-full text-left overflow-hidden transition-all mb-4"
+      >
+        <button
+          className="w-full text-left focus:outline-none active:bg-slate-50 transition-colors"
+          onClick={() => onPaymentClick(order)}
+        >
+          <div className="bg-slate-50/80 px-4 py-3 flex items-center justify-between border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-base">Order #{order.invoice_number?.slice(-4) || '??'}</span>
+              <span className="text-[10px] bg-white border border-slate-200 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider text-slate-500">
+                Table {order.table_no || order.floor_name || '??'}
+              </span>
             </div>
-          ))}
+            <StatusBadge
+              status={
+                (order.payment_status === 'PAID' || order.payment_status === 'WAITER RECEIVED' || (order.payment_status === 'PARTIAL' && order.received_by_waiter))
+                  ? 'paid'
+                  : order.payment_status?.toLowerCase() || 'pending'
+              }
+            />
+          </div>
+        </button>
+
+        <div className="px-4 py-3">
+          {/* Dropdown Items Header */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowItems(!showItems);
+            }}
+            className="w-full flex justify-between items-center py-2 px-1 border-b border-slate-100/50 hover:bg-slate-50/80 transition-all group rounded-md mb-2"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black uppercase text-slate-400 group-hover:text-primary transition-colors">
+                Items ({(order.items || []).length})
+              </span>
+            </div>
+            {showItems ? (
+              <ChevronUp className="h-4 w-4 text-slate-400 group-hover:text-primary transition-colors" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-slate-400 group-hover:text-primary transition-colors" />
+            )}
+          </button>
+
+          {/* Expandable Items List */}
+          {showItems && (
+            <div className="space-y-1 mb-4 animate-in fade-in slide-in-from-top-1 duration-200">
+              {order.items?.map((item: any, idx: number) => (
+                <div key={idx} className="flex justify-between items-center text-sm bg-slate-50/50 p-1.5 rounded-lg border border-slate-100/50">
+                  <span className="text-slate-700 font-medium leading-tight inline-flex gap-1.5 items-center">
+                    <span className="text-primary font-bold bg-primary/10 px-1.5 py-0.5 rounded text-[11px]">{item.quantity}×</span>
+                    {item.product_name || 'Item'}
+                  </span>
+                  <span className="text-slate-500 text-[11px] tabular-nums font-bold">Rs.{Number(item.unit_price * item.quantity).toFixed(0)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex justify-between items-center pt-2">
+            <div className="flex items-center gap-1.5 text-slate-400 text-xs">
+              <User className="h-3.5 w-3.5" />
+              <span className="font-medium">{order.created_by_name || 'Waiter'}</span>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-0.5">Amount Due</p>
+              <p className="text-lg font-black text-primary leading-none">Rs.{Number(order.due_amount ?? order.total_amount).toFixed(2)}</p>
+            </div>
+          </div>
         </div>
 
-        <div className="flex justify-between items-center pt-3 border-t border-dashed border-slate-100">
-          <div className="flex items-center gap-1.5 text-slate-400 text-xs">
-            <User className="h-3.5 w-3.5" />
-            <span className="font-medium">{order.created_by_name || 'Waiter'}</span>
-          </div>
-          <div className="text-right">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-0.5">Amount Due</p>
-            <p className="text-lg font-black text-primary leading-none">Rs.{Number(order.due_amount ?? order.total_amount).toFixed(2)}</p>
-          </div>
-        </div>
+        <button
+          onClick={() => onPaymentClick(order)}
+          className="w-full py-2.5 bg-primary/5 hover:bg-primary/10 text-primary text-xs font-bold uppercase tracking-widest transition-colors border-t border-primary/10"
+        >
+          Collect Payment
+        </button>
       </div>
-    </button>
-  );
+    );
+  };
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -255,7 +296,9 @@ export default function PaymentCollection() {
               </Button>
             </div>
 
-            {pendingOrdersList.map(renderOrderCard)}
+            {pendingOrdersList.map(order => (
+              <PaymentOrderCard key={order.id} order={order} onPaymentClick={handlePaymentClick} />
+            ))}
 
             {completedOrdersList.length > 0 && (
               <div className="mt-8">
@@ -264,7 +307,9 @@ export default function PaymentCollection() {
                     {completedOrdersList.length} Collected Today
                   </p>
                 </div>
-                {completedOrdersList.map(renderOrderCard)}
+                {completedOrdersList.map(order => (
+                  <PaymentOrderCard key={order.id} order={order} onPaymentClick={handlePaymentClick} />
+                ))}
               </div>
             )}
           </div>
@@ -564,12 +609,4 @@ export default function PaymentCollection() {
   );
 }
 
-// Simple Helper Component
-function User({ className }: { className?: string }) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </svg>
-  )
-}
+

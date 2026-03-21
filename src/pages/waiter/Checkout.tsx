@@ -17,12 +17,10 @@ import {
     User,
     Phone,
     MessageSquare,
-    Printer,
-    Wallet,
     Banknote,
     QrCode,
     CreditCard,
-    X
+    Wallet
 } from "lucide-react";
 import { toast } from "sonner";
 import { MenuItem } from "@/lib/mockData";
@@ -64,7 +62,6 @@ export default function Checkout() {
     const [showPaymentConfirmation, setShowPaymentConfirmation] = useState(false);
     const [showCashModal, setShowCashModal] = useState(false);
     const [cashReceived, setCashReceived] = useState("");
-    const [showReceipt, setShowReceipt] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
     const [changeAmount, setChangeAmount] = useState<number | null>(null);
     const [orderId, setOrderId] = useState<string | null>(null);
@@ -90,133 +87,7 @@ export default function Checkout() {
         [subtotal, taxAmount, discountAmount]
     );
 
-    const handlePrint = () => {
-        const itemRows = state?.cart.map((item, index) => `
-            <div class="receipt-item-grid">
-                <div>${index + 1}</div>
-                <div>
-                    ${item.item.name}
-                    ${item.notes ? `<div style="font-size: 8pt; text-transform: none; margin-top: 1mm;">"${item.notes}"</div>` : ""}
-                </div>
-                <div>${item.quantity}</div>
-                <div style="text-align: right;">${(item.item.price * item.quantity).toFixed(2)}</div>
-            </div>
-        `).join("") || "";
 
-        const taxRow = taxAmount > 0 ? `
-            <div class="thermal-row">
-                <span>TAX (${taxRate}%)</span>
-                <span>${taxAmount.toFixed(2)}</span>
-            </div>` : "";
-
-        const discountRow = discountAmount > 0 ? `
-            <div class="thermal-row" style="color: #dc2626 !important;">
-                <span>DISCOUNT</span>
-                <span>-${discountAmount.toFixed(2)}</span>
-            </div>` : "";
-
-        const html = `<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8"/>
-    <title>Receipt - Ama Bakery</title>
-    <link href="https://fonts.googleapis.com/css2?family=Libre+Barcode+39&display=swap" rel="stylesheet">
-    <style>
-        * { margin:0; padding:0; box-sizing:border-box; color: black !important; background: white !important; font-family: 'Courier New', Courier, monospace !important; }
-        body { width: 80mm; padding: 4mm; }
-        .thermal-header { text-align: center; margin-bottom: 4mm; }
-        .thermal-title { font-size: 16pt; font-weight: bold; margin-bottom: 1mm; letter-spacing: 1px; text-transform: uppercase; }
-        .thermal-subtitle { font-size: 9pt; margin-bottom: 2mm; text-align: center; }
-        .thermal-info-grid { display: grid; grid-template-columns: 1fr 1fr; font-size: 9pt; margin-bottom: 4mm; line-height: 1.4; gap: 2mm; }
-        .thermal-info-left { text-align: left; }
-        .thermal-info-right { text-align: right; }
-        .thermal-row { display: flex; justify-content: space-between; margin-bottom: 1mm; font-size: 10pt; }
-        .thermal-divider { border-top: 1px dashed black; margin: 3mm 0; }
-        .thermal-total-row { font-size: 14pt; font-weight: bold; display: flex; justify-content: space-between; margin-top: 2mm; border-top: 1px dashed black; padding-top: 2mm; }
-        .receipt-item-grid { display: grid; grid-template-columns: 6mm 1fr 10mm 18mm; gap: 1mm; font-size: 9pt; margin-bottom: 1mm; text-transform: uppercase; }
-        .thermal-footer { text-align: center; margin-top: 6mm; font-size: 9pt; font-weight: bold; text-transform: uppercase; }
-        .thermal-barcode { text-align: center; margin-top: 4mm; font-family: 'Libre Barcode 39', monospace !important; font-size: 30pt; }
-        .thermal-branding { text-align: center; font-size: 7pt; color: #aaa !important; margin-top: 2mm; }
-        
-        @media print {
-            @page { size: 80mm auto; margin: 0; }
-            body { width: 80mm; padding: 4mm; }
-        }
-    </style>
-</head>
-<body>
-    <div class="thermal-header">
-        <div class="thermal-title">AMA BAKERY</div>
-        <div class="thermal-subtitle">Tel: 9816020731</div>
-    </div>
-    
-    <div class="thermal-divider"></div>
-    
-    <div class="thermal-info-grid">
-        <div class="thermal-info-left">
-            <div>INV: #${orderId ? String(orderId).slice(-6).toUpperCase() : "NEW"}</div>
-            <div>DATE: ${new Date().toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
-        </div>
-        <div class="thermal-info-right">
-            <div>CSHR: Waiter</div>
-            <div>TBL: ${state?.tableNumber || "N/A"}</div>
-            <div>CUST: ${customer ? customer.name : "Walk-in"}</div>
-        </div>
-    </div>
-
-    <div class="thermal-divider"></div>
-    
-    <div class="receipt-item-grid" style="font-weight: bold;">
-        <div>SN</div>
-        <div>ITEM</div>
-        <div>QTY</div>
-        <div style="text-align: right;">TOTAL</div>
-    </div>
-    
-    ${itemRows}
-
-    <div class="thermal-divider"></div>
-
-    <div style="font-size: 10pt; line-height: 1.5;">
-        <div class="thermal-row">
-            <span>SUBTOTAL</span>
-            <span>${subtotal.toFixed(2)}</span>
-        </div>
-        ${taxRow}
-        ${discountRow}
-        <div class="thermal-divider"></div>
-        <div class="thermal-total-row">
-            <span>TOTAL</span>
-            <span>${total.toFixed(2)}</span>
-        </div>
-        <div class="thermal-divider"></div>
-        <div class="thermal-row">
-            <span>STATUS</span>
-            <span>${paymentTiming === "now" ? "PAID" : "DUE LATER"}</span>
-        </div>
-        <div class="thermal-divider"></div>
-    </div>
-
-    <div class="thermal-footer">
-        THANK YOU FOR YOUR VISIT!
-    </div>
-    <div class="thermal-barcode">
-        *AMA-POS-BILL*
-    </div>
-    <div class="thermal-branding">
-        POS-BY: nishchalacharya.com.np
-    </div>
-
-    <script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};</script>
-</body>
-</html>`;
-
-        const win = window.open('', '_blank', 'width=400,height=700');
-        if (win) {
-            win.document.write(html);
-            win.document.close();
-        }
-    };
 
     const submitInvoice = async (isPaid: boolean = false, paidAmount: number = 0, method: string | null = null) => {
         setIsProcessing(true);
@@ -324,7 +195,6 @@ export default function Checkout() {
             setChangeAmount(change);
             setShowCashModal(false);
             setShowSuccess(true);
-            setShowReceipt(true);
         } catch (err) { }
     };
 
@@ -338,16 +208,10 @@ export default function Checkout() {
 
             setShowPaymentConfirmation(false);
             setShowSuccess(true);
-            setShowReceipt(true);
         } catch (err) { }
     };
 
-    const handlePrintBill = () => {
-        setShowReceipt(true);
-        toast.success("Opening digital bill", {
-            icon: <Receipt className="h-5 w-5" />,
-        });
-    };
+
 
     if (!state || !state.cart || state.cart.length === 0) {
         return (
@@ -395,13 +259,7 @@ export default function Checkout() {
                         )}
 
                         <div className="pt-4 space-y-3">
-                            <Button
-                                className="w-full btn-touch gradient-warm shadow-warm-lg h-14 text-lg"
-                                onClick={handlePrintBill}
-                            >
-                                <Printer className="h-6 w-6 mr-2" />
-                                Print Bill
-                            </Button>
+
 
                             <div className="grid grid-cols-2 gap-3">
                                 <Button
@@ -425,115 +283,7 @@ export default function Checkout() {
                     <p className="text-xs text-muted-foreground">Order has been sent to the kitchen printer.</p>
                 </div>
 
-                {/* Digital Receipt Modal — updated for thermal layout */}
-                <Dialog open={showReceipt} onOpenChange={setShowReceipt}>
-                    <DialogContent className="max-w-[400px] w-[95vw] p-0 border-none bg-transparent shadow-none overflow-visible max-h-[95vh] flex flex-col">
-                        <DialogTitle className="sr-only">Digital Receipt</DialogTitle>
-                        <div className="flex justify-end mb-2 no-print">
-                            <button
-                                onClick={() => setShowReceipt(false)}
-                                className="h-10 w-10 flex items-center justify-center rounded-full bg-slate-900/80 text-white backdrop-blur-sm shadow-xl z-50 transition-all active:scale-95"
-                            >
-                                <X className="h-6 w-6" />
-                            </button>
-                        </div>
 
-                        <div className="bg-white rounded-2xl overflow-y-auto shadow-2xl relative custom-scrollbar flex flex-col">
-                            <div className="no-print p-4 bg-slate-50 border-b flex justify-between items-center">
-                                <span className="text-xs font-bold text-slate-500 uppercase">Receipt Preview</span>
-                                <Button size="sm" onClick={() => handlePrint()} className="h-8 text-xs font-bold px-4">
-                                    <Printer className="h-3.5 w-3.5 mr-1.5" />
-                                    Print
-                                </Button>
-                            </div>
-                            <div className="thermal-receipt printable-receipt" id="bill-print-root">
-                                <div className="thermal-header">
-                                    <h1 className="thermal-title">AMA BAKERY</h1>
-                                    <div className="thermal-subtitle">Tel: 9816020731</div>
-                                </div>
-
-                                <div className="thermal-divider"></div>
-
-                                <div className="thermal-info-grid">
-                                    <div className="thermal-info-left">
-                                        <div>INV: #{orderId ? String(orderId).slice(-6).toUpperCase() : "NEW"}</div>
-                                        <div>DATE: {new Date().toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
-                                    </div>
-                                    <div className="thermal-info-right">
-                                        <div>CSHR: Waiter</div>
-                                        <div>TBL: {state?.tableNumber || "N/A"}</div>
-                                        <div>CUST: {customer ? customer.name : "Walk-in"}</div>
-                                    </div>
-                                </div>
-
-                                <div className="thermal-divider"></div>
-
-                                <div className="receipt-item-grid" style={{ fontWeight: 'bold' }}>
-                                    <div>SN</div>
-                                    <div>ITEM</div>
-                                    <div>QTY</div>
-                                    <div style={{ textAlign: 'right' }}>TOTAL</div>
-                                </div>
-
-                                <div className="thermal-divider"></div>
-
-                                {state?.cart.map((item, idx) => (
-                                    <div key={idx} className="receipt-item-grid">
-                                        <div>{idx + 1}</div>
-                                        <div>
-                                            {item.item.name}
-                                            {item.notes && <div style={{ fontSize: '8pt', textTransform: 'none', marginTop: '1mm' }}>"{item.notes}"</div>}
-                                        </div>
-                                        <div>{item.quantity}</div>
-                                        <div style={{ textAlign: 'right' }}>{(item.item.price * item.quantity).toFixed(2)}</div>
-                                    </div>
-                                ))}
-
-                                <div className="thermal-divider"></div>
-
-                                <div style={{ fontSize: '10pt', lineHeight: '1.5' }}>
-                                    <div className="thermal-row">
-                                        <span>SUBTOTAL</span>
-                                        <span>{subtotal.toFixed(2)}</span>
-                                    </div>
-                                    {taxAmount > 0 && (
-                                        <div className="thermal-row">
-                                            <span>TAX ({taxRate}%)</span>
-                                            <span>{taxAmount.toFixed(2)}</span>
-                                        </div>
-                                    )}
-                                    {discountAmount > 0 && (
-                                        <div className="thermal-row text-red-600 font-bold">
-                                            <span>DISCOUNT ({discountPercent}%)</span>
-                                            <span>-{discountAmount.toFixed(2)}</span>
-                                        </div>
-                                    )}
-                                    <div className="thermal-divider"></div>
-                                    <div className="thermal-total-row">
-                                        <span>TOTAL</span>
-                                        <span>{total.toFixed(2)}</span>
-                                    </div>
-                                    <div className="thermal-divider"></div>
-                                    <div className="thermal-row">
-                                        <span>STATUS</span>
-                                        <span>{paymentTiming === "now" ? "PAID" : "DUE LATER"}</span>
-                                    </div>
-                                    <div className="thermal-divider"></div>
-                                </div>
-
-                                <div className="thermal-footer">
-                                    THANK YOU FOR YOUR VISIT!
-                                </div>
-                                <div className="thermal-barcode">
-                                    *AMA-POS-BILL*
-                                </div>
-                                <div className="thermal-branding">
-                                    POS-BY: nishchalacharya.com.np
-                                </div>
-                            </div>
-                        </div>
-                    </DialogContent>
-                </Dialog>
 
 
                 <WaiterBottomNav />

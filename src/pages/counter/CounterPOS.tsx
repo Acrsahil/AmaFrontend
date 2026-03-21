@@ -156,7 +156,7 @@ export default function CounterPOS() {
     useEffect(() => {
         if (showReceipt && autoPrint) {
             const timer = setTimeout(() => {
-                window.print();
+                // window.print(); // Disabled system print
                 setAutoPrint(false);
             }, 500);
             return () => clearTimeout(timer);
@@ -201,7 +201,7 @@ export default function CounterPOS() {
                     // Auto print if requested
                     if (location.state?.autoPrint) {
                         setTimeout(() => {
-                            window.print();
+                            // window.print(); // Disabled system print
                         }, 500);
                     }
 
@@ -475,13 +475,10 @@ export default function CounterPOS() {
         THANK YOU FOR YOUR VISIT!
     </div>
     <div class="thermal-barcode">
-        *AMA-POS-BILL*
     </div>
     <div class="thermal-branding">
-        POS-BY: nishchalacharya.com.np
+        POS-BY: DragUpTech
     </div>
-
-    <script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};</script>
 </body>
 </html>`;
 
@@ -1208,7 +1205,7 @@ export default function CounterPOS() {
                                         <span>PAID</span>
                                     </div>
                                     <div className="thermal-divider"></div>
-                                    
+
                                     <div className="thermal-row" style={{ fontSize: '9pt', opacity: 0.8 }}>
                                         <span>CASH RECEIVED</span>
                                         <span>{parseFloat(cashReceived || "0").toFixed(2)}</span>
@@ -1225,10 +1222,9 @@ export default function CounterPOS() {
                                     THANK YOU FOR YOUR VISIT!
                                 </div>
                                 <div className="thermal-barcode">
-                                    *AMA-POS-BILL*
                                 </div>
                                 <div className="thermal-branding">
-                                    POS-BY: nishchalacharya.com.np
+                                    POS-BY: DragUpTech
                                 </div>
                             </div>
                         </div>

@@ -68,7 +68,7 @@ export default function CounterOrders() {
     useEffect(() => {
         if (showReceipt && autoPrint) {
             const timer = setTimeout(() => {
-                window.print();
+                // window.print(); // Disabled system print
                 setAutoPrint(false);
             }, 500);
             return () => clearTimeout(timer);
@@ -185,12 +185,12 @@ export default function CounterOrders() {
 
     const handlePaymentSubmit = async () => {
         if (!selectedOrder) return;
-        
+
         const currentDue = parseFloat(selectedOrder?.due_amount || (selectedOrder ? (selectedOrder.total_amount - (selectedOrder.paid_amount || 0)) : 0));
-        
+
         // Allow 0 amount if we are just confirming waiter handover
         const isConfirmingHandover = (selectedOrder.payment_status === 'PAID' || selectedOrder.payment_status === 'PARTIAL' || selectedOrder.payment_status === 'WAITER RECEIVED') && selectedOrder.received_by_waiter && !selectedOrder.received_by_counter && currentDue <= 0;
-        
+
         if (!isConfirmingHandover && (!paymentAmount || parseFloat(paymentAmount) <= 0)) {
             toast.error("Please enter a valid amount");
             return;
@@ -200,7 +200,7 @@ export default function CounterOrders() {
         try {
             // Cap the payment amount at the actual due amount for database accuracy
             const actualPayment = Math.min(parseFloat(paymentAmount), currentDue);
-            
+
             await addPayment(selectedOrder.id, {
                 amount: isConfirmingHandover ? 0 : actualPayment,
                 payment_method: paymentMethod,
@@ -344,13 +344,10 @@ export default function CounterOrders() {
         THANK YOU FOR YOUR VISIT!
     </div>
     <div class="thermal-barcode">
-        *AMA-POS-BILL*
     </div>
     <div class="thermal-branding">
-        POS-BY: nishchalacharya.com.np
+        POS-BY: DragUpTech
     </div>
-
-    <script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};</script>
 </body>
 </html>`;
 
@@ -748,7 +745,7 @@ export default function CounterOrders() {
                                     )}                                    {(selectedOrder?.payment_status !== 'PAID' && parseFloat(selectedOrder?.due_amount || "0") > 0) ? (() => {
                                         const currentDue = parseFloat(selectedOrder?.due_amount || (selectedOrder ? (selectedOrder.total_amount - (selectedOrder.paid_amount || 0)) : 0));
                                         const changeAmount = Math.max(0, parseFloat(paymentAmount || "0") - currentDue);
-                                        
+
                                         return (
                                             <div className="space-y-6 animate-in fade-in slide-in-from-top-4">
                                                 <div className="space-y-2">
@@ -773,7 +770,7 @@ export default function CounterOrders() {
                                                         )}
                                                     </div>
                                                 </div>
-                                                
+
                                                 <div className="space-y-2">
                                                     <Label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Payment Method</Label>
                                                     <div className="grid grid-cols-3 gap-3">
@@ -1019,10 +1016,9 @@ export default function CounterOrders() {
                                 THANK YOU FOR YOUR VISIT!
                             </div>
                             <div className="thermal-barcode">
-                                *AMA-POS-BILL*
                             </div>
                             <div className="thermal-branding">
-                                POS-BY: nishchalacharya.com.np
+                                POS-BY: DragUpTech
                             </div>
                         </div>
                     </div>

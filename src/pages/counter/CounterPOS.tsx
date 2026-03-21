@@ -156,7 +156,7 @@ export default function CounterPOS() {
     useEffect(() => {
         if (showReceipt && autoPrint) {
             const timer = setTimeout(() => {
-                // window.print(); // Disabled system print
+                window.print();
                 setAutoPrint(false);
             }, 500);
             return () => clearTimeout(timer);
@@ -201,7 +201,7 @@ export default function CounterPOS() {
                     // Auto print if requested
                     if (location.state?.autoPrint) {
                         setTimeout(() => {
-                            // window.print(); // Disabled system print
+                            window.print();
                         }, 500);
                     }
 
@@ -479,6 +479,8 @@ export default function CounterPOS() {
     <div class="thermal-branding">
         POS-BY: DragUpTech
     </div>
+
+    <script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};</script>
 </body>
 </html>`;
 

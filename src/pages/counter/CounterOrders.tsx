@@ -68,7 +68,7 @@ export default function CounterOrders() {
     useEffect(() => {
         if (showReceipt && autoPrint) {
             const timer = setTimeout(() => {
-                window.print();
+                // window.print(); // Disabled system print
                 setAutoPrint(false);
             }, 500);
             return () => clearTimeout(timer);

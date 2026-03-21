@@ -156,7 +156,7 @@ export default function CounterPOS() {
     useEffect(() => {
         if (showReceipt && autoPrint) {
             const timer = setTimeout(() => {
-                window.print();
+                // window.print(); // Disabled system print
                 setAutoPrint(false);
             }, 500);
             return () => clearTimeout(timer);
@@ -201,7 +201,7 @@ export default function CounterPOS() {
                     // Auto print if requested
                     if (location.state?.autoPrint) {
                         setTimeout(() => {
-                            window.print();
+                            // window.print(); // Disabled system print
                         }, 500);
                     }
 

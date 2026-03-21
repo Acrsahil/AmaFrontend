@@ -32,6 +32,7 @@ export default defineConfig(({ mode }) => ({
       // "amabakerypos-production.up.railway.app/"
       "api.amabakeryhouse.com/",
       "www.api.amabakeryhouse.com/",
+      "localhost",
       "localhost:8080/"
     ],
   },

@@ -705,13 +705,16 @@ export default function Checkout() {
 
                             <div className="relative group">
                                 <div className="absolute -inset-1 bg-gradient-to-r from-info/20 to-primary/20 rounded-2xl blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200"></div>
-                                <div className="relative bg-white p-4 rounded-xl mx-auto border border-info/10 shadow-xl flex flex-col items-center">
-                                    <QrCode className="h-44 w-44 text-slate-800" />
-                                    <div className="mt-4 flex items-center justify-center gap-4 w-full opacity-60 grayscale scale-90">
-                                        <img src="https://upload.wikimedia.org/wikipedia/commons/e/e1/UPI-Logo.png" alt="UPI" className="h-4" />
-                                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/f/f2/Google_Pay_Logo.svg/1024px-Google_Pay_Logo.svg.png" alt="GPay" className="h-4" />
-                                        <img src="https://upload.wikimedia.org/wikipedia/commons/7/71/PhonePe_Logo.svg" alt="PhonePe" className="h-4" />
-                                    </div>
+                                <div className="relative bg-white p-4 rounded-xl mx-auto border border-info/10 shadow-xl flex flex-col items-center overflow-hidden">
+                                    <img 
+                                        src="/qr.png" 
+                                        alt="QR Code" 
+                                        className="h-64 w-64 object-cover" 
+                                        onError={(e) => {
+                                            const target = e.target as HTMLImageElement;
+                                            target.src = "https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=AMABAKERY_PAYMENT";
+                                        }}
+                                    />
                                 </div>
                             </div>
 

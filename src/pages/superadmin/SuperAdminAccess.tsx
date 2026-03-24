@@ -407,7 +407,7 @@ export default function SuperAdminAccess() {
                     </DialogHeader>
                     <form onSubmit={handleSubmit} className="grid gap-5 py-6">
                         <div className="space-y-2">
-                            <Label className="text-[10px] font-black uppercase text-slate-400 ml-1">Full Identity</Label>
+                            <Label className="text-[10px] font-black uppercase text-slate-400 ml-1">Full Name</Label>
                             <div className="relative">
                                 <User className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                                 <Input
@@ -422,7 +422,7 @@ export default function SuperAdminAccess() {
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label className="text-[10px] font-black uppercase text-slate-400 ml-1">Alias</Label>
+                                <Label className="text-[10px] font-black uppercase text-slate-400 ml-1">Username</Label>
                                 <Input
                                     value={form.username}
                                     onChange={e => setForm(p => ({ ...p, username: e.target.value }))}
@@ -432,7 +432,7 @@ export default function SuperAdminAccess() {
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label className="text-[10px] font-black uppercase text-slate-400 ml-1">Communication</Label>
+                                <Label className="text-[10px] font-black uppercase text-slate-400 ml-1">Phone no.</Label>
                                 <Input
                                     value={form.phone}
                                     onChange={e => setForm(p => ({ ...p, phone: e.target.value }))}
@@ -444,7 +444,7 @@ export default function SuperAdminAccess() {
                         </div>
 
                         <div className="space-y-2">
-                            <Label className="text-[10px] font-black uppercase text-slate-400 ml-1">Registry Email</Label>
+                            <Label className="text-[10px] font-black uppercase text-slate-400 ml-1">Email</Label>
                             <div className="relative">
                                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                                 <Input
@@ -459,7 +459,7 @@ export default function SuperAdminAccess() {
                         </div>
 
                         <div className="space-y-2">
-                            <Label className="text-[10px] font-black uppercase text-slate-400 ml-1">Deployed Node</Label>
+                            <Label className="text-[10px] font-black uppercase text-slate-400 ml-1">Branch</Label>
                             <Select
                                 value={form.branch}
                                 onValueChange={val => setForm(p => ({ ...p, branch: val }))}
@@ -480,7 +480,7 @@ export default function SuperAdminAccess() {
 
                         {!editUser && (
                             <div className="space-y-2">
-                                <Label className="text-[10px] font-black uppercase text-slate-400 ml-1">System Key</Label>
+                                <Label className="text-[10px] font-black uppercase text-slate-400 ml-1">Password</Label>
                                 <div className="relative">
                                     <Key className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                                     <Input

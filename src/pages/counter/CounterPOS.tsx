@@ -1035,8 +1035,16 @@ export default function CounterPOS() {
                             ) : paymentMethod === 'qr' ? (
                                 <div className="flex flex-col items-center gap-6 animate-in fade-in slide-in-from-right-4">
                                     <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Scan QR Code</Label>
-                                    <div className="bg-white p-4 rounded-3xl shadow-lg border border-slate-100 w-full aspect-square flex items-center justify-center">
-                                        <QrCode className="h-40 w-40 text-slate-800" />
+                                    <div className="bg-white p-4 rounded-3xl shadow-lg border border-slate-100 w-64 h-64 flex items-center justify-center overflow-hidden mx-auto">
+                                        <img 
+                                            src="/qr.png" 
+                                            alt="QR Code" 
+                                            className="h-full w-full object-cover" 
+                                            onError={(e) => {
+                                                const target = e.target as HTMLImageElement;
+                                                target.src = "https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=AMABAKERY_PAYMENT";
+                                            }}
+                                        />
                                     </div>
                                     <div className="text-center">
                                         <p className="text-[10px] uppercase font-black text-slate-400 tracking-widest mb-1">Total Payable</p>

@@ -493,9 +493,9 @@ export default function PaymentCollection() {
 
             {/* QR Code Placeholder/Real */}
             <div className="relative p-4 bg-white rounded-[2rem] border-4 border-slate-50 shadow-inner group">
-              <div className="h-48 w-48 bg-slate-100 rounded-xl flex items-center justify-center overflow-hidden border border-slate-200">
+              <div className="h-64 w-64 bg-slate-100 rounded-xl flex items-center justify-center overflow-hidden border border-slate-200">
                 <img
-                  src="/logos/qr.png"
+                  src="/qr.png"
                   alt="QR Code"
                   className="h-full w-full object-cover"
                   onError={(e) => {

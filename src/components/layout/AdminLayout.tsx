@@ -79,7 +79,7 @@ export function AdminLayout() {
       />
 
       {/* Mobile Header */}
-      <div className="md:hidden sticky top-0 z-50 flex items-center justify-between p-4 pr-14 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="md:hidden sticky top-0 z-50 flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center gap-1">
           <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
             <SheetTrigger asChild>
@@ -101,6 +101,42 @@ export function AdminLayout() {
               <span className="text-[10px] text-muted-foreground font-medium">Branch Admin</span>
             </div>
           </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shrink-0 p-0">
+                <UserIcon className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 rounded-2xl p-2 font-bold z-[100]">
+              <div className="px-2 py-1.5 md:hidden">
+                <p className="text-sm font-bold text-slate-900 leading-none">{user?.username || "Admin"}</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-primary mt-1">
+                  {user?.is_branch_scoped ? "Super Admin (Scoped)" : "Branch Manager"}
+                </p>
+              </div>
+              <DropdownMenuSeparator className="md:hidden" />
+              <DropdownMenuItem
+                className="h-10 rounded-xl cursor-pointer transition-colors"
+                onClick={() => setIsResetModalOpen(true)}
+              >
+                <Key className="mr-2 h-4 w-4 text-slate-400" />
+                <span>Change Password</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-slate-100 my-1" />
+              <DropdownMenuItem
+                className="h-10 rounded-xl cursor-pointer text-red-600 focus:text-red-700 focus:bg-red-50 transition-colors"
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent("show-logout-confirm"));
+                }}
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                <span>Logout</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 

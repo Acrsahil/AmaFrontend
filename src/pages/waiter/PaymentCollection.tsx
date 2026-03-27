@@ -336,11 +336,11 @@ export default function PaymentCollection() {
               </Button>
               <Button
                 variant="outline"
-                className="h-24 flex-col gap-2 rounded-2xl border-2 hover:border-info hover:bg-info/5 hover:text-info transition-all group"
+                className="h-24 flex-col gap-2 rounded-2xl border-2 hover:border-primary hover:bg-primary/5 hover:text-primary transition-all group"
                 onClick={() => handlePaymentMethod('QR')}
               >
-                <div className="h-10 w-10 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-info/20">
-                  <QrCode className="h-6 w-6 text-slate-400 group-hover:text-info" />
+                <div className="h-10 w-10 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-primary/20">
+                  <QrCode className="h-6 w-6 text-slate-400 group-hover:text-primary" />
                 </div>
                 <span className="font-bold">QR</span>
               </Button>
@@ -477,7 +477,7 @@ export default function PaymentCollection() {
       {/* Online Payment (QR) Dialog */}
       < Dialog open={showOnlineDialog} onOpenChange={setShowOnlineDialog} >
         <DialogContent className="max-w-[calc(100%-2rem)] w-[380px] rounded-2xl p-0 overflow-hidden border-none shadow-2xl">
-          <div className="bg-info p-6 text-white text-center">
+          <div className="bg-primary p-6 text-white text-center">
             <div className="h-16 w-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-4 border border-white/30">
               <CreditCard className="h-8 w-8 text-white" />
             </div>
@@ -516,7 +516,7 @@ export default function PaymentCollection() {
 
             <div className="w-full space-y-3 pt-2">
               <Button
-                className="w-full h-14 bg-info hover:bg-info/90 text-white font-black rounded-2xl shadow-xl shadow-info/20"
+                className="w-full h-14 bg-primary hover:bg-primary/90 text-white font-black rounded-2xl shadow-xl shadow-primary/20"
                 onClick={() => processPayment('ONLINE', parseFloat(selectedOrder?.due_amount || selectedOrder?.total_amount || 0))}
                 disabled={isProcessing}
               >

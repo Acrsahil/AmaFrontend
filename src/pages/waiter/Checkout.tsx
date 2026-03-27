@@ -591,17 +591,17 @@ export default function Checkout() {
                                 className={cn(
                                     "p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 hover:scale-105",
                                     paymentMethod === "qr"
-                                        ? "border-info bg-info/10 shadow-lg"
-                                        : "border-border hover:border-info/50"
+                                        ? "border-primary bg-primary/10 shadow-lg"
+                                        : "border-border hover:border-primary/50"
                                 )}
                             >
                                 <QrCode className={cn(
                                     "h-8 w-8",
-                                    paymentMethod === "qr" ? "text-info" : "text-muted-foreground"
+                                    paymentMethod === "qr" ? "text-primary" : "text-muted-foreground"
                                 )} />
                                 <span className={cn(
                                     "font-semibold",
-                                    paymentMethod === "qr" ? "text-info" : "text-foreground"
+                                    paymentMethod === "qr" ? "text-primary" : "text-foreground"
                                 )}>
                                     QR Code
                                 </span>
@@ -689,7 +689,7 @@ export default function Checkout() {
                 {/* QR Payment Modal - Now as a true Dialog */}
                 <Dialog open={showPaymentConfirmation} onOpenChange={setShowPaymentConfirmation}>
                     <DialogContent className="max-w-[calc(100%-2rem)] w-[360px] rounded-2xl p-0 overflow-hidden border-none shadow-2xl">
-                        <div className="bg-info p-6 text-white text-center">
+                        <div className="bg-primary p-6 text-white text-center">
                             <div className="h-16 w-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-4 border border-white/30">
                                 <QrCode className="h-8 w-8 text-white" />
                             </div>
@@ -704,8 +704,8 @@ export default function Checkout() {
                             </div>
 
                             <div className="relative group">
-                                <div className="absolute -inset-1 bg-gradient-to-r from-info/20 to-primary/20 rounded-2xl blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200"></div>
-                                <div className="relative bg-white p-4 rounded-xl mx-auto border border-info/10 shadow-xl flex flex-col items-center overflow-hidden">
+                                <div className="absolute -inset-1 bg-gradient-to-r from-primary/20 to-primary/20 rounded-2xl blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200"></div>
+                                <div className="relative bg-white p-4 rounded-xl mx-auto border border-primary/10 shadow-xl flex flex-col items-center overflow-hidden">
                                     <img 
                                         src="/qr.png" 
                                         alt="QR Code" 
@@ -730,7 +730,7 @@ export default function Checkout() {
                                     Cancel
                                 </Button>
                                 <Button
-                                    className="flex-[1.5] h-12 font-bold bg-info hover:bg-info/90 text-white shadow-lg shadow-info/20 transition-all active:scale-95"
+                                    className="flex-[1.5] h-12 font-bold bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 transition-all active:scale-95"
                                     onClick={handleQRPayment}
                                     disabled={isProcessing}
                                 >

@@ -153,7 +153,7 @@ export default function Checkout() {
                     description: `Table ${state?.tableNumber} - Payment Pending`,
                     icon: <CheckCircle2 className="h-5 w-5 text-warning" />,
                 });
-                setShowSuccess(true);
+                navigate('/waiter/tables');
             } catch (err) { }
         } else {
             // Pay Now flow - show appropriate modal
@@ -194,7 +194,7 @@ export default function Checkout() {
 
             setChangeAmount(change);
             setShowCashModal(false);
-            setShowSuccess(true);
+            navigate('/waiter/tables');
         } catch (err) { }
     };
 
@@ -207,7 +207,7 @@ export default function Checkout() {
             });
 
             setShowPaymentConfirmation(false);
-            setShowSuccess(true);
+            navigate('/waiter/tables');
         } catch (err) { }
     };
 
@@ -226,70 +226,6 @@ export default function Checkout() {
         );
     }
 
-    if (showSuccess) {
-        return (
-            <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 animate-in fade-in duration-500">
-                <div className="w-full max-w-sm text-center space-y-6">
-                    <div className="relative mx-auto w-24 h-24">
-                        <div className="absolute inset-0 bg-success/20 rounded-full animate-ping" />
-                        <div className="relative bg-success rounded-full w-24 h-24 flex items-center justify-center shadow-lg shadow-success/20">
-                            <CheckCircle2 className="h-12 w-12 text-white" />
-                        </div>
-                    </div>
-
-                    <div className="space-y-2">
-                        <h2 className="text-3xl font-black text-foreground">Order Received!</h2>
-                        <p className="text-muted-foreground">Table {state?.tableNumber} • {paymentTiming === 'now' ? 'Paid' : 'Payment Pending'}</p>
-                        <p className="text-emerald-600 font-bold bg-emerald-50 py-2 px-4 rounded-full inline-block mt-2">
-                            Sent to Kitchen
-                        </p>
-                    </div>
-
-                    <Card className="card-elevated p-6 space-y-4">
-                        <div className="flex justify-between items-center text-sm">
-                            <span className="text-muted-foreground">Order Total</span>
-                            <span className="font-bold text-lg text-primary">Rs.{total.toFixed(2)}</span>
-                        </div>
-
-                        {changeAmount !== null && changeAmount > 0 && (
-                            <div className="flex justify-between items-center pt-3 border-t">
-                                <span className="text-muted-foreground">Change Returned</span>
-                                <span className="font-bold text-lg text-success">Rs.{changeAmount.toFixed(2)}</span>
-                            </div>
-                        )}
-
-                        <div className="pt-4 space-y-3">
-
-
-                            <div className="grid grid-cols-2 gap-3">
-                                <Button
-                                    variant="outline"
-                                    className="h-12"
-                                    onClick={() => navigate('/waiter/tables')}
-                                >
-                                    New Order
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    className="h-12"
-                                    onClick={() => navigate('/waiter/orders')}
-                                >
-                                    View Orders
-                                </Button>
-                            </div>
-                        </div>
-                    </Card>
-
-                    <p className="text-xs text-muted-foreground">Order has been sent to the kitchen printer.</p>
-                </div>
-
-
-
-
-                <WaiterBottomNav />
-            </div>
-        );
-    }
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 pb-40">
@@ -688,28 +624,28 @@ export default function Checkout() {
 
                 {/* QR Payment Modal - Now as a true Dialog */}
                 <Dialog open={showPaymentConfirmation} onOpenChange={setShowPaymentConfirmation}>
-                    <DialogContent className="max-w-[calc(100%-2rem)] w-[360px] rounded-2xl p-0 overflow-hidden border-none shadow-2xl">
-                        <div className="bg-primary p-6 text-white text-center">
-                            <div className="h-16 w-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-4 border border-white/30">
-                                <QrCode className="h-8 w-8 text-white" />
+                    <DialogContent className="max-w-[calc(100%-2.5rem)] w-[320px] rounded-2xl p-0 overflow-hidden border-none shadow-2xl">
+                        <div className="bg-primary p-4 text-white text-center">
+                            <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-2 border border-white/30">
+                                <QrCode className="h-6 w-6 text-white" />
                             </div>
-                            <h3 className="text-xl font-bold">Scan to Pay</h3>
-                            <p className="text-white/80 text-sm">Ready to receive payment</p>
+                            <h3 className="text-lg font-bold">Scan to Pay</h3>
+                            <p className="text-white/80 text-[10px]">Ready to receive payment</p>
                         </div>
 
-                        <div className="p-8 text-center space-y-6">
-                            <div className="space-y-1">
-                                <p className="text-muted-foreground text-sm font-medium">Customer Payment Amount</p>
-                                <p className="text-4xl font-black text-primary">Rs.{total.toFixed(2)}</p>
+                        <div className="p-4 text-center space-y-3">
+                            <div className="space-y-0.5">
+                                <p className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider">Customer Payment Amount</p>
+                                <p className="text-3xl font-black text-primary">Rs.{total.toFixed(2)}</p>
                             </div>
 
                             <div className="relative group">
                                 <div className="absolute -inset-1 bg-gradient-to-r from-primary/20 to-primary/20 rounded-2xl blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200"></div>
-                                <div className="relative bg-white p-4 rounded-xl mx-auto border border-primary/10 shadow-xl flex flex-col items-center overflow-hidden">
+                                <div className="relative bg-white p-3 rounded-xl mx-auto border border-primary/10 shadow-xl flex flex-col items-center overflow-hidden">
                                     <img 
                                         src="/qr.png" 
                                         alt="QR Code" 
-                                        className="h-64 w-64 object-cover" 
+                                        className="h-48 w-48 object-cover" 
                                         onError={(e) => {
                                             const target = e.target as HTMLImageElement;
                                             target.src = "https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=AMABAKERY_PAYMENT";
@@ -719,26 +655,25 @@ export default function Checkout() {
                             </div>
 
                             <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-black opacity-60">Wait for confirmation</p>
-
-                            <div className="flex gap-3 pt-2">
+                            <div className="flex gap-3 pt-1">
                                 <Button
                                     variant="outline"
-                                    className="flex-1 h-12"
+                                    className="flex-1 h-10 text-xs"
                                     onClick={() => setShowPaymentConfirmation(false)}
                                     disabled={isProcessing}
                                 >
                                     Cancel
                                 </Button>
                                 <Button
-                                    className="flex-[1.5] h-12 font-bold bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 transition-all active:scale-95"
+                                    className="flex-[1.5] h-10 text-xs font-bold bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 transition-all active:scale-95"
                                     onClick={handleQRPayment}
                                     disabled={isProcessing}
                                 >
                                     {isProcessing ? (
-                                        <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                                     ) : (
                                         <>
-                                            <CheckCircle2 className="h-5 w-5 mr-2" />
+                                            <CheckCircle2 className="h-4 w-4 mr-2" />
                                             Confirm Paid
                                         </>
                                     )}

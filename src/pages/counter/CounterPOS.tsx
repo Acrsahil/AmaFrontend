@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
     Search,
@@ -92,6 +92,23 @@ export default function CounterPOS() {
     const [paymentMethod, setPaymentMethod] = useState<"cash" | "qr" | "online" | null>(null);
     const [activeKeypadField, setActiveKeypadField] = useState<'cash' | 'discount' | 'customer' | 'productSearch' | 'table' | null>(null);
     const [showKeypad, setShowKeypad] = useState(false);
+    const keyboardRef = useRef<HTMLDivElement>(null);
+    const backspaceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const backspaceIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+    const stopBackspace = () => {
+        if (backspaceTimeoutRef.current) clearTimeout(backspaceTimeoutRef.current);
+        if (backspaceIntervalRef.current) clearInterval(backspaceIntervalRef.current);
+        backspaceTimeoutRef.current = null;
+        backspaceIntervalRef.current = null;
+    };
+
+    const deleteWord = (text: string) => {
+        const trimmed = text.trimEnd();
+        const lastSpace = trimmed.lastIndexOf(' ');
+        if (lastSpace === -1) return '';
+        return trimmed.slice(0, lastSpace);
+    };
     const [customerSearch, setCustomerSearch] = useState("");
     const [cashReceived, setCashReceived] = useState("");
     const [paidAmount, setPaidAmount] = useState(0);
@@ -776,14 +793,14 @@ export default function CounterPOS() {
                 {showCheckoutModal && (
                     <div 
                         className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] z-[40] animate-in fade-in duration-300" 
-                        onClick={() => setShowCheckoutModal(false)}
+                        onClick={() => !showKeypad && setShowCheckoutModal(false)}
                     />
                 )}
                 <DialogContent 
                     onInteractOutside={(e) => {
-                        // Prevent closing if interacting with the keyboard
+                        // Prevent closing if interacting with the keyboard or its backdrop
                         const target = e.target as HTMLElement;
-                        if (target?.closest('.global-keyboard')) {
+                        if (target?.closest('.global-keyboard') || target?.closest('.keyboard-backdrop')) {
                             e.preventDefault();
                         }
                     }}
@@ -1244,11 +1261,22 @@ export default function CounterPOS() {
             </Dialog>
             {/* Global Floating Virtual Keyboard */}
             {showKeypad && activeKeypadField && (
+                <>
+                {/* Backdrop Layer to capture outside clicks and block background actions */}
                 <div 
-                    onMouseDown={(e) => e.preventDefault()}
-                    className="global-keyboard fixed bottom-0 left-0 right-0 z-[1000] bg-white/95 backdrop-blur-md border-t-2 border-primary/20 shadow-[0_-15px_40px_-10px_rgba(0,0,0,0.1)] animate-in slide-in-from-bottom-full duration-300 p-2 md:p-3 pointer-events-auto"
+                    className="fixed inset-0 z-[999] bg-transparent pointer-events-auto keyboard-backdrop"
+                    onMouseDown={(e) => {
+                        e.stopPropagation();
+                        setShowKeypad(false);
+                        (document.activeElement as HTMLElement)?.blur();
+                    }}
+                />
+                <div 
+                    ref={keyboardRef as any}
+                    onMouseDown={(e) => e.stopPropagation()} // Prevent closing when clicking inside
+                    className="global-keyboard fixed bottom-0 left-0 right-0 z-[1000] bg-white/95 backdrop-blur-md border-t-2 border-primary/20 shadow-[0_-15px_40px_-10px_rgba(0,0,0,0.1)] animate-in slide-in-from-bottom-full duration-300 p-2 md:p-4 pointer-events-auto"
                 >
-                    <div className="max-w-4xl mx-auto">
+                    <div className="max-w-7xl mx-auto">
                         <div className="flex items-center justify-between mb-2 px-1">
                             <div className="flex items-center gap-2">
                                 <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
@@ -1306,7 +1334,7 @@ export default function CounterPOS() {
                                                 key={char}
                                                 variant="outline"
                                                 onMouseDown={(e) => e.preventDefault()}
-                                                className="h-9 md:h-11 min-w-[30px] md:min-w-[40px] flex-1 md:flex-none text-xs md:text-sm font-bold rounded-lg border shadow-sm active:scale-90 bg-white hover:border-primary/30 transition-all p-0"
+                                                className="h-12 md:h-16 min-w-[40px] md:min-w-[85px] flex-1 md:flex-none text-sm md:text-xl font-black rounded-xl border shadow-sm active:scale-95 bg-white hover:border-primary/40 transition-all p-0"
                                                 onClick={() => {
                                                     const setter = activeKeypadField === 'customer' ? setCustomerSearch : setSearchQuery;
                                                     setter(prev => prev + char);
@@ -1318,12 +1346,26 @@ export default function CounterPOS() {
                                         {rIdx === 3 && (
                                             <Button
                                                 variant="outline"
-                                                onMouseDown={(e) => e.preventDefault()}
-                                                className="h-9 md:h-11 px-2 md:px-4 text-xs md:text-sm font-bold rounded-lg border-2 border-primary/20 bg-primary/5 text-primary active:scale-90"
-                                                onClick={() => {
-                                                    const setter = activeKeypadField === 'customer' ? setCustomerSearch : setSearchQuery;
-                                                    setter(prev => prev.slice(0, -1));
+                                                className="h-12 md:h-16 px-6 md:px-12 text-sm md:text-xl font-black rounded-xl border-2 border-primary/20 bg-primary/5 text-primary active:scale-95"
+                                                onMouseDown={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    // Initial character delete
+                                                    const setter = activeKeypadField === 'customer' || activeKeypadField === 'productSearch' ? (activeKeypadField === 'customer' ? setCustomerSearch : setSearchQuery) : null;
+                                                    if (setter) {
+                                                        setter(prev => prev.slice(0, -1));
+                                                        
+                                                        stopBackspace();
+                                                        backspaceTimeoutRef.current = setTimeout(() => {
+                                                            backspaceIntervalRef.current = setInterval(() => {
+                                                                setter(prev => deleteWord(prev));
+                                                            }, 150);
+                                                        }, 400);
+                                                    }
                                                 }}
+                                                onMouseUp={stopBackspace}
+                                                onMouseLeave={stopBackspace}
+                                                onTouchEnd={stopBackspace}
                                             >
                                                 ⌫
                                             </Button>
@@ -1334,9 +1376,9 @@ export default function CounterPOS() {
                                     <Button
                                         variant="outline"
                                         onMouseDown={(e) => e.preventDefault()}
-                                        className="h-9 md:h-11 flex-1 max-w-[400px] text-[10px] md:text-xs font-black rounded-lg border bg-slate-50 active:scale-95 uppercase tracking-widest"
+                                        className="h-12 md:h-16 flex-1 max-w-[800px] text-xs md:text-sm font-black rounded-xl border bg-slate-50 active:scale-95 uppercase tracking-widest shadow-inner"
                                         onClick={() => {
-                                            const setter = activeKeypadField === 'customer' ? setCustomerSearch : setSearchQuery;
+                                            const setter = activeKeypadField === 'customer' || activeKeypadField === 'productSearch' ? setCustomerSearch : setSearchQuery;
                                             setter(prev => prev + " ");
                                         }}
                                     >
@@ -1344,7 +1386,7 @@ export default function CounterPOS() {
                                     </Button>
                                     <Button
                                         onMouseDown={(e) => e.preventDefault()}
-                                        className="h-9 md:h-11 px-4 md:px-8 text-[10px] md:text-xs font-black rounded-lg bg-primary text-white shadow-lg active:scale-95 uppercase tracking-widest"
+                                        className="h-12 md:h-16 px-10 md:px-20 text-xs md:text-sm font-black rounded-xl bg-primary text-white shadow-lg active:scale-95 uppercase tracking-widest"
                                         onClick={() => {
                                             setShowKeypad(false);
                                             (document.activeElement as HTMLElement)?.blur();
@@ -1355,15 +1397,15 @@ export default function CounterPOS() {
                                 </div>
                             </div>
                         ) : (
-                            <div className="max-w-[280px] md:max-w-md mx-auto grid grid-cols-3 gap-1.5 md:gap-2">
+                            <div className="max-w-[360px] md:max-w-md mx-auto grid grid-cols-3 gap-3 md:gap-4">
                                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, "00", 0, "⌫"].map((key) => (
                                     <Button
                                         key={key.toString()}
                                         variant="outline"
-                                        onMouseDown={(e) => e.preventDefault()}
+                                        onMouseDown={(e) => e.stopPropagation()}
                                         className={cn(
-                                            "h-10 md:h-12 text-base md:text-xl font-black rounded-xl transition-all active:scale-90 bg-white hover:bg-slate-50 border shadow-sm p-0",
-                                            key === "⌫" ? "text-destructive border-destructive/10 bg-destructive/5" : "hover:border-primary/30"
+                                            "h-14 md:h-16 text-xl md:text-3xl font-black rounded-2xl transition-all active:scale-90 bg-white hover:bg-slate-50 border-2 shadow-sm p-0",
+                                            key === "⌫" ? "text-destructive border-destructive/20 bg-destructive/5" : "hover:border-primary/40"
                                         )}
                                         onClick={() => {
                                             if (activeKeypadField === 'cash') {
@@ -1408,8 +1450,8 @@ export default function CounterPOS() {
                                     </Button>
                                 ))}
                                 <Button
-                                    onMouseDown={(e) => e.preventDefault()}
-                                    className="col-span-3 h-10 md:h-12 text-xs md:text-sm font-black rounded-xl bg-primary text-white shadow-lg active:scale-95 uppercase tracking-widest"
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    className="col-span-3 h-14 md:h-16 text-base md:text-xl font-black rounded-2xl bg-primary text-white shadow-xl active:scale-95 uppercase tracking-widest mt-2"
                                     onClick={() => {
                                         setShowKeypad(false);
                                         (document.activeElement as HTMLElement)?.blur();
@@ -1421,6 +1463,7 @@ export default function CounterPOS() {
                         )}
                     </div>
                 </div>
+                </>
             )}
         </div>
     );

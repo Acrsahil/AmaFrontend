@@ -81,9 +81,9 @@ export default function PaymentCollection() {
     if (method === 'CASH') {
       setShowPaymentDialog(false);
       setShowCashDialog(true);
-    } else if (method === 'ONLINE') {
+    } else if (method === 'ONLINE' || method === 'QR') {
       setShowPaymentDialog(false);
-      processPayment('QR', parseFloat(selectedOrder.due_amount || selectedOrder.total_amount));
+      setShowOnlineDialog(true);
     } else {
       processPayment(method, parseFloat(selectedOrder.due_amount || selectedOrder.total_amount));
     }
@@ -116,15 +116,6 @@ export default function PaymentCollection() {
       setShowPaymentDialog(false);
       setShowCashDialog(false);
       setShowOnlineDialog(false);
-
-      // Set completed order for receipt display
-      setCompletedOrder({
-        ...selectedOrder,
-        payment_method: method,
-        payment_status: 'PAID'
-      });
-      setCompletedChange(change);
-      setShowReceipt(true);
 
       setSelectedOrder(null);
       setCashReceived("");
@@ -476,24 +467,24 @@ export default function PaymentCollection() {
 
       {/* Online Payment (QR) Dialog */}
       < Dialog open={showOnlineDialog} onOpenChange={setShowOnlineDialog} >
-        <DialogContent className="max-w-[calc(100%-2rem)] w-[380px] rounded-2xl p-0 overflow-hidden border-none shadow-2xl">
-          <div className="bg-primary p-6 text-white text-center">
-            <div className="h-16 w-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-4 border border-white/30">
-              <CreditCard className="h-8 w-8 text-white" />
+        <DialogContent className="max-w-[calc(100%-2.5rem)] w-[320px] rounded-2xl p-0 overflow-hidden border-none shadow-2xl">
+          <div className="bg-primary p-4 text-white text-center">
+            <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-2 border border-white/30">
+              <CreditCard className="h-6 w-6 text-white" />
             </div>
-            <h3 className="text-xl font-bold">Online Payment</h3>
-            <p className="text-white/80 text-sm italic">Scan QR to pay • Table {selectedOrder?.table_no}</p>
+            <h3 className="text-lg font-bold leading-tight">Online Payment</h3>
+            <p className="text-white/80 text-[10px] italic">Scan QR to pay • Table {selectedOrder?.table_no}</p>
           </div>
 
-          <div className="p-8 space-y-6 flex flex-col items-center">
+          <div className="p-4 space-y-3 flex flex-col items-center">
             <div className="text-center">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2">Payable Amount</p>
-              <p className="text-3xl font-black text-primary mb-6">Rs.{Number(selectedOrder?.due_amount || selectedOrder?.total_amount || 0).toFixed(2)}</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1">Payable Amount</p>
+              <p className="text-3xl font-black text-primary mb-2">Rs.{Number(selectedOrder?.due_amount || selectedOrder?.total_amount || 0).toFixed(2)}</p>
             </div>
 
             {/* QR Code Placeholder/Real */}
-            <div className="relative p-4 bg-white rounded-[2rem] border-4 border-slate-50 shadow-inner group">
-              <div className="h-64 w-64 bg-slate-100 rounded-xl flex items-center justify-center overflow-hidden border border-slate-200">
+            <div className="relative p-3 bg-white rounded-[1.5rem] border-4 border-slate-50 shadow-inner group">
+              <div className="h-48 w-48 bg-slate-100 rounded-xl flex items-center justify-center overflow-hidden border border-slate-200">
                 <img
                   src="/qr.png"
                   alt="QR Code"
@@ -514,24 +505,24 @@ export default function PaymentCollection() {
               <p className="text-xs font-semibold text-slate-500">Please ask the customer to scan and pay the exact amount above</p>
             </div>
 
-            <div className="w-full space-y-3 pt-2">
+            <div className="w-full space-y-2 pt-1">
               <Button
-                className="w-full h-14 bg-primary hover:bg-primary/90 text-white font-black rounded-2xl shadow-xl shadow-primary/20"
+                className="w-full h-12 bg-primary hover:bg-primary/90 text-white font-black rounded-xl shadow-xl shadow-primary/20"
                 onClick={() => processPayment('ONLINE', parseFloat(selectedOrder?.due_amount || selectedOrder?.total_amount || 0))}
                 disabled={isProcessing}
               >
                 {isProcessing ? (
-                  <Loader2 className="h-6 w-6 animate-spin" />
+                  <Loader2 className="h-5 w-5 animate-spin" />
                 ) : (
                   <>
-                    <CheckCircle2 className="h-5 w-5 mr-2" />
-                    Confirm & Complete Order
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                    Confirm & Complete
                   </>
                 )}
               </Button>
               <Button
                 variant="ghost"
-                className="w-full h-12 text-slate-400 font-bold"
+                className="w-full h-10 text-slate-400 font-bold"
                 onClick={() => setShowOnlineDialog(false)}
                 disabled={isProcessing}
               >
@@ -542,57 +533,6 @@ export default function PaymentCollection() {
         </DialogContent>
       </Dialog >
 
-      {/* Digital Receipt Modal (Reuse your professional receipt logic here) */}
-      < Dialog open={showReceipt} onOpenChange={setShowReceipt} >
-        <DialogContent className="max-w-[360px] w-[92vw] p-0 border-none bg-transparent shadow-none overflow-visible max-h-[92vh] flex flex-col items-center">
-          <div className="h-[2px] w-24 bg-white/20 rounded-full mb-4 shrink-0" />
-
-          {/* The Actual Receipt */}
-          <div className="bg-white w-full rounded-2xl overflow-hidden shadow-2xl flex flex-col">
-            <div className="h-1.5 bg-primary w-full" />
-
-            <div className="p-6 space-y-4">
-              <div className="text-center">
-                <h1 className="text-lg text-primary font-black tracking-widest" style={{ fontFamily: "'Rockwell', serif" }}>AMA BAKERY</h1>
-                <p className="text-[8px] text-slate-400 uppercase tracking-widest mt-1">Payment Successful</p>
-              </div>
-
-              <div className="border-t border-b border-dashed py-3 flex justify-between items-center text-[11px]">
-                <div>
-                  <p className="text-slate-400 font-bold uppercase text-[8px]">Receipt</p>
-                  <p className="font-bold">#{(completedOrder?.id || '0').toString().padStart(4, '0')}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-slate-400 font-bold uppercase text-[8px]">Method</p>
-                  <p className="font-bold">{completedOrder?.payment_method}</p>
-                </div>
-              </div>
-
-              <div className="space-y-1 pt-1">
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-500 font-medium">Order Total</span>
-                  <span className="font-bold">Rs.{Number(completedOrder?.total_amount).toFixed(2)}</span>
-                </div>
-                {completedChange > 0 && (
-                  <div className="flex justify-between text-xs text-emerald-600">
-                    <span>Change Given</span>
-                    <span className="font-black">Rs.{completedChange.toFixed(2)}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="p-4 bg-slate-50 border-t border-slate-100">
-              <Button
-                className="w-full bg-slate-900 text-white font-bold h-11 rounded-xl"
-                onClick={() => setShowReceipt(false)}
-              >
-                Done
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog >
 
       <WaiterBottomNav />
     </div >

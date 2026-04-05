@@ -29,11 +29,11 @@ export default defineConfig(({ mode }) => ({
     port: 8080,
     allowedHosts: [
       "amabakery.nishchalacharya.com.np",
-      "amabakerypos-production.up.railway.app/"
+      "amabakerypos-production.up.railway.app/",
       "api.amabakeryhouse.com/",
       "www.api.amabakeryhouse.com/",
-      "localhost",
-      "localhost:8080/"
+      // "localhost",
+      // "localhost:8080/"
     ],
   },
   plugins: [

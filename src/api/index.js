@@ -11,8 +11,9 @@ let _tokenExpiry = null;
 // Helper to save tokens
 function saveTokens(tokens) {
   _accessToken = tokens.access;
-  // Standard JWTs usually have an exp claim. For now, we'll just store the token.
-  // If the backend provides an expiry, we could use it to proactively refresh.
+  if (tokens.access) {
+    localStorage.setItem("token", tokens.access);
+  }
 }
 
 // Clear tokens (logout)
@@ -92,12 +93,14 @@ export async function refreshAccessToken() {
     if (res.status === 200) {
       const data = await res.json();
       _accessToken = data.access;
+      localStorage.setItem("token", data.access);
       console.log("✅ Token refreshed successfully");
       onTokenRefreshed(_accessToken);
       return _accessToken;
     } else {
       console.warn("❌ Token refresh failed (session expired)");
       _accessToken = null;
+      localStorage.removeItem("token");
       localStorage.removeItem("currentUser");
       localStorage.removeItem("currentWaiter");
       onTokenRefreshed(null);
@@ -112,11 +115,45 @@ export async function refreshAccessToken() {
   }
 }
 
+// Helper to check if JWT is expired
+function isTokenExpired(token) {
+  if (!token) return true;
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+
+    const decoded = JSON.parse(jsonPayload);
+    return decoded.exp * 1000 < Date.now();
+  } catch (e) {
+    return true;
+  }
+}
+
 // Check if we have a session to restore
 export async function initializeAuth() {
   if (_accessToken) return true;
 
-  if (localStorage.getItem("just_logged_out") === "true") {
+  // Try to load from localStorage first
+  const storedToken = localStorage.getItem("token");
+  const justLoggedOut = localStorage.getItem("just_logged_out") === "true";
+
+  if (storedToken && !justLoggedOut) {
+    // If token is expired, verify if we can refresh it
+    if (isTokenExpired(storedToken)) {
+      console.log("🔓 Stored token expired, attempting refresh...");
+      const refreshed = await refreshAccessToken();
+      return !!refreshed;
+    }
+    
+    _accessToken = storedToken;
+    console.log("💾 Restored session from localStorage");
+    return true;
+  }
+
+  if (justLoggedOut) {
     return false;
   }
 

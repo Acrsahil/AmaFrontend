@@ -6,7 +6,7 @@ import { getCurrentUser } from "../../auth/auth";
 import { toast } from "sonner";
 import { useDashboardWebSocket } from "@/hooks/useDashboardWebSocket";
 import {
-  DollarSign,
+  Banknote,
   ShoppingBag,
   TrendingUp,
   Clock,
@@ -259,7 +259,7 @@ export default function AdminDashboard() {
             <StatCard
               title="Global Sales"
               value={`Rs.${dashboardData?.total_sum?.toLocaleString() || 0}`}
-              icon={DollarSign}
+              icon={Banknote}
             />
             <StatCard
               title="Branches"
@@ -283,7 +283,7 @@ export default function AdminDashboard() {
             <StatCard
               title={`${timeframe} Sales`}
               value={`Rs.${dashboardData?.today_sales?.toLocaleString() || 0}`}
-              icon={DollarSign}
+              icon={Banknote}
               trend={{ value: Number(Math.abs(dashboardData?.sales_percent || 0).toFixed(1)), isPositive: (dashboardData?.sales_percent || 0) >= 0 }}
             />
             <StatCard

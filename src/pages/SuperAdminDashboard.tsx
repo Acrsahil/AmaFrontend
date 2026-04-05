@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
     Store,
     Users,
-    DollarSign,
+    Banknote,
     TrendingUp,
     Search,
     Plus,
@@ -109,7 +109,7 @@ export default function SuperAdminDashboard() {
                         <div className="flex items-center justify-between">
                             <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground">Network Revenue</h3>
                             <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                                <DollarSign className="h-4 w-4" />
+                                <Banknote className="h-4 w-4" />
                             </div>
                         </div>
                         <div className="space-y-1">

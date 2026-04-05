@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
     Store,
     Users,
-    DollarSign,
+    Banknote,
     TrendingUp,
     Search,
     Plus,
@@ -302,7 +302,7 @@ export default function SuperAdminOverview() {
 
             {/* Stats Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard title={`${timeframe} Revenue`} value={`Rs.${(dashboardData?.total_sum || 0).toLocaleString()}`} icon={DollarSign} subtitle={`Global sales (${timeframe})`} />
+                <StatCard title={`${timeframe} Revenue`} value={`Rs.${(dashboardData?.total_sum || 0).toLocaleString()}`} icon={Banknote} subtitle={`Global sales (${timeframe})`} />
                 <StatCard title="Active Branches" value={dashboardData?.total_count_branch || branches.length} icon={Store} subtitle="Enterprise nodes" />
                 <StatCard title="Total Staff" value={dashboardData?.total_user_count || 0} icon={Users} subtitle="Combined workforce" />
                 <StatCard title={`${timeframe} Orders`} value={dashboardData?.total_count_order || 0} icon={ShoppingBag} subtitle={`Avg Order (${timeframe}): Rs.${dashboardData?.average_order_value?.toFixed(0) || 0}`} />

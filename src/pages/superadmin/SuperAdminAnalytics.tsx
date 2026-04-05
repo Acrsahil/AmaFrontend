@@ -4,7 +4,7 @@ import {
     TrendingUp,
     Users,
     ShoppingBag,
-    DollarSign,
+    Banknote,
     ArrowUpRight,
     Filter,
     Loader2,
@@ -163,7 +163,7 @@ export default function SuperAdminAnalytics() {
                     title="Total Revenue"
                     value={`Rs. ${(data?.total_sum || 0).toLocaleString()}`}
                     subtitle={`Global ${timeframe} yield`}
-                    icon={DollarSign}
+                    icon={Banknote}
                     color="primary"
                 />
                 <StatCard

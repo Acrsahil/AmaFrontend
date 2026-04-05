@@ -546,8 +546,8 @@ export default function CounterPOS() {
                 </div>
 
                 <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="icon" onClick={() => navigate('/counter/orders')} className="rounded-xl hover:bg-slate-100" title="Order History">
-                        <Receipt className="h-5 w-5 text-slate-500" />
+                    <Button variant="ghost" size="icon" onClick={() => navigate('/counter/orders')} className="rounded-xl hover:bg-slate-100 h-10 w-10 active:scale-95 transition-all shadow-sm border border-slate-100/50" title="Order History">
+                        <Clock className="h-6 w-6 text-slate-600" />
                     </Button>
                     <Separator orientation="vertical" className="h-8" />
                     <DropdownMenu>

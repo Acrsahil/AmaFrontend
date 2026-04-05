@@ -28,8 +28,8 @@ export default defineConfig(({ mode }) => ({
     host: "::",
     port: 8080,
     allowedHosts: [
-      // "amabakery.nishchalacharya.com.np",
-      // "amabakerypos-production.up.railway.app/"
+      "amabakery.nishchalacharya.com.np",
+      "amabakerypos-production.up.railway.app/"
       "api.amabakeryhouse.com/",
       "www.api.amabakeryhouse.com/",
       "localhost",

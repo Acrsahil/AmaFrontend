@@ -16,6 +16,7 @@ import OrderStatus from "./pages/waiter/OrderStatus";
 import PaymentCollection from "./pages/waiter/PaymentCollection";
 
 // Counter Pages
+import { CounterLayout } from "./components/layout/CounterLayout";
 import CounterPOS from "./pages/counter/CounterPOS";
 import CounterOrders from "./pages/counter/CounterOrders";
 import CounterDashboard from "./pages/counter/CounterDashboard";
@@ -197,29 +198,16 @@ const App = () => {
             />
 
             <Route
-              path="/counter/pos"
-              element={
-                <ProtectedRoute allowedRoles={["COUNTER", "BRANCH_MANAGER", "ADMIN"]}>
-                  <CounterPOS />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/counter/orders"
-              element={
-                <ProtectedRoute allowedRoles={["COUNTER", "ADMIN"]}>
-                  <CounterOrders />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/counter/dashboard"
               element={
                 <ProtectedRoute allowedRoles={["COUNTER", "ADMIN", "BRANCH_MANAGER"]}>
-                  <CounterDashboard />
+                  <CounterLayout />
                 </ProtectedRoute>
               }
-            />
+            >
+              <Route path="/counter/dashboard" element={<CounterDashboard />} />
+              <Route path="/counter/pos" element={<CounterPOS />} />
+              <Route path="/counter/orders" element={<CounterOrders />} />
+            </Route>
 
             {/* ✅ KITCHEN PROTECTED */}
             <Route

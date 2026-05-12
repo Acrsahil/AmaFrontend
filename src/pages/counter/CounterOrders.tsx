@@ -498,13 +498,10 @@ export default function CounterOrders() {
     }, [orders, searchQuery, statusFilter]);
 
     return (
-        <div className="h-screen bg-stone-50 flex flex-col overflow-hidden font-sans">
+        <div className="h-screen bg-background flex flex-col overflow-hidden font-sans">
             {/* Header */}
             <header className="h-16 bg-white border-b px-6 pr-14 flex items-center justify-between shrink-0 z-10">
                 <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="icon" onClick={() => navigate('/counter/pos')} className="rounded-xl">
-                        <ChevronLeft className="h-6 w-6" />
-                    </Button>
                     <div className="flex items-center gap-3">
                         <div className="bg-primary/10 h-10 w-10 rounded-xl flex items-center justify-center">
                             <Monitor className="h-6 w-6 text-primary" />
@@ -514,22 +511,6 @@ export default function CounterOrders() {
                 </div>
 
                 <div className="flex items-center gap-4">
-                    <Button
-                        variant="default"
-                        onClick={() => navigate('/counter/pos')}
-                        className="h-11 px-6 rounded-xl font-black bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 gap-2"
-                    >
-                        <ShoppingBag className="h-5 w-5" />
-                        Sell Items
-                    </Button>
-                    <Button
-                        variant="outline"
-                        onClick={() => navigate('/counter/dashboard')}
-                        className="h-11 px-4 rounded-xl font-bold border-2 border-slate-100 hover:bg-slate-50 gap-2 shadow-sm"
-                    >
-                        <LayoutDashboard className="h-5 w-5 text-slate-400" />
-                        Dashboard
-                    </Button>
                     <Separator orientation="vertical" className="h-8" />
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>

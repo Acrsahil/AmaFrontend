@@ -594,21 +594,10 @@ export default function CounterPOS() {
     };
 
     return (
-        <div className="h-screen bg-stone-50 flex flex-col overflow-hidden font-sans">
+        <div className="h-screen bg-background flex flex-col overflow-hidden font-sans">
             {/* Top Header */}
             <header className="h-16 bg-white border-b px-6 pr-14 flex items-center justify-between shrink-0 z-10">
                 <div className="flex items-center gap-4">
-                    {(operator?.role === "ADMIN" || operator?.role === "BRANCH_MANAGER" || operator?.role === "SUPER_ADMIN") && (
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => navigate('/admin/dashboard')}
-                            className="mr-2 rounded-xl text-slate-400 hover:text-primary hover:bg-primary/5"
-                            title="Back to Admin Dashboard"
-                        >
-                            <LayoutDashboard className="h-6 w-6" />
-                        </Button>
-                    )}
                     <div className="h-10 w-10 md:h-12 md:w-12 rounded-full flex items-center justify-center overflow-hidden border border-slate-100 shadow-sm bg-white p-0.5">
                         <img src="/logos/logo1white.jfif" alt="AMA BAKERY" className="h-full w-full object-cover rounded-full" />
                     </div>
@@ -619,12 +608,6 @@ export default function CounterPOS() {
                 </div>
 
                 <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="icon" onClick={() => navigate('/counter/dashboard')} className="rounded-xl hover:bg-slate-100 h-10 w-10 active:scale-95 transition-all shadow-sm border border-slate-100/50" title="Dashboard">
-                        <LayoutDashboard className="h-6 w-6 text-slate-600" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => navigate('/counter/orders')} className="rounded-xl hover:bg-slate-100 h-10 w-10 active:scale-95 transition-all shadow-sm border border-slate-100/50" title="Order History">
-                        <Clock className="h-6 w-6 text-slate-600" />
-                    </Button>
                     <Separator orientation="vertical" className="h-8" />
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>

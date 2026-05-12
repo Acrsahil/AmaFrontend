@@ -89,7 +89,7 @@ export default function CounterDashboard() {
     };
 
     return (
-        <div className="h-screen bg-stone-50 flex flex-col overflow-hidden font-sans">
+        <div className="h-screen bg-background flex flex-col overflow-hidden font-sans">
             {/* Top Header */}
             <header className="h-16 bg-white border-b px-6 pr-14 flex items-center justify-between shrink-0 z-10">
                 <div className="flex items-center gap-4">
@@ -103,23 +103,6 @@ export default function CounterDashboard() {
                 </div>
 
                 <div className="flex items-center gap-4">
-                    <Button
-                        variant="default"
-                        onClick={() => navigate('/counter/pos')}
-                        className="hidden md:flex h-10 px-6 rounded-xl font-black bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 gap-2 transition-all active:scale-95"
-                    >
-                        <Monitor className="h-4 w-4" />
-                        Open POS
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => navigate('/counter/orders')}
-                        className="rounded-xl hover:bg-slate-100 h-10 w-10 active:scale-95 transition-all shadow-sm border border-slate-100/50"
-                        title="Order History"
-                    >
-                        <Clock className="h-6 w-6 text-slate-600" />
-                    </Button>
                     <Separator orientation="vertical" className="h-8" />
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -164,7 +147,7 @@ export default function CounterDashboard() {
                 <div className="max-w-7xl mx-auto space-y-8">
 
                     {/* Welcome Banner */}
-                    <div className="relative overflow-hidden bg-slate-900 rounded-[2rem] p-8 md:p-12 text-white shadow-2xl">
+                    <div className="relative overflow-hidden gradient-espresso rounded-[2rem] p-8 md:p-12 text-white shadow-2xl">
                         <div className="relative z-10">
                             <div className="flex items-center gap-3 mb-4">
                                 <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center animate-pulse">
@@ -173,14 +156,14 @@ export default function CounterDashboard() {
                                 <span className="text-[10px] font-black uppercase tracking-[0.3em] text-primary/80">Operational Overview</span>
                             </div>
                             <h2 className="text-3xl md:text-5xl font-black mb-2 tracking-tight">Today's Summary</h2>
-                            <p className="text-slate-400 font-medium max-w-xl text-sm md:text-base">
-                                Welcome back, <span className="text-white font-bold">{user?.username || 'Counter'}</span>.
+                            <p className="text-white/60 font-medium max-w-xl text-sm md:text-base">
+                                Welcome back, <span className="text-white font-bold">{user?.username || 'Counter'}</span>. 
                                 Here's how {branchInfo?.name || 'the branch'} is performing today.
                             </p>
                         </div>
                         {/* Decorative background elements */}
                         <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/4 h-[400px] w-[400px] bg-primary/20 rounded-full blur-[100px]" />
-                        <div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/4 h-[300px] w-[300px] bg-blue-500/10 rounded-full blur-[80px]" />
+                        <div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/4 h-[300px] w-[300px] bg-amber-500/10 rounded-full blur-[80px]" />
                     </div>
 
                     {/* Stats Grid */}
@@ -190,34 +173,34 @@ export default function CounterDashboard() {
                             value={`Rs.${(dashboardData?.today_sales || dashboardData?.total_sum || 0).toLocaleString()}`}
                             icon={Banknote}
                             trend={{ value: Number(Math.abs(dashboardData?.sales_percent || 0).toFixed(1)), isPositive: (dashboardData?.sales_percent || 0) >= 0 }}
-                            className="bg-white border-2 border-slate-100 hover:border-primary/20 transition-all hover:shadow-xl rounded-3xl"
+                            className="bg-white border-2 border-border/50 hover:border-primary/20 transition-all hover:shadow-xl rounded-3xl"
                         />
                         <StatCard
                             title="Total Orders"
                             value={dashboardData?.total_orders || dashboardData?.total_count_order || 0}
                             icon={ShoppingBag}
                             trend={{ value: Number(Math.abs(dashboardData?.order_percent || 0).toFixed(1)), isPositive: (dashboardData?.order_percent || 0) >= 0 }}
-                            className="bg-white border-2 border-slate-100 hover:border-primary/20 transition-all hover:shadow-xl rounded-3xl"
+                            className="bg-white border-2 border-border/50 hover:border-primary/20 transition-all hover:shadow-xl rounded-3xl"
                         />
                         <StatCard
                             title="Avg. Ticket"
                             value={`Rs.${dashboardData?.avg_orders || dashboardData?.average_order_value ? Number(dashboardData.avg_orders || dashboardData.average_order_value).toFixed(0) : 0}`}
                             icon={TrendingUp}
                             trend={{ value: Number(Math.abs(dashboardData?.avg_order_percent || 0).toFixed(1)), isPositive: (dashboardData?.avg_order_percent || 0) >= 0 }}
-                            className="bg-white border-2 border-slate-100 hover:border-primary/20 transition-all hover:shadow-xl rounded-3xl"
+                            className="bg-white border-2 border-border/50 hover:border-primary/20 transition-all hover:shadow-xl rounded-3xl"
                         />
                         <StatCard
                             title="Busiest Hour"
                             value={Array.isArray(dashboardData?.peak_hours) && dashboardData.peak_hours.length > 0 ? dashboardData.peak_hours.join(", ") : "—"}
                             icon={Clock}
                             subtitle="Peak performance time"
-                            className="bg-white border-2 border-slate-100 hover:border-primary/20 transition-all hover:shadow-xl rounded-3xl"
+                            className="bg-white border-2 border-border/50 hover:border-primary/20 transition-all hover:shadow-xl rounded-3xl"
                         />
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         {/* Sales Trend Chart */}
-                        <div className="lg:col-span-2 bg-white rounded-[2rem] border-2 border-slate-100 p-8 shadow-sm">
+                        <div className="lg:col-span-2 bg-white rounded-[2rem] border-2 border-border/50 p-8 shadow-sm">
                             <div className="flex items-center justify-between mb-8">
                                 <div>
                                     <h3 className="text-xl font-black text-slate-800 tracking-tight">Sales Trend</h3>
@@ -256,7 +239,7 @@ export default function CounterDashboard() {
                         </div>
 
                         {/* Top Products */}
-                        <div className="bg-white rounded-[2rem] border-2 border-slate-100 p-8 shadow-sm">
+                        <div className="bg-white rounded-[2rem] border-2 border-border/50 p-8 shadow-sm">
                             <div className="flex items-center justify-between mb-8">
                                 <div>
                                     <h3 className="text-xl font-black text-slate-800 tracking-tight">Top Selling Todays</h3>
@@ -291,7 +274,7 @@ export default function CounterDashboard() {
                     </div>
 
                     {/* Recent Orders Section */}
-                    <div className="bg-white rounded-[2.5rem] border-2 border-slate-100 overflow-hidden shadow-sm">
+                    <div className="bg-white rounded-[2.5rem] border-2 border-border/50 overflow-hidden shadow-sm">
                         <div className="p-8 border-b flex flex-col md:flex-row md:items-center justify-between gap-4">
                             <div>
                                 <h3 className="text-2xl font-black text-slate-800 tracking-tight">Recent Activity</h3>
@@ -308,7 +291,7 @@ export default function CounterDashboard() {
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left">
-                                <thead className="bg-slate-50/50">
+                                <thead className="bg-muted/30">
                                     <tr>
                                         <th className="px-8 py-5 text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Order ID</th>
                                         <th className="px-8 py-5 text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Customer</th>
@@ -365,21 +348,6 @@ export default function CounterDashboard() {
                 </div>
             </main>
 
-            {/* Mobile Footer Nav */}
-            <div className="md:hidden bg-white border-t p-4 flex items-center justify-around shrink-0">
-                <Button variant="ghost" className="flex flex-col h-auto gap-1 text-primary" onClick={() => navigate('/counter/dashboard')}>
-                    <LayoutDashboard className="h-5 w-5" />
-                    <span className="text-[10px] font-black uppercase">Home</span>
-                </Button>
-                <Button variant="ghost" className="flex flex-col h-auto gap-1 text-slate-400" onClick={() => navigate('/counter/pos')}>
-                    <Monitor className="h-5 w-5" />
-                    <span className="text-[10px] font-black uppercase">POS</span>
-                </Button>
-                <Button variant="ghost" className="flex flex-col h-auto gap-1 text-slate-400" onClick={() => navigate('/counter/orders')}>
-                    <Clock className="h-5 w-5" />
-                    <span className="text-[10px] font-black uppercase">History</span>
-                </Button>
-            </div>
         </div>
     );
 }

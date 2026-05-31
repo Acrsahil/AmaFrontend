@@ -1,5 +1,5 @@
 import { StatCard } from "@/components/admin/StatCard";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchDashboardDetails, fetchInvoices, fetchBranch, fetchDailySales } from "@/api/index.js";
 import { getCurrentUser, logout } from "../../auth/auth";
@@ -20,8 +20,11 @@ import {
     Search,
     ChevronDown,
     Loader2,
-    Menu
+    Menu,
+    Wifi,
+    WifiOff
 } from "lucide-react";
+import { useDashboardWebSocket } from "@/hooks/useDashboardWebSocket";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -59,6 +62,7 @@ export default function CounterDashboard() {
     const [loading, setLoading] = useState(true);
     const [branchInfo, setBranchInfo] = useState<any>(null);
     const [showChangePassword, setShowChangePassword] = useState(false);
+    const [sseConnected, setSSEConnected] = useState(false);
 
     const [salesFilter, setSalesFilter] = useState<'product' | 'category' | 'kitchentype'>('product');
     const [salesData, setSalesData] = useState<any[]>([]);
@@ -111,7 +115,28 @@ export default function CounterDashboard() {
             return;
         }
         loadData();
-    }, [user, navigate, loadData]);
+    }, [user?.id, user?.branch_id, navigate, loadData]);
+
+    const wsRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const handleWSUpdate = useCallback(() => {
+        if (wsRefreshTimerRef.current) clearTimeout(wsRefreshTimerRef.current);
+        wsRefreshTimerRef.current = setTimeout(() => {
+            loadData();
+            loadSalesData(salesFilter);
+        }, 500);
+    }, [loadData, loadSalesData, salesFilter]);
+
+    const { isConnected: wsConnected } = useDashboardWebSocket(user?.branch_id, handleWSUpdate);
+
+    useEffect(() => {
+        setSSEConnected(wsConnected);
+    }, [wsConnected]);
+
+    useEffect(() => {
+        return () => {
+            if (wsRefreshTimerRef.current) clearTimeout(wsRefreshTimerRef.current);
+        };
+    }, []);
 
     const handleLogout = () => {
         window.dispatchEvent(new CustomEvent("show-logout-confirm"));
@@ -136,6 +161,10 @@ export default function CounterDashboard() {
                 </div>
 
                 <div className="flex items-center gap-4">
+                    <div className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${sseConnected ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" : "bg-amber-500/10 text-amber-600 border border-amber-500/20"}`}>
+                        <div className={`h-1.5 w-1.5 rounded-full ${sseConnected ? "bg-emerald-500 animate-pulse" : "bg-amber-500 animate-pulse"}`} />
+                        {sseConnected ? "Live" : "Connecting"}
+                    </div>
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="ghost" className="h-auto p-2 hover:bg-slate-50 flex items-center gap-3 rounded-2xl transition-all text-left">

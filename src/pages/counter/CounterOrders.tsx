@@ -196,7 +196,7 @@ export default function CounterOrders() {
     useOrdersWebSocket(
         useCallback(() => {
             if (wsRefreshTimerRef.current) clearTimeout(wsRefreshTimerRef.current);
-            wsRefreshTimerRef.current = setTimeout(() => loadInvoices(), 500);
+            wsRefreshTimerRef.current = setTimeout(() => loadInvoices(1, true), 500);
         }, [loadInvoices])
     );
 
@@ -304,7 +304,7 @@ export default function CounterOrders() {
             });
             toast.success("Payment added successfully");
             setShowDetailModal(false);
-            loadInvoices(); // Refresh list
+            loadInvoices(1, true); // Refresh list
         } catch (err: any) {
             toast.error(err.message || "Failed to process payment");
         } finally {

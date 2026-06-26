@@ -34,6 +34,24 @@ import { ChangePasswordModal } from "@/components/auth/ChangePasswordModal";
 import { fetchInvoices, fetchProducts, fetchCategories, updateInvoiceStatus, fetchTables, fetchInvoiceDetail } from "../../api/index.js";
 import { useOrdersWebSocket } from "@/hooks/useOrdersWebSocket";
 
+/** Derive kanban column from this kitchen's item statuses (matches backend item-wise logic). */
+function deriveKitchenOrderStatus(items: { status?: string }[]): 'new' | 'ready' | 'completed' {
+  if (!items?.length) return 'completed';
+
+  const statuses = items.map((i) => (i.status || 'PENDING').toUpperCase());
+
+  if (statuses.every((s) => s === 'COMPLETED' || s === 'CANCELLED')) return 'completed';
+  if (statuses.some((s) => s === 'PENDING')) return 'new';
+  if (statuses.some((s) => s === 'READY')) return 'ready';
+  return 'new';
+}
+
+function mapInvoiceStatusToKitchenStatus(invoiceStatus?: string): 'new' | 'ready' | 'completed' {
+  if (invoiceStatus === 'READY') return 'ready';
+  if (invoiceStatus === 'COMPLETED') return 'completed';
+  return 'new';
+}
+
 export default function KitchenDisplay() {
   const navigate = useNavigate();
   const [orders, setOrders] = useState<any[]>([]);
@@ -91,6 +109,9 @@ export default function KitchenDisplay() {
   const loadData = async () => {
     setLoading(true);
     try {
+      const currentUser = getCurrentUser();
+      const kitchenTypeId = currentUser?.kitchentype_id;
+
       const [invoiceRes, productsResponse, categoryData, floorData] = await Promise.all([
         fetchInvoices({ date: new Date().toLocaleDateString('en-CA') }),
         fetchProducts({ page_size: 1000 }),
@@ -132,6 +153,27 @@ export default function KitchenDisplay() {
           const tableMatch = (inv.description || inv.invoice_description || "").match(/Table (\d+)/);
           const tableNumber = inv.table_no || (tableMatch ? parseInt(tableMatch[1]) : 0);
 
+          const items = (inv.items || [])
+            .filter(Boolean)
+            .map((item: any) => {
+              const product = productsMap[String(item.product)];
+              return {
+                quantity: item.quantity || 0,
+                status: item.status || 'PENDING',
+                menuItem: {
+                  name: product?.name || `Product #${item.product}`,
+                  category: product?.category_name || 'Uncategorized',
+                  categoryId: product?.category,
+                  kitchenTypeId: product?.kitchentype_id || product?.kitchenType
+                },
+                notes: item.description || ""
+              };
+            });
+
+          const kitchenStatus = kitchenTypeId
+            ? deriveKitchenOrderStatus(items)
+            : mapInvoiceStatusToKitchenStatus(inv.invoice_status);
+
           return {
             id: (inv.id || "").toString(),
             invoiceNumber: inv.invoice_number || "N/A",
@@ -139,24 +181,10 @@ export default function KitchenDisplay() {
             waiter: inv.created_by_name || "Unknown",
             floor: inv.floor,
             floorName: inv.floor_name,
-            status: inv.invoice_status === 'PENDING' ? 'new' :
-              inv.invoice_status === 'READY' ? 'ready' : 'completed',
+            status: kitchenStatus,
             total: parseFloat(inv.total_amount || "0"),
             notes: inv.notes || (inv.description?.includes('| NOTE:') ? inv.description.split('| NOTE:')[1].trim() : ""),
-            items: (inv.items || []).map((item: any) => {
-              const product = productsMap[String(item.product)];
-              return {
-                quantity: item.quantity || 0,
-                menuItem: {
-                  name: product?.name || `Product #${item.product}`,
-                  category: product?.category_name || 'Uncategorized',
-                  categoryId: product?.category,
-                  // Use the kitchen type ID directly from the product data
-                  kitchenTypeId: product?.kitchentype_id || product?.kitchenType
-                },
-                notes: item.description || ""
-              };
-            }),
+            items,
             createdAt: inv.created_at
           };
         });
@@ -211,7 +239,13 @@ export default function KitchenDisplay() {
 
       // Return order with ONLY relevant items, or null if no items match
       if (relevantItems.length > 0) {
-        return { ...order, items: relevantItems };
+        return {
+          ...order,
+          items: relevantItems,
+          status: userKitchenId
+            ? deriveKitchenOrderStatus(relevantItems)
+            : order.status,
+        };
       }
       return null;
     })
@@ -229,10 +263,48 @@ export default function KitchenDisplay() {
     console.log(`Updating order ${orderId} to ${backendStatus}`);
 
     try {
-      await updateInvoiceStatus(orderId, backendStatus);
+      const updatedInvoice = await updateInvoiceStatus(orderId, backendStatus);
       toast.success(`Order updated to ${newFrontendStatus}`);
 
-      // Re-fetch data to be sure
+      // Apply the PATCH response immediately so the card moves columns without waiting for a full reload
+      if (updatedInvoice) {
+        setOrders((prev) =>
+          prev.map((order) => {
+            if (order.id !== orderId) return order;
+
+            const updatedItems = (updatedInvoice.items || [])
+              .filter(Boolean)
+              .map((item: any) => {
+                const existingItem = order.items.find(
+                  (i: any) => String(i.menuItem?.name) === String(item.product_name)
+                );
+                return {
+                  quantity: item.quantity || 0,
+                  status: item.status || backendStatus,
+                  menuItem: existingItem?.menuItem || {
+                    name: item.product_name || `Product #${item.product}`,
+                    category: 'Uncategorized',
+                  },
+                  notes: existingItem?.notes || "",
+                };
+              });
+
+            const nextItems = updatedItems.length > 0 ? updatedItems : order.items.map((item: any) => ({
+              ...item,
+              status: backendStatus,
+            }));
+
+            return {
+              ...order,
+              items: nextItems,
+              status: userKitchenId
+                ? deriveKitchenOrderStatus(nextItems)
+                : mapInvoiceStatusToKitchenStatus(updatedInvoice.invoice_status),
+            };
+          })
+        );
+      }
+
       await loadData();
     } catch (err: any) {
       console.error("Status update error:", err);

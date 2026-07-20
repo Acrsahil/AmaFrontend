@@ -383,8 +383,8 @@ export default function CounterPOS() {
             toast.error("Please select payment method");
             return;
         }
-        if (paymentMethod === 'cash' && (!cashReceived || parseFloat(cashReceived) < total)) {
-            toast.error("Insufficient cash received");
+        if (paymentMethod === 'cash' && (!cashReceived || parseFloat(cashReceived) <= 0)) {
+            toast.error("Enter a valid amount");
             return;
         }
 
@@ -1189,7 +1189,7 @@ export default function CounterPOS() {
                                         <div>INV: #POS-{Date.now().toString().slice(-6)}</div>
                                         <div>DATE: {new Date().toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
                                     </div>
-                                <div className="thermal-info-right">
+                                    <div className="thermal-info-right">
                                         <div>CSHR: {operator?.name || "Counter"}</div>
                                         <div>CUST: {receiptData?.customer ? receiptData.customer.name : "Walk-in"}</div>
                                     </div>

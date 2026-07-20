@@ -11,6 +11,9 @@ import { fetchInvoices, fetchNotifications, markNotificationRead, fetchProducts,
 import { getCurrentUser } from "@/auth/auth";
 import { useOrdersWebSocket } from "@/hooks/useOrdersWebSocket";
 import { format, formatDistanceToNow } from "date-fns";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { fetchTables, patchInvoice } from "@/api/index.js";
+import { Edit, MoveRight } from "lucide-react";
 
 type MainTab = "mine" | "all";
 
@@ -25,18 +28,23 @@ export default function OrderStatus() {
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const currentUser = getCurrentUser();
+  const [floors, setFloors] = useState<any[]>([]);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [selectedTransferOrder, setSelectedTransferOrder] = useState<any>(null);
+  const [transferring, setTransferring] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [dataRes, notifs, prodData, catData] = await Promise.all([
+      const [dataRes, notifs, prodData, catData, floorsData] = await Promise.all([
         fetchInvoices({ date: format(new Date(), 'yyyy-MM-dd') }),
         fetchNotifications(),
         fetchProducts(),
-        fetchCategories()
+        fetchCategories(),
+        fetchTables()
       ]);
       const data = dataRes.results || dataRes;
-      
+
       const enrichedOrders = await Promise.all(
         (data || []).map(async (inv: any) => {
           try {
@@ -56,6 +64,7 @@ export default function OrderStatus() {
       setNotifications((notificationsData || []).filter((n: any) => !n.is_read));
       setProducts(productsData || []);
       setCategories(categoriesData || []);
+      setFloors(floorsData || []);
     } catch (err: any) {
       toast.error(err.message || "Failed to load orders");
     } finally {
@@ -130,6 +139,26 @@ export default function OrderStatus() {
     acc[floorName].push(notif);
     return acc;
   }, {});
+
+  const handleEditOrder = (order: any) => {
+    const tableNo = order.table_no || "takeaway";
+    navigate(`/waiter/order/${tableNo}?invoiceId=${order.id}&floorId=${order.floor}`);
+  };
+
+  const submitTransfer = async (floorId: number) => {
+    if (!selectedTransferOrder) return;
+    setTransferring(true);
+    try {
+      await patchInvoice(selectedTransferOrder.id, { transfer_to_floor: floorId });
+      toast.success("Order transferred successfully!");
+      setShowTransferModal(false);
+      loadData();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to transfer");
+    } finally {
+      setTransferring(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -227,6 +256,11 @@ export default function OrderStatus() {
                         activeTab={activeTab}
                         products={products}
                         categories={categories}
+                        onEdit={() => handleEditOrder(order)}
+                        onTransfer={() => {
+                          setSelectedTransferOrder(order);
+                          setShowTransferModal(true);
+                        }}
                       />
                     ))}
                   </div>
@@ -285,6 +319,29 @@ export default function OrderStatus() {
         )}
       </main>
 
+      <Dialog open={showTransferModal} onOpenChange={setShowTransferModal}>
+        <DialogContent className="max-w-[400px] rounded-3xl p-6">
+          <DialogHeader>
+            <DialogTitle>Transfer to Floor</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 mt-4">
+            {floors.map(floor => (
+              <Button
+                key={floor.id}
+                variant="outline"
+                className="w-full justify-between h-14"
+                onClick={() => submitTransfer(floor.id)}
+                disabled={transferring}
+              >
+                <span className="font-bold">{floor.name}</span>
+                <span className="text-xs text-muted-foreground">{floor.table_count} tables</span>
+              </Button>
+            ))}
+            {floors.length === 0 && <p className="text-center text-muted-foreground">No floors configured.</p>}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <WaiterBottomNav />
     </div>
   );
@@ -299,6 +356,8 @@ function OrderCard({
   products = [],
   categories = [],
   onUndo,
+  onEdit,
+  onTransfer,
 }: {
   order: any;
   showWaiter?: boolean;
@@ -307,6 +366,8 @@ function OrderCard({
   products?: any[];
   categories?: any[];
   onUndo?: () => void;
+  onEdit?: () => void;
+  onTransfer?: () => void;
 }) {
   const currentUser = getCurrentUser();
   const isReady = order.invoice_status === "READY";
@@ -478,6 +539,23 @@ function OrderCard({
             >
               Undo Pick Up
             </Button>
+          </div>
+        )}
+
+        {!isPaid && !isCompleted && !notification && activeTab === 'mine' && (
+          <div className="flex gap-2 pt-3 pb-1 mt-2 border-t border-slate-100">
+            {onTransfer && (
+              <Button onClick={onTransfer} variant="outline" className="flex-1 h-9 rounded-xl text-xs gap-1.5 text-slate-500">
+                <MoveRight className="h-3.5 w-3.5" />
+                Transfer
+              </Button>
+            )}
+            {onEdit && (
+              <Button onClick={onEdit} variant="outline" className="flex-1 h-9 rounded-xl text-xs gap-1.5 text-primary border-primary/20 hover:bg-primary/5">
+                <Edit className="h-3.5 w-3.5" />
+                Edit Items
+              </Button>
+            )}
           </div>
         )}
       </div>

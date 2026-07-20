@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams, useLocation } from "react-router-dom";
 import { MobileHeader } from "@/components/layout/MobileHeader";
 import { MenuItemCard } from "@/components/waiter/MenuItemCard";
 import { CartItem } from "@/components/waiter/CartItem";
@@ -11,12 +11,16 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Input } from "@/components/ui/input";
 import { ShoppingCart, Search, X, Receipt, Loader2, Check } from "lucide-react";
 import { toast } from "sonner";
-import { fetchProducts, fetchCategories } from "../../api/index.js";
+import { fetchProducts, fetchCategories, patchInvoice, fetchInvoiceDetail } from "../../api/index.js";
 
 interface CartItemData {
   item: MenuItem;
   quantity: number;
   notes?: string;
+  isExisting?: boolean;
+  originalQuantity?: number;
+  invoiceItemId?: number;
+  status?: string;
 }
 
 export default function OrderEntry() {
@@ -32,10 +36,40 @@ export default function OrderEntry() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [orderSent, setOrderSent] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const invoiceId = searchParams.get("invoiceId");
+  const [removedItemIds, setRemovedItemIds] = useState<number[]>([]);
 
   useEffect(() => {
     loadData();
-  }, []);
+    if (invoiceId) {
+      loadInvoiceData();
+    }
+  }, [invoiceId]);
+
+  const loadInvoiceData = async () => {
+    try {
+      const inv = await fetchInvoiceDetail(invoiceId);
+      if (inv && inv.items) {
+        const mappedExisting = inv.items.map((it: any) => ({
+          item: {
+            id: String(it.product),
+            name: it.product_name || `Product #${it.product}`,
+            price: parseFloat(it.unit_price),
+            category: "",
+          },
+          quantity: it.quantity,
+          originalQuantity: it.quantity,
+          notes: it.description,
+          isExisting: true,
+          status: it.status,
+          invoiceItemId: it.id
+        }));
+        setCart(mappedExisting);
+      }
+    } catch (err: any) {
+      toast.error("Failed to load invoice items");
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -127,12 +161,22 @@ export default function OrderEntry() {
   const removeFromCart = (item: MenuItem) => {
     setCart(prev => {
       const existing = prev.find(c => c.item.id === item.id);
-      if (existing && existing.quantity > 1) {
-        return prev.map(c =>
-          c.item.id === item.id
-            ? { ...c, quantity: c.quantity - 1 }
-            : c
-        );
+      if (existing) {
+        if (existing.isExisting && existing.status !== "PENDING" && existing.quantity <= (existing.originalQuantity || 0)) {
+          toast.error("Cannot reduce quantity of prepared items.");
+          return prev;
+        }
+        if (existing.quantity > 1) {
+          return prev.map(c =>
+            c.item.id === item.id
+              ? { ...c, quantity: c.quantity - 1 }
+              : c
+          );
+        }
+
+        if (existing.isExisting && existing.invoiceItemId) {
+          setRemovedItemIds(r => [...r, existing.invoiceItemId!]);
+        }
       }
       return prev.filter(c => c.item.id !== item.id);
     });
@@ -141,7 +185,14 @@ export default function OrderEntry() {
   const setQuantity = (item: MenuItem, quantity: number) => {
     setCart(prev => {
       const existing = prev.find(c => c.item.id === item.id);
+      if (existing && existing.isExisting && existing.status !== "PENDING" && quantity < (existing.originalQuantity || 0)) {
+        toast.error("Cannot reduce quantity of prepared items.");
+        return prev;
+      }
       if (quantity <= 0) {
+        if (existing?.isExisting && existing.invoiceItemId) {
+          setRemovedItemIds(r => [...r, existing.invoiceItemId!]);
+        }
         return prev.filter(c => c.item.id !== item.id);
       }
       if (existing) {
@@ -156,7 +207,17 @@ export default function OrderEntry() {
   };
 
   const deleteFromCart = (itemId: string) => {
-    setCart(prev => prev.filter(c => c.item.id !== itemId));
+    setCart(prev => {
+      const existing = prev.find(c => c.item.id === itemId);
+      if (existing?.isExisting && existing.status !== "PENDING") {
+        toast.error("Cannot remove prepared items.");
+        return prev;
+      }
+      if (existing?.isExisting && existing.invoiceItemId) {
+        setRemovedItemIds(r => [...r, existing.invoiceItemId!]);
+      }
+      return prev.filter(c => c.item.id !== itemId);
+    });
   };
 
   const updateNotes = (itemId: string, notes: string) => {
@@ -165,9 +226,72 @@ export default function OrderEntry() {
     ));
   };
 
-  const handleSendOrder = () => {
-    setIsCartOpen(false);
-    proceedToCheckout();
+  const handleSendOrder = async () => {
+    if (invoiceId) {
+      // Compute diff and patch
+      const addItems: any[] = [];
+      const updateItems: any[] = [];
+
+      cart.forEach(c => {
+        if (c.isExisting) {
+          const diff = c.quantity - (c.originalQuantity || 0);
+          if (diff > 0) {
+            addItems.push({
+              product: parseInt(c.item.id),
+              quantity: diff,
+              description: c.notes || ""
+            });
+          } else if (diff < 0) {
+            updateItems.push({
+              invoice_item_id: c.invoiceItemId,
+              quantity: c.quantity
+            });
+          }
+        } else {
+          addItems.push({
+            product: parseInt(c.item.id),
+            quantity: c.quantity,
+            description: c.notes || ""
+          });
+        }
+      });
+
+      // Track items needing removal based on quantity reduction to 0 was handled in deleteFromCart
+      // But what if quantity was just reduced but > 0? 
+      // Backend actually DOES NOT support reducing quantity from N to M for Waiter via remove_items 
+      // remove_items asks for `invoice_item_id` (this deletes the whole row!). 
+      // If waiter reduces qty, they can't. Waiter can ONLY remove completely if PENDING.
+      // Wait, if waiter reduces quantity to >0, the frontend shouldn't allow it if backend doesn't support, 
+      // OR we can just ignore it or delete and re-add. 
+      // Let's assume we just delete if they reduce it (we only supported remove the whole item in deleteFromCart).
+
+      if (addItems.length === 0 && removedItemIds.length === 0 && updateItems.length === 0) {
+        toast.info("No changes made.");
+        setIsCartOpen(false);
+        return;
+      }
+
+      setOrderSent(true);
+      try {
+        await patchInvoice(invoiceId, {
+          add_items: addItems,
+          remove_items: removedItemIds,
+          update_items: updateItems
+        });
+        toast.success("Order updated successfully!");
+        setIsCartOpen(false);
+        setTimeout(() => {
+          navigate("/waiter/tables");
+        }, 1000);
+      } catch (err: any) {
+        toast.error(err.message || "Failed to update order");
+        setOrderSent(false);
+      }
+
+    } else {
+      setIsCartOpen(false);
+      proceedToCheckout();
+    }
   };
 
   const proceedToCheckout = () => {
@@ -307,12 +431,12 @@ export default function OrderEntry() {
                   {orderSent ? (
                     <>
                       <Check className="h-5 w-5 mr-2" />
-                      Order Sent!
+                      {invoiceId ? "Order Updated!" : "Order Sent!"}
                     </>
                   ) : (
                     <>
                       <Receipt className="h-5 w-5 mr-2" />
-                      Proceed to Checkout
+                      {invoiceId ? "Update Order" : "Proceed to Checkout"}
                     </>
                   )}
                 </Button>

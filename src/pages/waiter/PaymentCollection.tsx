@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { WaiterBottomNav } from "@/components/waiter/WaiterBottomNav";
-import { CreditCard, Banknote, CheckCircle2, IndianRupee, Printer, Clock, X, Loader2, Wallet, QrCode, ChevronDown, ChevronUp, User, Receipt } from "lucide-react";
+import { CreditCard, Banknote, CheckCircle2, IndianRupee, Printer, Clock, X, Loader2, Wallet, QrCode, ChevronDown, ChevronUp, User, Receipt, Edit } from "lucide-react";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
@@ -23,6 +23,7 @@ export default function PaymentCollection() {
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showCashDialog, setShowCashDialog] = useState(false);
   const [cashReceived, setCashReceived] = useState("");
+  const [onlineReceived, setOnlineReceived] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
   const [receiptData, setReceiptData] = useState<any>(null);
@@ -37,7 +38,7 @@ export default function PaymentCollection() {
     try {
       const response = await fetchInvoices({ date: new Date().toISOString().split('T')[0] });
       const data = response.results || response;
-      
+
       const enrichedInvoices = await Promise.all(
         (data || []).map(async (inv: any) => {
           try {
@@ -112,9 +113,11 @@ export default function PaymentCollection() {
     if (method === 'CASH') {
       setShowPaymentDialog(false);
       setShowCashDialog(true);
+      setCashReceived(String(selectedOrder.due_amount || selectedOrder.total_amount || 0));
     } else if (method === 'ONLINE' || method === 'QR') {
       setShowPaymentDialog(false);
       setShowOnlineDialog(true);
+      setOnlineReceived(String(selectedOrder.due_amount || selectedOrder.total_amount || 0));
     } else {
       processPayment(method, parseFloat(selectedOrder.due_amount || selectedOrder.total_amount));
     }
@@ -161,23 +164,16 @@ export default function PaymentCollection() {
     const received = parseFloat(cashReceived);
     const due = parseFloat(selectedOrder?.due_amount || selectedOrder?.total_amount || 0);
 
-    if (!cashReceived || isNaN(received)) {
-      toast.error("Please enter amount received");
+    if (!cashReceived || isNaN(received) || received <= 0) {
+      toast.error("Please enter a valid amount");
       return;
     }
-
-    if (received < due) {
-      toast.error("Insufficient amount");
-      return;
-    }
-
-
 
     if (received >= due) {
       const change = received - due;
       processPayment('CASH', due, change);
     } else {
-      processPayment('CASH', received, 0);
+      processPayment('CASH', received, 0); // Partial Payment
     }
   };
 
@@ -395,7 +391,7 @@ export default function PaymentCollection() {
                 const name = item?.product_name || item?.product?.name || item?.name || `Product #${item?.product || "?"}`;
                 const qty = item?.quantity ?? 1;
                 const price = item?.unit_price ?? item?.price ?? (item?.product?.selling_price) ?? 0;
-                
+
                 return (
                   <div key={idx} className="flex justify-between items-center text-sm bg-slate-50/50 p-1.5 rounded-lg border border-slate-100/50">
                     <span className="text-slate-700 font-medium leading-tight inline-flex gap-1.5 items-center">
@@ -421,7 +417,7 @@ export default function PaymentCollection() {
           </div>
         </div>
 
-        <div className="flex gap-2 border-t border-primary/10">
+        <div className="flex border-t border-primary/10">
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -432,6 +428,18 @@ export default function PaymentCollection() {
             <Receipt className="h-3.5 w-3.5" />
             View Bill
           </button>
+
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/waiter/order/${order.table_no || "takeaway"}?invoiceId=${order.id}&floorId=${order.floor}`);
+            }}
+            className="flex-1 py-2.5 bg-slate-50 hover:bg-slate-100 text-amber-600 text-[10px] font-bold uppercase tracking-widest transition-colors border-l border-primary/10 flex items-center justify-center gap-1.5"
+          >
+            <Edit className="h-3.5 w-3.5" />
+            Edit
+          </button>
+
           <button
             onClick={() => onPaymentClick(order)}
             className="flex-1 py-2.5 bg-primary/5 hover:bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest transition-colors border-l border-primary/10 flex items-center justify-center gap-2"
@@ -680,9 +688,19 @@ export default function PaymentCollection() {
           </div>
 
           <div className="p-4 space-y-3 flex flex-col items-center">
-            <div className="text-center">
+            <div className="text-center w-full">
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1">Payable Amount</p>
-              <p className="text-3xl font-black text-primary mb-2">Rs.{Number(selectedOrder?.due_amount || selectedOrder?.total_amount || 0).toFixed(2)}</p>
+
+              <div className="relative max-w-[200px] mx-auto mb-2">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-300 text-xl">Rs.</div>
+                <Input
+                  type="number"
+                  value={onlineReceived}
+                  onChange={(e) => setOnlineReceived(e.target.value)}
+                  className="text-center text-3xl h-14 font-black border-2 border-slate-100 focus:border-primary pl-10 rounded-xl bg-slate-50"
+                  autoFocus
+                />
+              </div>
             </div>
 
             {/* QR Code Placeholder/Real */}
@@ -711,7 +729,12 @@ export default function PaymentCollection() {
             <div className="w-full space-y-2 pt-1">
               <Button
                 className="w-full h-12 bg-primary hover:bg-primary/90 text-white font-black rounded-xl shadow-xl shadow-primary/20"
-                onClick={() => processPayment('ONLINE', parseFloat(selectedOrder?.due_amount || selectedOrder?.total_amount || 0))}
+                onClick={() => {
+                  const amt = parseFloat(onlineReceived);
+                  const due = parseFloat(selectedOrder?.due_amount || selectedOrder?.total_amount || 0);
+                  if (isNaN(amt) || amt <= 0) return toast.error("Enter a valid amount");
+                  processPayment('ONLINE', Math.min(amt, due));
+                }}
                 disabled={isProcessing}
               >
                 {isProcessing ? (

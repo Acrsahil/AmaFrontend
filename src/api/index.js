@@ -579,6 +579,8 @@ export async function fetchInvoiceDetail(id) {
   return data.data;
 }
 
+export async function patchInvoice(id, payload) { const res = await apiFetch(`/api/invoice/${id}/`, { method: "PATCH", body: JSON.stringify(payload) }); const data = await safeJson(res); if (!res.ok) throw new Error(data?.message || "Failed to patch invoice"); return data.data; }
+
 export async function updateInvoiceStatus(id, status, extraData = {}) {
   const res = await apiFetch(`/api/invoice/${id}/`, {
     method: "PATCH",

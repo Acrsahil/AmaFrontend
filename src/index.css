@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Libre+Barcode+39&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -251,8 +253,6 @@
 }
 
 /* Thermal Receipt Formatting */
-@import url('https://fonts.googleapis.com/css2?family=Libre+Barcode+39&display=swap');
-
 .thermal-receipt {
   width: 100%;
   max-width: 80mm;

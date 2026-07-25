@@ -237,6 +237,9 @@ export default function AdminDailyStats() {
                     <DropdownMenuItem onClick={() => setFilter("kitchentype")} className="rounded-xl cursor-pointer py-2 text-xs">
                       Kitchen Types
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setFilter("paymentmethod")} className="rounded-xl cursor-pointer py-2 text-xs">
+                      Payment Methods
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
 
@@ -257,7 +260,7 @@ export default function AdminDailyStats() {
                 <thead className="bg-muted/50">
                   <tr>
                     <th className="px-6 py-4 text-left font-bold uppercase tracking-wider text-[11px] text-muted-foreground">
-                      {filter === "product" ? "Product" : filter === "category" ? "Category" : "Kitchen Type"}
+                      {filter === "product" ? "Product" : filter === "category" ? "Category" : filter === "kitchentype" ? "Kitchen Type" : "Payment Method"}
                     </th>
                     <th className="px-6 py-4 text-center font-bold uppercase tracking-wider text-[11px] text-muted-foreground">Qty Sold</th>
                     <th className="px-6 py-4 text-right font-bold uppercase tracking-wider text-[11px] text-muted-foreground">Revenue</th>
@@ -279,6 +282,8 @@ export default function AdminDailyStats() {
                         name = item.product__category__name || "Unknown Category";
                       } else if (filter === "kitchentype") {
                         name = item.productcategorykitchentypename || "Unknown Kitchen Type";
+                      } else if (filter === "paymentmethod") {
+                        name = item.payment_method || "Unknown Payment Method";
                       }
 
                       return (

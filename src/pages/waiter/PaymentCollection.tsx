@@ -738,7 +738,7 @@ export default function PaymentCollection() {
               <div className="relative p-3 bg-white rounded-[1.5rem] border-4 border-slate-50 shadow-inner group">
                 <div className="h-48 w-48 bg-slate-100 rounded-xl flex items-center justify-center overflow-hidden border border-slate-200">
                   <img
-                    src="/qr.png"
+                    src={branchInfo?.image_url || "/qr.png"}
                     alt="QR Code"
                     className="h-full w-full object-cover"
                     onError={(e) => {

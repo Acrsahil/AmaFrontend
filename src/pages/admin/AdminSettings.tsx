@@ -1,19 +1,21 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Store, Phone, Mail, MapPin, FileText, Save, Loader2, Link2 } from "lucide-react";
+import { Store, Phone, Mail, MapPin, FileText, Save, Loader2, Link2, ImageUp, QrCode, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { getCurrentUser } from "../../auth/auth";
-import { fetchBranch, updateBranch } from "../../api";
+import { fetchBranch, updateBranch, updateBranchImage } from "../../api";
 
 export default function AdminSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [branchData, setBranchData] = useState<any>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const user = getCurrentUser();
 
@@ -34,6 +36,41 @@ export default function AdminSettings() {
       toast.error(err.message || "Failed to load branch settings");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !branchData?.id) return;
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select a valid image file");
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image must be less than 5MB");
+      return;
+    }
+
+    setUploadingImage(true);
+    try {
+      const response = await updateBranchImage(branchData.id, file);
+      if (response.success) {
+        toast.success("QR code uploaded successfully");
+        // Reload branch data to get updated image_url
+        await loadBranchData();
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to upload image");
+    } finally {
+      setUploadingImage(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   };
 
@@ -206,6 +243,67 @@ export default function AdminSettings() {
 
         {/* Preview Sidebar */}
         <div className="space-y-8">
+          {/* QR Code / Branch Image Upload */}
+          <Card className="border-none shadow-2xl shadow-slate-200/50 rounded-[2.5rem] overflow-hidden bg-white">
+            <CardHeader className="bg-slate-50/50 px-8 py-6">
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-600">
+                  <QrCode className="h-6 w-6" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg font-black">QR Code / Logo</CardTitle>
+                  <CardDescription className="font-bold text-slate-400 text-xs">Upload your branch QR code or logo</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="px-8 py-6 space-y-4">
+              {/* Image Preview */}
+              {branchData?.image_url ? (
+                <div className="relative group">
+                  <img
+                    src={branchData.image_url}
+                    alt="Branch QR Code"
+                    className="w-full aspect-square object-contain rounded-2xl border-2 border-slate-100 bg-white p-4"
+                  />
+                </div>
+              ) : (
+                <div className="w-full aspect-square rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 flex flex-col items-center justify-center gap-3 text-slate-400">
+                  <QrCode className="h-12 w-12" />
+                  <p className="text-sm font-bold">No QR code uploaded</p>
+                  <p className="text-[10px] font-medium">Upload a QR code image for your branch</p>
+                </div>
+              )}
+
+              {/* Upload Controls */}
+              <div className="space-y-3">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={uploadingImage}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full h-12 rounded-xl border-2 border-dashed border-emerald-200 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300 font-bold gap-2 transition-all"
+                >
+                  {uploadingImage ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ImageUp className="h-4 w-4" />
+                  )}
+                  {uploadingImage ? "Uploading..." : "Upload Image"}
+                </Button>
+                <p className="text-[10px] text-slate-400 font-medium text-center">
+                  Supports JPG, PNG, WEBP. Max 5MB.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className="border-none shadow-2xl shadow-slate-200/50 rounded-[2.5rem] overflow-hidden bg-white">
             <CardHeader className="bg-slate-900 px-8 py-6">
               <CardTitle className="text-white text-lg">Bill Preview</CardTitle>

@@ -1055,7 +1055,7 @@ export default function CounterPOS() {
                                             <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Scan QR Code</Label>
                                             <div className="bg-white p-2 rounded-2xl shadow-md border border-slate-100 w-32 h-32 flex items-center justify-center overflow-hidden mx-auto">
                                                 <img
-                                                    src="/qr.png"
+                                                    src={branchInfo?.image_url || "/qr.png"}
                                                     alt="QR Code"
                                                     className="h-full w-full object-cover"
                                                     onError={(e) => {

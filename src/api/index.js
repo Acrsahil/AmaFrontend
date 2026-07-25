@@ -483,6 +483,33 @@ export async function updateBranch(id, branchData) {
   return data;
 }
 
+/**
+ * Upload a branch image (QR code / logo) using multipart/form-data.
+ * This bypasses the JSON Content-Type of apiFetch to support file uploads.
+ */
+export async function updateBranchImage(id, imageFile) {
+  const url = apiBaseUrl + `/api/branch/${id}/`;
+  
+  const formData = new FormData();
+  formData.append("image", imageFile);
+
+  const headers = {};
+  if (_accessToken) {
+    headers["Authorization"] = `Bearer ${_accessToken}`;
+  }
+
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers,
+    credentials: "include",
+    body: formData,
+  });
+
+  const data = await safeJson(res);
+  if (!res.ok) throw new Error(data?.message || "Failed to upload branch image");
+  return data;
+}
+
 export async function deleteBranch(id) {
   const res = await apiFetch(`/api/branch/${id}/`, {
     method: "DELETE",
@@ -579,7 +606,16 @@ export async function fetchInvoiceDetail(id) {
   return data.data;
 }
 
-export async function patchInvoice(id, payload) { const res = await apiFetch(`/api/invoice/${id}/`, { method: "PATCH", body: JSON.stringify(payload) }); const data = await safeJson(res); if (!res.ok) throw new Error(data?.message || "Failed to patch invoice"); return data.data; }
+export async function patchInvoice(id, payload) {
+  const res = await apiFetch(`/api/invoice/${id}/`, { method: "PATCH", body: JSON.stringify(payload) });
+  const data = await safeJson(res);
+  if (!res.ok) {
+    // Backend can return error in different formats
+    const errorMsg = data?.error || data?.message || (Array.isArray(data?.errors) ? data.errors.join("; ") : data?.errors) || "Failed to patch invoice";
+    throw new Error(errorMsg);
+  }
+  return data.data;
+}
 
 export async function updateInvoiceStatus(id, status, extraData = {}) {
   const res = await apiFetch(`/api/invoice/${id}/`, {
@@ -805,4 +841,3 @@ export async function fetchDailySales(branchId, date, filter = "") {
   if (!res.ok) throw new Error(data?.message || "Failed to fetch daily sales");
   return data;
 }
-

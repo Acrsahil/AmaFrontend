@@ -5,7 +5,8 @@ import {
     Monitor,
     Clock,
     Shield,
-    BarChart3
+    BarChart3,
+    FileText
 } from "lucide-react";
 import { getCurrentUser } from "../../auth/auth";
 
@@ -14,6 +15,7 @@ const navItems = [
     { icon: Monitor, label: "POS Terminal", path: "/counter/pos" },
     { icon: Clock, label: "Order History", path: "/counter/orders" },
     { icon: BarChart3, label: "Daily Sales", path: "/counter/daily-sales" },
+    { icon: FileText, label: "Reports", path: "/counter/reports" },
 ];
 
 interface CounterSidebarProps {

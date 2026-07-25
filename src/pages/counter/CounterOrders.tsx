@@ -1007,6 +1007,34 @@ export default function CounterOrders() {
                                             </div>
                                         </div>
                                     )}
+
+                                    {/* Payment Details Section */}
+                                    {selectedOrder?.payment_details && selectedOrder.payment_details.length > 0 && (
+                                        <div className="p-4 rounded-xl bg-slate-50 space-y-2">
+                                            <p className="text-xs text-slate-400 font-medium">Payment Breakdown</p>
+                                            <div className="space-y-1.5">
+                                                {selectedOrder.payment_details.map((payment: any, idx: number) => (
+                                                    <div key={payment.id || idx} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-slate-100">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className={cn(
+                                                                "text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider",
+                                                                payment.payment_method === "CASH" ? "bg-green-100 text-green-700" :
+                                                                payment.payment_method === "QR" ? "bg-blue-100 text-blue-700" :
+                                                                payment.payment_method === "ONLINE" ? "bg-purple-100 text-purple-700" :
+                                                                payment.payment_method === "CARD" ? "bg-amber-100 text-amber-700" :
+                                                                "bg-slate-100 text-slate-700"
+                                                            )}>
+                                                                {payment.payment_method}
+                                                            </span>
+                                                            <span className="text-xs text-slate-500">{payment.received_by_name || ''}</span>
+                                                        </div>
+                                                        <span className="font-bold text-sm">Rs.{parseFloat(payment.amount).toFixed(2)}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {(selectedOrder?.payment_status !== 'PAID' && parseFloat(selectedOrder?.due_amount || "0") > 0) ? (() => {
                                         const currentDue = parseFloat(selectedOrder?.due_amount || (selectedOrder ? (selectedOrder.total_amount - (selectedOrder.paid_amount || 0)) : 0));
                                         const changeAmount = Math.max(0, parseFloat(paymentAmount || "0") - currentDue);
@@ -1048,15 +1076,7 @@ export default function CounterOrders() {
                                                             { id: 'QR', icon: QrCode, label: 'QR' },
                                                             { id: 'ONLINE', icon: Wallet, label: 'Online' },
                                                             { id: 'CARD', icon: CreditCard, label: 'Card' }
-                                                        ].filter(method => {
-                                                            // Detect if waiter ever handled it (Lock to their method)
-                                                            const pMethods = selectedOrder?.payment_methods_list || selectedOrder?.payment_methods || [];
-                                                            if (selectedOrder?.received_by_waiter && pMethods.length > 0) {
-                                                                // Compare case-insensitive to be safe
-                                                                return pMethods.some((m: string) => m.toUpperCase() === method.id.toUpperCase());
-                                                            }
-                                                            return true;
-                                                        }).map((method) => (
+                                                        ].map((method) => (
                                                             <button
                                                                 key={method.id}
                                                                 onClick={() => setPaymentMethod(method.id as any)}

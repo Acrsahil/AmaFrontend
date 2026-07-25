@@ -282,7 +282,7 @@ export default function CounterDashboard() {
 
             {/* Main Content Area */}
             <main className="flex-1 overflow-y-auto p-6 custom-scrollbar">
-                <div className="max-w-7xl mx-auto space-y-8">
+                <div className="max-w-[1600px] mx-auto space-y-10">
 
                     {/* Welcome Banner */}
                     <div className="relative overflow-hidden bg-gradient-to-br from-primary to-amber-700 rounded-[2rem] p-8 md:p-12 text-white shadow-xl shadow-primary/10">
@@ -305,7 +305,7 @@ export default function CounterDashboard() {
                     </div>
 
                     {/* Stats Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                         <StatCard
                             title={`${timeframe} Sales`}
                             value={`Rs.${(dashboardData?.today_sales || dashboardData?.total_sum || 0).toLocaleString()}`}
@@ -337,14 +337,14 @@ export default function CounterDashboard() {
                     </div>
 
                     {/* Main Charts Row */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         {/* Category breakdown bar chart */}
                         <div className="bg-white rounded-[2rem] border-2 border-slate-100 p-8 shadow-sm">
                             <div className="mb-6 text-center">
                                 <h3 className="text-lg font-black uppercase tracking-tight capitalize">{timeframe} Sales by Category</h3>
                                 <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">{timeframe} Revenue split</p>
                             </div>
-                            <div className="h-[250px] w-full">
+                            <div className="h-[320px] w-full">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart
                                         data={(dashboardData?.total_sales_per_category || []).map((item: any) => ({
@@ -388,7 +388,7 @@ export default function CounterDashboard() {
                         {/* Payment Status distribution pie chart */}
                         <div className="bg-white rounded-[2rem] border-2 border-slate-100 p-8 shadow-sm text-center">
                             <h3 className="text-lg font-black uppercase tracking-tight mb-6 capitalize">{timeframe} Payment Status</h3>
-                            <div className="h-[280px] w-full">
+                            <div className="h-[320px] w-full">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
                                         <Pie
@@ -427,7 +427,7 @@ export default function CounterDashboard() {
                         {/* Payment Methods pie chart */}
                         <div className="bg-white rounded-[2rem] border-2 border-slate-100 p-8 shadow-sm text-center">
                             <h3 className="text-lg font-black uppercase tracking-tight mb-6 capitalize">{timeframe} Payments</h3>
-                            <div className="h-[280px] w-full">
+                            <div className="h-[320px] w-full">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
                                         <Pie
@@ -487,7 +487,7 @@ export default function CounterDashboard() {
                     {/* Main trend chart */}
                     <div className="bg-white rounded-[2rem] border-2 border-slate-100 p-8 shadow-sm">
                         <h3 className="text-xl font-black text-slate-800 tracking-tight mb-8 capitalize">{timeframe} Sales Trend</h3>
-                        <div className="h-[350px] w-full">
+                        <div className="h-[420px] w-full">
                             <ResponsiveContainer width="100%" height="100%">
                                 <AreaChart data={dashboardData?.trend_chart || []}>
                                     <defs>

@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { ShoppingCart, Search, X, Receipt, Loader2, Check } from "lucide-react";
 import { toast } from "sonner";
 import { fetchProducts, fetchCategories, patchInvoice, fetchInvoiceDetail } from "../../api/index.js";
+import { getCurrentUser } from "@/auth/auth";
 
 interface CartItemData {
   item: MenuItem;
@@ -162,8 +163,11 @@ export default function OrderEntry() {
     setCart(prev => {
       const existing = prev.find(c => c.item.id === item.id);
       if (existing) {
-        if (existing.isExisting && existing.status !== "PENDING" && existing.quantity <= (existing.originalQuantity || 0)) {
-          toast.error("Cannot reduce quantity of prepared items.");
+        const isPrepared = existing.status === "READY" || existing.status === "COMPLETED";
+        const user = getCurrentUser();
+        const isAdmin = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN" || user?.is_superuser;
+        if (isPrepared && !isAdmin && existing.quantity <= (existing.originalQuantity || 0)) {
+          toast.error("This item is already prepared and can't be reduced");
           return prev;
         }
         if (existing.quantity > 1) {
@@ -174,6 +178,9 @@ export default function OrderEntry() {
           );
         }
 
+        if (!window.confirm("Remove this item?")) {
+          return prev;
+        }
         if (existing.isExisting && existing.invoiceItemId) {
           setRemovedItemIds(r => [...r, existing.invoiceItemId!]);
         }
@@ -185,11 +192,19 @@ export default function OrderEntry() {
   const setQuantity = (item: MenuItem, quantity: number) => {
     setCart(prev => {
       const existing = prev.find(c => c.item.id === item.id);
-      if (existing && existing.isExisting && existing.status !== "PENDING" && quantity < (existing.originalQuantity || 0)) {
-        toast.error("Cannot reduce quantity of prepared items.");
-        return prev;
+      if (existing && existing.isExisting) {
+        const isPrepared = existing.status === "READY" || existing.status === "COMPLETED";
+        const user = getCurrentUser();
+        const isAdmin = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN" || user?.is_superuser;
+        if (isPrepared && !isAdmin && quantity < (existing.originalQuantity || 0)) {
+          toast.error("This item is already prepared and can't be reduced");
+          return prev;
+        }
       }
       if (quantity <= 0) {
+        if (!window.confirm("Remove this item?")) {
+          return prev;
+        }
         if (existing?.isExisting && existing.invoiceItemId) {
           setRemovedItemIds(r => [...r, existing.invoiceItemId!]);
         }
@@ -209,8 +224,16 @@ export default function OrderEntry() {
   const deleteFromCart = (itemId: string) => {
     setCart(prev => {
       const existing = prev.find(c => c.item.id === itemId);
-      if (existing?.isExisting && existing.status !== "PENDING") {
-        toast.error("Cannot remove prepared items.");
+      if (existing?.isExisting) {
+        const isPrepared = existing.status === "READY" || existing.status === "COMPLETED";
+        const user = getCurrentUser();
+        const isAdmin = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN" || user?.is_superuser;
+        if (isPrepared && !isAdmin) {
+          toast.error("This item is already prepared and can't be reduced");
+          return prev;
+        }
+      }
+      if (!window.confirm("Remove this item?")) {
         return prev;
       }
       if (existing?.isExisting && existing.invoiceItemId) {
@@ -235,13 +258,7 @@ export default function OrderEntry() {
       cart.forEach(c => {
         if (c.isExisting) {
           const diff = c.quantity - (c.originalQuantity || 0);
-          if (diff > 0) {
-            addItems.push({
-              product: parseInt(c.item.id),
-              quantity: diff,
-              description: c.notes || ""
-            });
-          } else if (diff < 0) {
+          if (diff !== 0) {
             updateItems.push({
               invoice_item_id: c.invoiceItemId,
               quantity: c.quantity

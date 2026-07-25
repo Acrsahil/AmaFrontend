@@ -14,6 +14,7 @@ import {
     Banknote,
     QrCode,
     CreditCard,
+    Wallet,
     ShoppingBag,
     FileText,
     Check,
@@ -21,14 +22,18 @@ import {
     LogOut,
     Key,
     LayoutDashboard,
-    Menu
+    Menu,
+    Plus,
+    Minus,
+    Trash2,
+    MoveRight
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { format, parseISO } from "date-fns";
-import { fetchInvoices, addPayment, fetchProducts, fetchBranch, fetchInvoiceDetail } from "@/api/index.js";
+import { fetchInvoices, addPayment, fetchProducts, fetchBranch, fetchInvoiceDetail, patchInvoice } from "@/api/index.js";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -57,7 +62,7 @@ export default function CounterOrders() {
     const [selectedOrder, setSelectedOrder] = useState<any>(null);
     const [branchInfo, setBranchInfo] = useState<any>(null);
     const [paymentAmount, setPaymentAmount] = useState("");
-    const [paymentMethod, setPaymentMethod] = useState<"CASH" | "ONLINE" | "QR">("CASH");
+    const [paymentMethod, setPaymentMethod] = useState<"CASH" | "ONLINE" | "QR" | "CARD">("CASH");
     const [paymentNotes, setPaymentNotes] = useState("");
     const [isPaying, setIsPaying] = useState(false);
     const [productsMap, setProductsMap] = useState<Record<string, any>>({});
@@ -67,6 +72,13 @@ export default function CounterOrders() {
     const [autoPrint, setAutoPrint] = useState(false);
     const [showChangePassword, setShowChangePassword] = useState(false);
     const [currentUser, setCurrentUser] = useState<any>(null);
+    const [isUpdatingItem, setIsUpdatingItem] = useState(false);
+    const [showAddItemsModal, setShowAddItemsModal] = useState(false);
+    const [showTransferTableModal, setShowTransferTableModal] = useState(false);
+    const [newTableNo, setNewTableNo] = useState("");
+    const [isTransferringTable, setIsTransferringTable] = useState(false);
+    const [tempAddedItems, setTempAddedItems] = useState<{ product: any, quantity: number }[]>([]);
+    const [addItemsSearch, setAddItemsSearch] = useState("");
 
     // Global Keyboard State
     const [showKeypad, setShowKeypad] = useState(false);
@@ -92,6 +104,108 @@ export default function CounterOrders() {
         const lastSpace = trimmed.lastIndexOf(' ');
         if (lastSpace === -1) return '';
         return trimmed.slice(0, lastSpace);
+    };
+
+    const handleUpdateQuantity = async (invoiceItemId: number, newQty: number, itemStatus: string) => {
+        if (newQty <= 0) {
+            handleRemoveItem(invoiceItemId, itemStatus);
+            return;
+        }
+
+        const isPrepared = itemStatus === "READY" || itemStatus === "COMPLETED";
+        const isAdmin = currentUser?.role === "ADMIN" || currentUser?.role === "SUPER_ADMIN" || currentUser?.is_superuser;
+        if (isPrepared && !isAdmin && newQty < selectedOrder.items.find((it: any) => it.id === invoiceItemId)?.quantity) {
+            toast.error("This item is already prepared and can't be reduced");
+            return;
+        }
+
+        setIsUpdatingItem(true);
+        try {
+            const updatedInvoice = await patchInvoice(selectedOrder.id, {
+                update_items: [{ invoice_item_id: invoiceItemId, quantity: newQty }]
+            });
+            setSelectedOrder(updatedInvoice);
+            loadInvoices(page, false);
+            toast.success("Quantity updated");
+        } catch (err: any) {
+            toast.error(err.message || "Failed to update quantity");
+        } finally {
+            setIsUpdatingItem(false);
+        }
+    };
+
+    const handleRemoveItem = async (invoiceItemId: number, itemStatus: string) => {
+        const isPrepared = itemStatus === "READY" || itemStatus === "COMPLETED";
+        const isAdmin = currentUser?.role === "ADMIN" || currentUser?.role === "SUPER_ADMIN" || currentUser?.is_superuser;
+        if (isPrepared && !isAdmin) {
+            toast.error("This item is already prepared and can't be reduced");
+            return;
+        }
+
+        if (!window.confirm("Remove this item?")) {
+            return;
+        }
+
+        setIsUpdatingItem(true);
+        try {
+            const updatedInvoice = await patchInvoice(selectedOrder.id, {
+                remove_items: [invoiceItemId]
+            });
+            setSelectedOrder(updatedInvoice);
+            loadInvoices(page, false);
+            toast.success("Item removed");
+        } catch (err: any) {
+            toast.error(err.message || "Failed to remove item");
+        } finally {
+            setIsUpdatingItem(false);
+        }
+    };
+
+    const handleAddItemsSubmit = async () => {
+        if (tempAddedItems.length === 0) return;
+        setIsUpdatingItem(true);
+        try {
+            const payload = tempAddedItems.map(item => ({
+                product: parseInt(item.product.id),
+                quantity: item.quantity
+            }));
+            const updatedInvoice = await patchInvoice(selectedOrder.id, {
+                add_items: payload
+            });
+            setSelectedOrder(updatedInvoice);
+            loadInvoices(page, false);
+            setTempAddedItems([]);
+            setShowAddItemsModal(false);
+            toast.success("Items added successfully");
+        } catch (err: any) {
+            toast.error(err.message || "Failed to add items");
+        } finally {
+            setIsUpdatingItem(false);
+        }
+    };
+
+    const handleTransferTableSubmit = async () => {
+        if (!newTableNo) return;
+        const tableNum = parseInt(newTableNo);
+        if (isNaN(tableNum) || tableNum <= 0) {
+            toast.error("Please enter a valid table number");
+            return;
+        }
+        setIsTransferringTable(true);
+        try {
+            const res = await patchInvoice(selectedOrder.id, {
+                transfer_to_table: tableNum
+            });
+            toast.success(res.message || `Transferred to Table ${tableNum}`);
+            setSelectedOrder(res.data || res);
+            loadInvoices(page, false);
+            setShowTransferTableModal(false);
+            setNewTableNo("");
+        } catch (err: any) {
+            toast.error(err.message || "Failed to transfer table");
+        } finally {
+            setIsTransferringTable(false);
+        }
     };
 
     useEffect(() => {
@@ -801,7 +915,7 @@ export default function CounterOrders() {
                             e.preventDefault();
                         }
                     }}
-                    className="max-w-[460px] p-0 overflow-hidden border border-slate-200 shadow-xl rounded-2xl z-[50]"
+                    className="max-w-[540px] p-0 overflow-hidden border border-slate-200 shadow-xl rounded-2xl z-[50]"
                 >
                     <div className="bg-white">
                         <div className="px-6 pt-6 pb-4">
@@ -928,11 +1042,12 @@ export default function CounterOrders() {
 
                                                 <div className="space-y-2">
                                                     <Label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Payment Method</Label>
-                                                    <div className="grid grid-cols-3 gap-3">
+                                                    <div className="grid grid-cols-4 gap-2">
                                                         {[
                                                             { id: 'CASH', icon: Banknote, label: 'Cash' },
                                                             { id: 'QR', icon: QrCode, label: 'QR' },
-                                                            { id: 'ONLINE', icon: CreditCard, label: 'Online' }
+                                                            { id: 'ONLINE', icon: Wallet, label: 'Online' },
+                                                            { id: 'CARD', icon: CreditCard, label: 'Card' }
                                                         ].filter(method => {
                                                             // Detect if waiter ever handled it (Lock to their method)
                                                             const pMethods = selectedOrder?.payment_methods_list || selectedOrder?.payment_methods || [];
@@ -1020,20 +1135,105 @@ export default function CounterOrders() {
                                             </div>
                                         ) : (
                                             <>
+                                                {(() => {
+                                                    const isEditable = selectedOrder?.payment_status !== "PAID" && selectedOrder?.payment_status !== "CANCELLED";
+                                                    return isEditable && (
+                                                        <div className="flex gap-2 mb-3">
+                                                            <Button
+                                                                variant="outline"
+                                                                className="flex-1 h-12 rounded-xl font-bold border-dashed border-2 hover:border-primary hover:text-primary gap-1"
+                                                                onClick={() => {
+                                                                    setTempAddedItems([]);
+                                                                    setAddItemsSearch("");
+                                                                    setShowAddItemsModal(true);
+                                                                }}
+                                                            >
+                                                                <Plus className="h-4 w-4" />
+                                                                Add Item
+                                                            </Button>
+                                                            <Button
+                                                                variant="outline"
+                                                                className="flex-1 h-12 rounded-xl font-bold border-dashed border-2 hover:border-primary hover:text-primary gap-1"
+                                                                onClick={() => {
+                                                                    const tableMatch = (selectedOrder?.description || selectedOrder?.invoice_description || "").match(/Table (\d+)/);
+                                                                    const tableNo = selectedOrder?.table_no || (tableMatch ? tableMatch[1] : "");
+                                                                    setNewTableNo(tableNo ? String(tableNo) : "");
+                                                                    setShowTransferTableModal(true);
+                                                                }}
+                                                            >
+                                                                <MoveRight className="h-4 w-4" />
+                                                                Change Table
+                                                            </Button>
+                                                        </div>
+                                                    );
+                                                })()}
                                                 {selectedOrder?.items?.map((item: any, idx: number) => {
                                                     const productName = item.product_name || productsMap[String(item.product)]?.name || `Product #${item.product}`;
+                                                    const isPrepared = item.status === "READY" || item.status === "COMPLETED";
+                                                    const isAdmin = currentUser?.role === "ADMIN" || currentUser?.role === "SUPER_ADMIN" || currentUser?.is_superuser;
+                                                    const disableDecrement = isPrepared && !isAdmin;
+                                                    const isEditable = selectedOrder?.payment_status !== "PAID" && selectedOrder?.payment_status !== "CANCELLED";
+
                                                     return (
                                                         <div key={idx} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                                            <div className="flex items-center gap-4">
-                                                                <div className="h-10 w-10 rounded-xl bg-white flex items-center justify-center font-black text-primary border border-slate-100">
+                                                            <div className="flex items-center gap-4 flex-1 min-w-0">
+                                                                <div className="h-10 w-10 shrink-0 rounded-xl bg-white flex items-center justify-center font-black text-primary border border-slate-100">
                                                                     {item.quantity}x
                                                                 </div>
-                                                                <div>
-                                                                    <p className="font-bold text-slate-800">{productName}</p>
-                                                                    <p className="text-[10px] text-slate-400 font-bold">Rs.{item.unit_price} / unit</p>
+                                                                <div className="flex-1 min-w-0 pr-2">
+                                                                    <p className="font-bold text-slate-800 break-words whitespace-normal leading-tight">{productName}</p>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="text-[10px] text-slate-400 font-bold">Rs.{item.unit_price} / unit</span>
+                                                                        {item.status && (
+                                                                            <span className={cn(
+                                                                                "text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider",
+                                                                                isPrepared ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"
+                                                                            )}>
+                                                                                {item.status}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
                                                             </div>
-                                                            <p className="font-black text-slate-900">Rs.{(parseFloat(item.unit_price) * item.quantity).toFixed(2)}</p>
+                                                            <div className="flex items-center gap-3">
+                                                                {isEditable && (
+                                                                    <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5 shadow-sm">
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            disabled={disableDecrement || isUpdatingItem}
+                                                                            onClick={() => handleUpdateQuantity(item.id, item.quantity - 1, item.status)}
+                                                                            className="h-7 w-7 rounded-md text-slate-500 hover:text-slate-700"
+                                                                        >
+                                                                            <Minus className="h-3 w-3" />
+                                                                        </Button>
+                                                                        <span className="w-5 text-center font-bold text-xs">{item.quantity}</span>
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            disabled={isUpdatingItem}
+                                                                            onClick={() => handleUpdateQuantity(item.id, item.quantity + 1, item.status)}
+                                                                            className="h-7 w-7 rounded-md text-slate-500 hover:text-slate-700"
+                                                                        >
+                                                                            <Plus className="h-3 w-3" />
+                                                                        </Button>
+                                                                    </div>
+                                                                )}
+                                                                <div className="text-right min-w-[70px]">
+                                                                    <p className="font-black text-slate-900">Rs.{(parseFloat(item.unit_price) * item.quantity).toFixed(0)}</p>
+                                                                </div>
+                                                                {isEditable && (
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        disabled={disableDecrement || isUpdatingItem}
+                                                                        onClick={() => handleRemoveItem(item.id, item.status)}
+                                                                        className="h-8 w-8 text-slate-400 hover:text-destructive hover:bg-destructive/5 rounded-lg"
+                                                                    >
+                                                                        <Trash2 className="h-4 w-4" />
+                                                                    </Button>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     );
                                                 })}
@@ -1210,6 +1410,139 @@ export default function CounterOrders() {
                     </div>
                 </DialogContent>
             </Dialog>
+
+            {/* Add Items Modal */}
+            <Dialog open={showAddItemsModal} onOpenChange={setShowAddItemsModal}>
+                <DialogContent className="max-w-[400px] rounded-3xl p-6 flex flex-col max-h-[85vh] z-[110]">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                            <ShoppingBag className="h-5 w-5 text-primary" />
+                            Add Items to Order
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    {/* Search */}
+                    <div className="relative my-3 shrink-0">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <Input
+                            placeholder="Search products..."
+                            className="pl-10 h-10 rounded-lg border-slate-200"
+                            value={addItemsSearch}
+                            onChange={(e) => setAddItemsSearch(e.target.value)}
+                        />
+                    </div>
+
+                    {/* Product list */}
+                    <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                        {Object.values(productsMap)
+                            .filter(p => !addItemsSearch.trim() || p.name.toLowerCase().includes(addItemsSearch.toLowerCase()))
+                            .map(product => {
+                                const tempItem = tempAddedItems.find(it => it.product.id === product.id);
+                                const qty = tempItem ? tempItem.quantity : 0;
+                                return (
+                                    <div key={product.id} className="flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100/50 rounded-xl transition-all border border-slate-100">
+                                        <div className="flex flex-col text-left">
+                                            <span className="font-bold text-sm text-slate-800">{product.name}</span>
+                                            <span className="text-xs font-semibold text-slate-400">Rs.{parseFloat(product.selling_price).toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            {qty > 0 ? (
+                                                <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-0.5 shadow-sm">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-7 w-7 text-slate-500"
+                                                        onClick={() => {
+                                                            setTempAddedItems(prev => {
+                                                                const existing = prev.find(it => it.product.id === product.id);
+                                                                if (existing && existing.quantity > 1) {
+                                                                    return prev.map(it => it.product.id === product.id ? { ...it, quantity: it.quantity - 1 } : it);
+                                                                }
+                                                                return prev.filter(it => it.product.id !== product.id);
+                                                            });
+                                                        }}
+                                                    >
+                                                        <Minus className="h-3 w-3" />
+                                                    </Button>
+                                                    <span className="w-5 text-center font-bold text-xs">{qty}</span>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-7 w-7 text-slate-500"
+                                                        onClick={() => {
+                                                            setTempAddedItems(prev => prev.map(it => it.product.id === product.id ? { ...it, quantity: it.quantity + 1 } : it));
+                                                        }}
+                                                    >
+                                                        <Plus className="h-3 w-3" />
+                                                    </Button>
+                                                </div>
+                                            ) : (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        setTempAddedItems(prev => [...prev, { product, quantity: 1 }]);
+                                                    }}
+                                                    className="h-8 pr-3 pl-2 rounded-lg gap-1 border-primary/20 text-primary hover:bg-primary/5 font-bold"
+                                                >
+                                                    <Plus className="h-3.5 w-3.5" /> Add
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        {Object.values(productsMap).length === 0 && (
+                            <p className="text-center py-6 text-slate-400 font-semibold text-sm">No products available</p>
+                        )}
+                    </div>
+
+                    {/* Selected summary & submit */}
+                    {tempAddedItems.length > 0 && (
+                        <div className="border-t pt-4 mt-3 bg-white space-y-3 shrink-0">
+                            <div className="flex justify-between items-center text-sm">
+                                <span className="font-bold text-slate-600">Selected Items ({tempAddedItems.length})</span>
+                                <span className="font-black text-primary text-base">
+                                    Rs.{tempAddedItems.reduce((acc, curr) => acc + (parseFloat(curr.product.selling_price) * curr.quantity), 0).toFixed(2)}
+                                </span>
+                            </div>
+                            <Button
+                                className="w-full h-12 rounded-xl font-bold bg-primary text-white"
+                                onClick={handleAddItemsSubmit}
+                                disabled={isUpdatingItem}
+                            >
+                                {isUpdatingItem ? <Loader2 className="h-5 w-5 animate-spin" /> : `Add to Order`}
+                            </Button>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Transfer Table Modal */}
+            <Dialog open={showTransferTableModal} onOpenChange={setShowTransferTableModal}>
+                <DialogContent className="max-w-[320px] rounded-2xl p-6 z-[110]">
+                    <DialogHeader>
+                        <DialogTitle className="text-lg font-bold">Transfer Table</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 mt-3">
+                        <Input
+                            type="number"
+                            placeholder="Enter table number"
+                            value={newTableNo}
+                            onChange={(e) => setNewTableNo(e.target.value)}
+                            className="text-center font-bold text-xl h-12"
+                        />
+                        <Button
+                            className="w-full h-12 rounded-xl font-bold bg-primary text-white"
+                            onClick={handleTransferTableSubmit}
+                            disabled={isTransferringTable}
+                        >
+                            {isTransferringTable ? <Loader2 className="h-5 w-5 animate-spin" /> : "Transfer"}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
             {/* Global Floating Virtual Keyboard */}
             {showKeypad && activeKeypadField && (
                 <>

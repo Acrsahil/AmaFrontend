@@ -375,6 +375,8 @@ export default function CounterPOS() {
             toast.error("Cart is empty");
             return;
         }
+        setCashReceived(total.toFixed(2));
+        setPaymentMethod('cash');
         setShowCheckoutModal(true);
     };
 
@@ -383,7 +385,7 @@ export default function CounterPOS() {
             toast.error("Please select payment method");
             return;
         }
-        if (paymentMethod === 'cash' && (!cashReceived || parseFloat(cashReceived) <= 0)) {
+        if (!cashReceived || parseFloat(cashReceived) <= 0) {
             toast.error("Enter a valid amount");
             return;
         }
@@ -401,7 +403,7 @@ export default function CounterPOS() {
                 description: "Counter Sale",
                 tax_amount: taxAmount,
                 discount: discountAmount,
-                paid_amount: paymentMethod === 'cash' ? Math.min(total, parseFloat(cashReceived) || total) : total,
+                paid_amount: Math.min(total, parseFloat(cashReceived) || total),
                 payment_method: paymentMethod?.toUpperCase(),
                 items: cart.map(c => ({
                     item_type: "PRODUCT",
@@ -962,135 +964,140 @@ export default function CounterPOS() {
                             "w-full md:w-[320px] bg-slate-50 border-t md:border-l p-4 md:p-6 flex flex-col gap-4 overflow-y-auto custom-scrollbar",
                             showKeypad && "pb-64 md:pb-40"
                         )}>
-                            {paymentMethod === 'cash' ? (
-                                <div className="space-y-3 animate-in fade-in slide-in-from-right-4">
-                                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Cash Details</Label>
-                                    <div className="flex items-center justify-between bg-white p-3 rounded-xl border-2 border-slate-100">
-                                        <div>
-                                            <p className="text-[9px] text-slate-400 font-bold uppercase">Payable</p>
-                                            <p className="text-lg font-black text-slate-800 leading-none">Rs.{total.toFixed(2)}</p>
+                            {paymentMethod ? (
+                                <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
+                                    {/* Common Amount Input */}
+                                    <div className="space-y-3">
+                                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Payment Details</Label>
+                                        <div className="flex items-center justify-between bg-white p-3 rounded-xl border-2 border-slate-100">
+                                            <div>
+                                                <p className="text-[9px] text-slate-400 font-bold uppercase">Payable</p>
+                                                <p className="text-lg font-black text-slate-800 leading-none">Rs.{total.toFixed(2)}</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <Label className="text-[9px] text-slate-400 font-bold uppercase">
+                                                    {paymentMethod === 'cash' ? 'Cash Received' :
+                                                        paymentMethod === 'qr' ? 'QR Received' :
+                                                            paymentMethod === 'card' ? 'Card Paid' : 'Credit Amount'}
+                                                </Label>
+                                                <p className="text-lg font-black text-primary leading-none">Rs.{cashReceived || "0"}</p>
+                                            </div>
                                         </div>
-                                        <div className="text-right">
-                                            <Label className="text-[9px] text-slate-400 font-bold uppercase">Received</Label>
-                                            <p className="text-lg font-black text-primary leading-none">Rs.{cashReceived || "0"}</p>
+                                        <div className="space-y-1 relative">
+                                            <Input
+                                                type="number"
+                                                placeholder="0.00"
+                                                className={cn(
+                                                    "h-11 text-xl font-black text-center border-2 transition-all",
+                                                    activeKeypadField === 'cash' ? "border-primary ring-2 ring-primary/5 shadow-inner" : "border-primary/10"
+                                                )}
+                                                value={cashReceived}
+                                                onFocus={() => {
+                                                    setActiveKeypadField('cash');
+                                                    setShowKeypad(true);
+                                                }}
+                                                min="0"
+                                                max="100000"
+                                                onKeyDown={(e) => {
+                                                    // Allow control keys
+                                                    const allowedKeys = ['Backspace', 'Tab', 'Delete', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'Enter', 'Escape'];
+                                                    if (allowedKeys.includes(e.key)) return;
+
+                                                    // Allow Ctrl/Cmd combos
+                                                    if (e.ctrlKey || e.metaKey) return;
+
+                                                    // Allow decimal point (only one)
+                                                    if (e.key === '.') {
+                                                        if (cashReceived.includes('.')) e.preventDefault();
+                                                        return;
+                                                    }
+
+                                                    // Block anything that isn't a digit
+                                                    if (!/^[0-9]$/.test(e.key)) {
+                                                        e.preventDefault();
+                                                    }
+                                                }}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    const numVal = parseFloat(val);
+
+                                                    // Allow empty string for clearing
+                                                    if (val === "") {
+                                                        setCashReceived("");
+                                                        return;
+                                                    }
+
+                                                    // Strictly enforce max 100,000 and non-negative
+                                                    if (numVal > 100000) {
+                                                        setCashReceived("100000");
+                                                        toast.error("Maximum amount is 100,000");
+                                                    } else if (numVal < 0) {
+                                                        setCashReceived("0");
+                                                    } else {
+                                                        setCashReceived(val);
+                                                    }
+                                                }}
+                                                autoFocus
+                                            />
                                         </div>
-                                    </div>
-                                    <div className="space-y-1 relative">
-                                        <Input
-                                            type="number"
-                                            placeholder="0.00"
-                                            className={cn(
-                                                "h-11 text-xl font-black text-center border-2 transition-all",
-                                                activeKeypadField === 'cash' ? "border-primary ring-2 ring-primary/5 shadow-inner" : "border-primary/10"
-                                            )}
-                                            value={cashReceived}
-                                            onFocus={() => {
-                                                setActiveKeypadField('cash');
-                                                setShowKeypad(true);
-                                            }}
-                                            min="0"
-                                            max="100000"
-                                            onKeyDown={(e) => {
-                                                // Allow control keys
-                                                const allowedKeys = ['Backspace', 'Tab', 'Delete', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'Enter', 'Escape'];
-                                                if (allowedKeys.includes(e.key)) return;
 
-                                                // Allow Ctrl/Cmd combos
-                                                if (e.ctrlKey || e.metaKey) return;
-
-                                                // Allow decimal point (only one)
-                                                if (e.key === '.') {
-                                                    if (cashReceived.includes('.')) e.preventDefault();
-                                                    return;
-                                                }
-
-                                                // Block anything that isn't a digit
-                                                if (!/^[0-9]$/.test(e.key)) {
-                                                    e.preventDefault();
-                                                }
-                                            }}
-                                            onChange={(e) => {
-                                                const val = e.target.value;
-                                                const numVal = parseFloat(val);
-
-                                                // Allow empty string for clearing
-                                                if (val === "") {
-                                                    setCashReceived("");
-                                                    return;
-                                                }
-
-                                                // Strictly enforce max 100,000 and non-negative
-                                                if (numVal > 100000) {
-                                                    setCashReceived("100000");
-                                                    toast.error("Maximum cash amount is 100,000");
-                                                } else if (numVal < 0) {
-                                                    setCashReceived("0");
-                                                } else {
-                                                    setCashReceived(val);
-                                                }
-                                            }}
-                                            autoFocus
-                                        />
+                                        {paymentMethod === 'cash' && cashReceived && parseFloat(cashReceived) >= total && (
+                                            <div className="bg-success/5 p-2 rounded-xl border border-success/10 animate-in zoom-in-95">
+                                                <p className="text-[8px] uppercase font-black text-success/60">Change</p>
+                                                <p className="text-lg font-black text-success">Rs.{(parseFloat(cashReceived) - total).toFixed(2)}</p>
+                                            </div>
+                                        )}
                                     </div>
 
-                                    {/* Universal Global Keyboard will float outside */}
-                                    {cashReceived && parseFloat(cashReceived) >= total && (
-                                        <div className="bg-success/5 p-2 rounded-xl border border-success/10 animate-in zoom-in-95">
-                                            <p className="text-[8px] uppercase font-black text-success/60">Change</p>
-                                            <p className="text-lg font-black text-success">Rs.{(parseFloat(cashReceived) - total).toFixed(2)}</p>
+                                    {/* Visual Helpers per Payment Method */}
+                                    {paymentMethod === 'qr' && (
+                                        <div className="flex flex-col items-center gap-2 pt-2 border-t border-slate-100">
+                                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Scan QR Code</Label>
+                                            <div className="bg-white p-2 rounded-2xl shadow-md border border-slate-100 w-32 h-32 flex items-center justify-center overflow-hidden mx-auto">
+                                                <img
+                                                    src="/qr.png"
+                                                    alt="QR Code"
+                                                    className="h-full w-full object-cover"
+                                                    onError={(e) => {
+                                                        const target = e.target as HTMLImageElement;
+                                                        target.src = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=AMABAKERY_PAYMENT";
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {paymentMethod === 'card' && (
+                                        <div className="flex flex-col items-center justify-center gap-2 pt-2 border-t border-slate-100">
+                                            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                                                <CreditCard className="h-5 w-5 text-primary animate-pulse" />
+                                            </div>
+                                            <div className="text-center">
+                                                <p className="text-[10px] font-bold text-slate-400 italic">Swipe or Dip Card on Machine</p>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {paymentMethod === 'credit' && (
+                                        <div className="flex flex-col items-center justify-center gap-2 pt-2 border-t border-slate-100">
+                                            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                                                <IndianRupee className="h-5 w-5 text-primary" />
+                                            </div>
+                                            <div className="text-center">
+                                                <p className="text-[10px] font-bold text-slate-400 italic">Customer credit will be updated</p>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
-                            ) : paymentMethod === 'qr' ? (
-                                <div className="flex flex-col items-center gap-6 animate-in fade-in slide-in-from-right-4">
-                                    <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Scan QR Code</Label>
-                                    <div className="bg-white p-4 rounded-3xl shadow-lg border border-slate-100 w-64 h-64 flex items-center justify-center overflow-hidden mx-auto">
-                                        <img
-                                            src="/qr.png"
-                                            alt="QR Code"
-                                            className="h-full w-full object-cover"
-                                            onError={(e) => {
-                                                const target = e.target as HTMLImageElement;
-                                                target.src = "https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=AMABAKERY_PAYMENT";
-                                            }}
-                                        />
-                                    </div>
-                                    <div className="text-center">
-                                        <p className="text-[10px] uppercase font-black text-slate-400 tracking-widest mb-1">Total Payable</p>
-                                        <p className="text-3xl font-black text-primary">Rs.{total.toFixed(2)}</p>
-                                    </div>
-                                </div>
-                            ) : paymentMethod === 'card' ? (
-                                <div className="flex flex-col items-center justify-center gap-6 animate-in fade-in slide-in-from-right-4 h-full">
-                                    <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center">
-                                        <CreditCard className="h-10 w-10 text-primary" />
-                                    </div>
-                                    <div className="text-center">
-                                        <p className="text-[10px] uppercase font-black text-slate-400 tracking-widest mb-1">Total Payable</p>
-                                        <p className="text-3xl font-black text-primary">Rs.{total.toFixed(2)}</p>
-                                        <p className="text-xs font-bold text-slate-400 mt-4 italic">Swipe or Dip Card on Machine</p>
-                                    </div>
-                                </div>
-                            ) : paymentMethod === 'credit' ? (
-                                <div className="flex flex-col items-center justify-center gap-6 animate-in fade-in slide-in-from-right-4 h-full">
-                                    <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center">
-                                        <IndianRupee className="h-10 w-10 text-primary" />
-                                    </div>
-                                    <div className="text-center">
-                                        <p className="text-[10px] uppercase font-black text-slate-400 tracking-widest mb-1">Amount to Credit</p>
-                                        <p className="text-3xl font-black text-primary">Rs.{total.toFixed(2)}</p>
-                                        <p className="text-xs font-bold text-slate-400 mt-4 italic">Customer credit will be updated</p>
-                                    </div>
-                                </div>
                             ) : (
-                                <div className="h-full flex flex-col items-center justify-center text-center opacity-40">
+                                <div className="h-full flex flex-col items-center justify-center text-center opacity-40 py-10">
                                     <CreditCard className="h-12 w-12 mb-4 text-slate-300" />
                                     <p className="text-sm font-bold text-slate-400 px-4">Select a payment method to continue</p>
                                 </div>
                             )}
 
                             <Button
-                                className="w-full h-14 rounded-2xl font-black text-lg gradient-warm"
+                                className="w-full h-14 rounded-2xl font-black text-lg gradient-warm mt-auto"
                                 disabled={!paymentMethod || isProcessing}
                                 onClick={processPayment}
                             >

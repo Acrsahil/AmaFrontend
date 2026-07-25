@@ -32,6 +32,7 @@ export default function PaymentCollection() {
   const [completedOrder, setCompletedOrder] = useState<any | null>(null);
   const [completedChange, setCompletedChange] = useState<number>(0);
   const [showAlreadyPaidDialog, setShowAlreadyPaidDialog] = useState(false);
+  const [activeNonCashMethod, setActiveNonCashMethod] = useState<'QR' | 'CARD' | 'ONLINE'>('QR');
 
   const loadInvoices = useCallback(async () => {
     setLoading(true);
@@ -114,12 +115,11 @@ export default function PaymentCollection() {
       setShowPaymentDialog(false);
       setShowCashDialog(true);
       setCashReceived(String(selectedOrder.due_amount || selectedOrder.total_amount || 0));
-    } else if (method === 'ONLINE' || method === 'QR') {
+    } else {
+      setActiveNonCashMethod(method);
       setShowPaymentDialog(false);
       setShowOnlineDialog(true);
       setOnlineReceived(String(selectedOrder.due_amount || selectedOrder.total_amount || 0));
-    } else {
-      processPayment(method, parseFloat(selectedOrder.due_amount || selectedOrder.total_amount));
     }
   };
 
@@ -546,6 +546,26 @@ export default function PaymentCollection() {
                 </div>
                 <span className="font-bold">QR</span>
               </Button>
+              <Button
+                variant="outline"
+                className="h-24 flex-col gap-2 rounded-2xl border-2 hover:border-blue-600 hover:bg-blue-500/5 hover:text-blue-600 transition-all group"
+                onClick={() => handlePaymentMethod('CARD')}
+              >
+                <div className="h-10 w-10 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-blue-600/20">
+                  <CreditCard className="h-6 w-6 text-slate-400 group-hover:text-blue-600" />
+                </div>
+                <span className="font-bold">Card</span>
+              </Button>
+              <Button
+                variant="outline"
+                className="h-24 flex-col gap-2 rounded-2xl border-2 hover:border-orange-500 hover:bg-orange-500/5 hover:text-orange-500 transition-all group"
+                onClick={() => handlePaymentMethod('ONLINE')}
+              >
+                <div className="h-10 w-10 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-orange-500/20">
+                  <Wallet className="h-6 w-6 text-slate-400 group-hover:text-orange-500" />
+                </div>
+                <span className="font-bold">Online</span>
+              </Button>
             </div>
           </div>
         </DialogContent>
@@ -681,10 +701,20 @@ export default function PaymentCollection() {
         <DialogContent className="max-w-[calc(100%-2.5rem)] w-[320px] rounded-2xl p-0 overflow-hidden border-none shadow-2xl">
           <div className="bg-primary p-4 text-white text-center">
             <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-2 border border-white/30">
-              <CreditCard className="h-6 w-6 text-white" />
+              {activeNonCashMethod === 'QR' && <QrCode className="h-6 w-6 text-white" />}
+              {activeNonCashMethod === 'CARD' && <CreditCard className="h-6 w-6 text-white" />}
+              {activeNonCashMethod === 'ONLINE' && <Wallet className="h-6 w-6 text-white" />}
             </div>
-            <h3 className="text-lg font-bold leading-tight">Online Payment</h3>
-            <p className="text-white/80 text-[10px] italic">Scan QR to pay • Table {selectedOrder?.table_no}</p>
+            <h3 className="text-lg font-bold leading-tight">
+              {activeNonCashMethod === 'QR' && "QR Payment"}
+              {activeNonCashMethod === 'CARD' && "Card Payment"}
+              {activeNonCashMethod === 'ONLINE' && "Online Payment"}
+            </h3>
+            <p className="text-white/80 text-[10px] italic">
+              {activeNonCashMethod === 'QR' && "Scan QR to pay"}
+              {activeNonCashMethod === 'CARD' && "Insert/Swipe card to pay"}
+              {activeNonCashMethod === 'ONLINE' && "Process online wallet payment"} • Table {selectedOrder?.table_no}
+            </p>
           </div>
 
           <div className="p-4 space-y-3 flex flex-col items-center">
@@ -704,26 +734,56 @@ export default function PaymentCollection() {
             </div>
 
             {/* QR Code Placeholder/Real */}
-            <div className="relative p-3 bg-white rounded-[1.5rem] border-4 border-slate-50 shadow-inner group">
-              <div className="h-48 w-48 bg-slate-100 rounded-xl flex items-center justify-center overflow-hidden border border-slate-200">
-                <img
-                  src="/qr.png"
-                  alt="QR Code"
-                  className="h-full w-full object-cover"
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.src = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=AMABAKERY_PAYMENT";
-                  }}
-                />
+            {activeNonCashMethod === 'QR' && (
+              <div className="relative p-3 bg-white rounded-[1.5rem] border-4 border-slate-50 shadow-inner group">
+                <div className="h-48 w-48 bg-slate-100 rounded-xl flex items-center justify-center overflow-hidden border border-slate-200">
+                  <img
+                    src="/qr.png"
+                    alt="QR Code"
+                    className="h-full w-full object-cover"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.src = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=AMABAKERY_PAYMENT";
+                    }}
+                  />
+                </div>
+                <div className="absolute -top-2 -right-2 h-8 w-8 bg-primary text-white rounded-full flex items-center justify-center shadow-lg animate-bounce">
+                  <div className="h-4 w-4 rounded-full border-2 border-white animate-ping absolute" />
+                  <IndianRupee className="h-4 w-4 relative" />
+                </div>
               </div>
-              <div className="absolute -top-2 -right-2 h-8 w-8 bg-primary text-white rounded-full flex items-center justify-center shadow-lg animate-bounce">
-                <div className="h-4 w-4 rounded-full border-2 border-white animate-ping absolute" />
-                <IndianRupee className="h-4 w-4 relative" />
+            )}
+
+            {activeNonCashMethod === 'ONLINE' && (
+              <div className="relative p-3 bg-white rounded-[1.5rem] border-4 border-slate-50 shadow-inner group">
+                <div className="h-48 w-48 bg-slate-100 rounded-xl flex items-center justify-center overflow-hidden border border-slate-200">
+                  <div className="flex flex-col items-center justify-center h-full p-4 text-center">
+                    <Wallet className="h-10 w-10 text-primary mb-2 animate-pulse" />
+                    <p className="text-xs font-bold text-slate-700">Digital Wallet</p>
+                    <p className="text-[10px] text-slate-400">Process payment online</p>
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
+
+            {activeNonCashMethod === 'CARD' && (
+              <div className="relative p-3 bg-white rounded-[1.5rem] border-4 border-slate-50 shadow-inner group">
+                <div className="h-48 w-48 bg-slate-100 rounded-xl flex items-center justify-center overflow-hidden border border-slate-200">
+                  <div className="flex flex-col items-center justify-center h-full p-4 text-center">
+                    <CreditCard className="h-10 w-10 text-primary mb-2 animate-pulse" />
+                    <p className="text-xs font-bold text-slate-700">Card Terminal</p>
+                    <p className="text-[10px] text-slate-400">Swipe/Insert to Pay</p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="text-center max-w-[240px]">
-              <p className="text-xs font-semibold text-slate-500">Please ask the customer to scan and pay the exact amount above</p>
+              <p className="text-xs font-semibold text-slate-500">
+                {activeNonCashMethod === 'QR' && "Please ask the customer to scan and pay the exact amount above"}
+                {activeNonCashMethod === 'CARD' && "Please process the card payment for the exact amount above"}
+                {activeNonCashMethod === 'ONLINE' && "Please complete the online wallet payment for the exact amount above"}
+              </p>
             </div>
 
             <div className="w-full space-y-2 pt-1">
@@ -733,7 +793,7 @@ export default function PaymentCollection() {
                   const amt = parseFloat(onlineReceived);
                   const due = parseFloat(selectedOrder?.due_amount || selectedOrder?.total_amount || 0);
                   if (isNaN(amt) || amt <= 0) return toast.error("Enter a valid amount");
-                  processPayment('ONLINE', Math.min(amt, due));
+                  processPayment(activeNonCashMethod, Math.min(amt, due));
                 }}
                 disabled={isProcessing}
               >

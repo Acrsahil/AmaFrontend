@@ -16,13 +16,15 @@ import {
     Key,
     ChevronRight,
     ArrowUpRight,
-    Calendar,
+    Calendar as CalendarIcon,
     Search,
     ChevronDown,
     Loader2,
     Menu,
     Wifi,
-    WifiOff
+    WifiOff,
+    Filter,
+    CalendarDays
 } from "lucide-react";
 import { useDashboardWebSocket } from "@/hooks/useDashboardWebSocket";
 import {
@@ -31,10 +33,13 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
     DropdownMenuSeparator,
+    DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ChangePasswordModal } from "@/components/auth/ChangePasswordModal";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import {
     BarChart,
     Bar,
@@ -48,11 +53,15 @@ import {
     Cell,
     AreaChart,
     Area,
+    Legend,
+    LabelList,
 } from "recharts";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 const COLORS = ['hsl(32, 95%, 44%)', 'hsl(15, 70%, 50%)', 'hsl(142, 71%, 45%)', 'hsl(199, 89%, 48%)'];
+const PAYMENT_COLORS = ['hsl(142, 71%, 45%)', 'hsl(217, 91%, 60%)', 'hsl(32, 95%, 44%)', 'hsl(280, 65%, 60%)', 'hsl(0, 84%, 60%)'];
 
 export default function CounterDashboard() {
     const navigate = useNavigate();
@@ -64,9 +73,25 @@ export default function CounterDashboard() {
     const [showChangePassword, setShowChangePassword] = useState(false);
     const [sseConnected, setSSEConnected] = useState(false);
 
+    // Timeframe filters identical to Branch Manager
+    const [timeframe, setTimeframe] = useState("daily");
+    const [dateRange, setDateRange] = useState<{ from: Date | undefined, to: Date | undefined }>({
+        from: undefined,
+        to: undefined
+    });
+
     const [salesFilter, setSalesFilter] = useState<'product' | 'category' | 'kitchentype'>('product');
     const [salesData, setSalesData] = useState<any[]>([]);
     const [salesLoading, setSalesLoading] = useState(false);
+
+    const getFilters = () => {
+        const params: any = { timeframe };
+        if (timeframe === "custom" && dateRange.from && dateRange.to) {
+            params.start_date = format(dateRange.from, "yyyy-MM-dd");
+            params.end_date = format(dateRange.to, "yyyy-MM-dd");
+        }
+        return params;
+    };
 
     const loadSalesData = useCallback(async (filter: 'product' | 'category' | 'kitchentype') => {
         if (!user?.branch_id) return;
@@ -94,7 +119,7 @@ export default function CounterDashboard() {
         setLoading(true);
         try {
             const [dashData, invoicesRes, branchRes] = await Promise.all([
-                fetchDashboardDetails(user?.branch_id, { timeframe: 'daily' }),
+                fetchDashboardDetails(user?.branch_id, getFilters()),
                 fetchInvoices({ date: format(new Date(), 'yyyy-MM-dd'), page_size: 10 }),
                 fetchBranch(user?.branch_id).catch(() => null)
             ]);
@@ -107,7 +132,7 @@ export default function CounterDashboard() {
         } finally {
             setLoading(false);
         }
-    }, [user?.branch_id]);
+    }, [user?.branch_id, timeframe, dateRange]);
 
     useEffect(() => {
         if (!user) {
@@ -115,7 +140,7 @@ export default function CounterDashboard() {
             return;
         }
         loadData();
-    }, [user?.id, user?.branch_id, navigate, loadData]);
+    }, [user?.id, user?.branch_id, navigate, loadData, timeframe, dateRange]);
 
     const wsRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const handleWSUpdate = useCallback(() => {
@@ -165,6 +190,58 @@ export default function CounterDashboard() {
                         <div className={`h-1.5 w-1.5 rounded-full ${sseConnected ? "bg-emerald-500 animate-pulse" : "bg-amber-500 animate-pulse"}`} />
                         {sseConnected ? "Live" : "Connecting"}
                     </div>
+
+                    {/* Timeframe Selector identical to Branch Manager */}
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" className="h-9 rounded-xl border font-bold px-3 hover:bg-slate-50 transition-all border-slate-200 shadow-sm gap-1.5 text-xs">
+                                <Filter className="h-3.5 w-3.5 text-primary" />
+                                <span className="capitalize">{timeframe}</span>
+                                <ChevronDown className="h-3 w-3 opacity-50" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56 p-2 rounded-2xl border bg-white shadow-2xl z-[110]">
+                            <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-muted-foreground px-2 py-1.5 font-black">Select Period</DropdownMenuLabel>
+                            <DropdownMenuItem onClick={() => setTimeframe("daily")} className="rounded-xl font-bold text-sm cursor-pointer hover:bg-slate-50 py-2.5">Today</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setTimeframe("weekly")} className="rounded-xl font-bold text-sm cursor-pointer hover:bg-slate-50 py-2.5">Weekly</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setTimeframe("monthly")} className="rounded-xl font-bold text-sm cursor-pointer hover:bg-slate-50 py-2.5">Monthly</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setTimeframe("yearly")} className="rounded-xl font-bold text-sm cursor-pointer hover:bg-slate-50 py-2.5">Yearly</DropdownMenuItem>
+                            <DropdownMenuSeparator className="bg-slate-100 my-1" />
+                            <DropdownMenuItem onClick={() => setTimeframe("custom")} className="rounded-xl font-bold text-sm cursor-pointer hover:bg-slate-50 py-2.5 text-primary">Custom Range</DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    {/* Custom Date Range Popover identical to Branch Manager */}
+                    {timeframe === "custom" && (
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button variant="outline" className={cn("h-9 rounded-xl border font-bold px-3 border-slate-200 shadow-sm gap-1.5 text-xs", !dateRange.from && "text-muted-foreground")}>
+                                    <CalendarIcon className="h-3.5 w-3.5" />
+                                    {dateRange.from ? (
+                                        dateRange.to ? (
+                                            <>{format(dateRange.from, "MMM dd")} - {format(dateRange.to, "MMM dd")}</>
+                                        ) : (
+                                            format(dateRange.from, "MMM dd")
+                                        )
+                                    ) : (
+                                        "Pick Dates"
+                                    )}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0 border shadow-2xl rounded-3xl overflow-hidden z-[110]" align="end">
+                                <Calendar
+                                    initialFocus
+                                    mode="range"
+                                    defaultMonth={dateRange.from}
+                                    selected={{ from: dateRange.from, to: dateRange.to }}
+                                    onSelect={(range: any) => setDateRange({ from: range?.from, to: range?.to })}
+                                    numberOfMonths={2}
+                                    className="p-4"
+                                />
+                            </PopoverContent>
+                        </Popover>
+                    )}
+
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="ghost" className="h-auto p-2 hover:bg-slate-50 flex items-center gap-3 rounded-2xl transition-all text-left">
@@ -216,10 +293,10 @@ export default function CounterDashboard() {
                                 </div>
                                 <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/90">Operational Overview</span>
                             </div>
-                            <h2 className="text-3xl md:text-5xl font-black mb-2 tracking-tight">Today's Summary</h2>
+                            <h2 className="text-3xl md:text-5xl font-black mb-2 tracking-tight">{timeframe === 'daily' ? "Today's Summary" : `${timeframe} Summary`}</h2>
                             <p className="text-white/80 font-medium max-w-xl text-sm md:text-base">
                                 Welcome back, <span className="text-white font-bold">{user?.username || 'Counter'}</span>.
-                                Here's how {branchInfo?.name || 'the branch'} is performing today.
+                                Here's how {branchInfo?.name || 'the branch'} is performing.
                             </p>
                         </div>
                         {/* Decorative background elements */}
@@ -230,227 +307,294 @@ export default function CounterDashboard() {
                     {/* Stats Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                         <StatCard
-                            title="Today's Sales"
+                            title={`${timeframe} Sales`}
                             value={`Rs.${(dashboardData?.today_sales || dashboardData?.total_sum || 0).toLocaleString()}`}
                             icon={Banknote}
                             trend={{ value: Number(Math.abs(dashboardData?.sales_percent || 0).toFixed(1)), isPositive: (dashboardData?.sales_percent || 0) >= 0 }}
                             className="bg-white border-2 border-slate-100 hover:border-primary/20 transition-all hover:shadow-xl rounded-3xl"
                         />
                         <StatCard
-                            title="Total Orders"
+                            title={`${timeframe} Orders`}
                             value={dashboardData?.total_orders || dashboardData?.total_count_order || 0}
                             icon={ShoppingBag}
                             trend={{ value: Number(Math.abs(dashboardData?.order_percent || 0).toFixed(1)), isPositive: (dashboardData?.order_percent || 0) >= 0 }}
                             className="bg-white border-2 border-slate-100 hover:border-primary/20 transition-all hover:shadow-xl rounded-3xl"
                         />
                         <StatCard
-                            title="Avg. Ticket"
+                            title={`Avg Order (${timeframe})`}
                             value={`Rs.${dashboardData?.avg_orders || dashboardData?.average_order_value ? Number(dashboardData.avg_orders || dashboardData.average_order_value).toFixed(0) : 0}`}
                             icon={TrendingUp}
                             trend={{ value: Number(Math.abs(dashboardData?.avg_order_percent || 0).toFixed(1)), isPositive: (dashboardData?.avg_order_percent || 0) >= 0 }}
                             className="bg-white border-2 border-slate-100 hover:border-primary/20 transition-all hover:shadow-xl rounded-3xl"
                         />
                         <StatCard
-                            title="Busiest Hour"
+                            title="Peak Hour"
                             value={Array.isArray(dashboardData?.peak_hours) && dashboardData.peak_hours.length > 0 ? dashboardData.peak_hours.join(", ") : "—"}
                             icon={Clock}
-                            subtitle="Peak performance time"
+                            subtitle="Busiest time"
                             className="bg-white border-2 border-slate-100 hover:border-primary/20 transition-all hover:shadow-xl rounded-3xl"
                         />
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        {/* Sales Trend Chart */}
-                        <div className="lg:col-span-2 bg-white rounded-[2rem] border-2 border-slate-100 p-8 shadow-sm">
-                            <div className="flex items-center justify-between mb-8">
-                                <div>
-                                    <h3 className="text-xl font-black text-slate-800 tracking-tight">Sales Trend</h3>
-                                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Revenue over time today</p>
-                                </div>
-                                <div className="h-10 w-10 rounded-2xl bg-slate-50 flex items-center justify-center">
-                                    <TrendingUp className="h-5 w-5 text-slate-400" />
-                                </div>
+                    {/* Main Charts Row */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        {/* Category breakdown bar chart */}
+                        <div className="bg-white rounded-[2rem] border-2 border-slate-100 p-8 shadow-sm">
+                            <div className="mb-6 text-center">
+                                <h3 className="text-lg font-black uppercase tracking-tight capitalize">{timeframe} Sales by Category</h3>
+                                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">{timeframe} Revenue split</p>
                             </div>
-                            <div className="h-[300px] w-full">
+                            <div className="h-[250px] w-full">
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <AreaChart data={dashboardData?.trend_chart || []}>
-                                        <defs>
-                                            <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.15} />
-                                                <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                                            </linearGradient>
-                                        </defs>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                                        <XAxis dataKey="label" fontSize={10} fontWeight={800} axisLine={false} tickLine={false} dy={10} />
-                                        <YAxis fontSize={10} fontWeight={800} axisLine={false} tickLine={false} tickFormatter={(v) => `Rs.${v}`} />
+                                    <BarChart
+                                        data={(dashboardData?.total_sales_per_category || []).map((item: any) => ({
+                                            name: item.product__category__name || 'Other',
+                                            value: parseFloat(String(item.category_total_sales || 0)) || 0
+                                        }))}
+                                        layout="vertical"
+                                        margin={{ left: -30, right: 80, top: 0, bottom: 0 }}
+                                    >
+                                        <XAxis type="number" hide />
+                                        <YAxis
+                                            dataKey="name"
+                                            type="category"
+                                            axisLine={false}
+                                            tickLine={false}
+                                            tick={{ fontSize: 9, fontWeight: 800, fill: '#64748b' }}
+                                            width={90}
+                                        />
                                         <Tooltip
-                                            contentStyle={{ borderRadius: '1.5rem', border: 'none', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)', padding: '1rem' }}
-                                            formatter={(v: any) => [`Rs.${Number(v).toLocaleString()}`, 'Sales']}
+                                            cursor={{ fill: 'rgba(0,0,0,0.02)' }}
+                                            contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}
+                                            formatter={(value: any) => [`Rs.${Number(value).toLocaleString()}`, 'Sales']}
                                         />
-                                        <Area
-                                            type="monotone"
-                                            dataKey="sales"
-                                            stroke="hsl(var(--primary))"
-                                            strokeWidth={4}
-                                            fill="url(#colorSales)"
-                                        />
-                                    </AreaChart>
+                                        <Bar dataKey="value" radius={[0, 8, 8, 0]} barSize={20}>
+                                            {(dashboardData?.total_sales_per_category || []).map((_: any, index: number) => (
+                                                <Cell key={`cell-cat-${index}`} fill={COLORS[index % COLORS.length]} />
+                                            ))}
+                                            <LabelList
+                                                dataKey="value"
+                                                position="right"
+                                                offset={12}
+                                                formatter={(val: any) => `Rs.${Number(val).toLocaleString()}`}
+                                                style={{ fontSize: '10px', fontWeight: 'bold', fill: '#64748b' }}
+                                            />
+                                        </Bar>
+                                    </BarChart>
                                 </ResponsiveContainer>
                             </div>
-                        </div>                        {/* Today's Sales Breakdown */}
-                        <div className="bg-white rounded-[2rem] border-2 border-slate-100 p-8 shadow-sm flex flex-col h-full min-h-[480px]">
-                            <div className="flex items-center justify-between mb-8">
-                                <div>
-                                    <h3 className="text-xl font-black text-slate-800 tracking-tight">Today's Sales</h3>
-                                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                                        {salesFilter === 'product' ? 'Performance by product' : salesFilter === 'category' ? 'Performance by category' : 'Performance by kitchen type'}
-                                    </p>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button variant="outline" size="sm" className="rounded-xl border-2 font-bold px-3 py-1.5 text-xs gap-1.5 flex items-center bg-stone-50 border-slate-200 hover:bg-slate-100 transition-all active:scale-95">
-                                                {salesFilter === 'product' ? 'Products' : salesFilter === 'category' ? 'Categories' : 'Kitchen Types'}
-                                                <ChevronDown className="h-3.5 w-3.5 text-slate-500" />
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end" className="rounded-xl p-1.5 min-w-[140px] font-bold z-[100]">
-                                            <DropdownMenuItem onClick={() => setSalesFilter('product')} className="rounded-lg text-xs py-2 cursor-pointer">
-                                                Products
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => setSalesFilter('category')} className="rounded-lg text-xs py-2 cursor-pointer">
-                                                Categories
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => setSalesFilter('kitchentype')} className="rounded-lg text-xs py-2 cursor-pointer">
-                                                Kitchen Types
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
-                                </div>
-                            </div>
-                            <div className="space-y-4 flex-1 overflow-y-auto pr-1">
-                                {salesLoading ? (
-                                    <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-400 h-full">
-                                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                                        <p className="text-xs font-bold uppercase tracking-widest">Loading sales...</p>
-                                    </div>
-                                ) : salesData.length > 0 ? (
-                                    salesData.slice(0, 5).map((item: any, idx: number) => {
-                                        let name = "Unknown";
-                                        const qty = item.qty_sold || 0;
-                                        const revenue = item.total_revenue || 0;
+                        </div>
 
-                                        if (salesFilter === 'product') {
-                                            name = item.product__name || "Unknown Product";
-                                        } else if (salesFilter === 'category') {
-                                            name = item.product__category__name || "Unknown Category";
-                                        } else if (salesFilter === 'kitchentype') {
-                                            name = item.product__category__kitchentype__name || item.productcategorykitchentypename || "Unknown Kitchen Type";
-                                        }
-
-                                        return (
-                                            <div key={idx} className="flex items-center justify-between p-4 rounded-2xl bg-slate-50/50 hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100 group">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="h-8 w-8 rounded-xl bg-white shadow-sm flex items-center justify-center font-black text-xs text-slate-400">
-                                                        {idx + 1}
-                                                    </div>
-                                                    <span className="font-bold text-slate-700 group-hover:text-primary transition-colors line-clamp-1">{name}</span>
-                                                </div>
-                                                <div className="text-right flex flex-col items-end shrink-0">
-                                                    <span className="text-[11px] font-black bg-white px-3 py-0.5 rounded-full text-slate-500 shadow-sm border border-slate-100">{qty} Sold</span>
-                                                    <span className="text-xs font-black text-slate-900 mt-1">Rs. {Number(revenue).toLocaleString()}</span>
-                                                </div>
-                                            </div>
-                                        );
-                                    })
-                                ) : (
-                                    <div className="py-20 text-center text-slate-400 flex flex-col items-center justify-center h-full">
-                                        <p className="text-xs font-bold uppercase tracking-widest">No data available</p>
-                                    </div>
-                                )}
+                        {/* Payment Status distribution pie chart */}
+                        <div className="bg-white rounded-[2rem] border-2 border-slate-100 p-8 shadow-sm text-center">
+                            <h3 className="text-lg font-black uppercase tracking-tight mb-6 capitalize">{timeframe} Payment Status</h3>
+                            <div className="h-[280px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie
+                                            data={(dashboardData?.sales_by_status || []).map((item: any) => ({
+                                                name: (item.payment_status || 'Other').toLowerCase(),
+                                                value: parseFloat(String(item.total_amount || 0)) || 0
+                                            }))}
+                                            dataKey="value"
+                                            innerRadius={50}
+                                            outerRadius={70}
+                                            paddingAngle={5}
+                                            stroke="none"
+                                        >
+                                            {(dashboardData?.sales_by_status || []).map((_: any, index: number) => (
+                                                <Cell key={`cell-status-${index}`} fill={PAYMENT_COLORS[index % PAYMENT_COLORS.length]} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip formatter={(value: any) => [`Rs.${Number(value).toLocaleString()}`, 'Total']} />
+                                        <Legend
+                                            layout="horizontal"
+                                            align="center"
+                                            verticalAlign="bottom"
+                                            iconType="circle"
+                                            wrapperStyle={{ paddingTop: '20px' }}
+                                            formatter={(value, entry: any) => (
+                                                <span className="text-[10px] font-black uppercase text-slate-500 ml-1">
+                                                    {value}: <span className="text-slate-900 font-black">Rs.{Number(entry.payload.value).toLocaleString()}</span>
+                                                </span>
+                                            )}
+                                        />
+                                    </PieChart>
+                                </ResponsiveContainer>
                             </div>
-                            <Button variant="ghost" className="w-full mt-6 rounded-xl font-black text-[10px] uppercase tracking-widest text-slate-400 hover:text-primary" onClick={() => navigate('/counter/pos')}>
-                                View Menu
-                            </Button>
+                        </div>
+
+                        {/* Payment Methods pie chart */}
+                        <div className="bg-white rounded-[2rem] border-2 border-slate-100 p-8 shadow-sm text-center">
+                            <h3 className="text-lg font-black uppercase tracking-tight mb-6 capitalize">{timeframe} Payments</h3>
+                            <div className="h-[280px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie
+                                            data={(() => {
+                                                const methods = (dashboardData?.sales_by_payment_method || [])
+                                                    .filter((p: any) => ['CASH', 'QR'].includes(p.payment_method?.toUpperCase()))
+                                                    .map((p: any) => ({
+                                                        name: (p.payment_method || 'other').toLowerCase(),
+                                                        value: parseFloat(String(p.total_amount || 0)) || 0
+                                                    }));
+
+                                                const pending = (dashboardData?.sales_by_status || [])
+                                                    .find((s: any) => s.payment_status?.toUpperCase() === 'PENDING');
+
+                                                if (pending && parseFloat(String(pending.total_amount)) > 0) {
+                                                    methods.push({
+                                                        name: 'pending',
+                                                        value: parseFloat(String(pending.total_amount))
+                                                    });
+                                                }
+                                                return methods;
+                                            })()}
+                                            dataKey="value"
+                                            innerRadius={50}
+                                            outerRadius={70}
+                                            paddingAngle={5}
+                                            stroke="none"
+                                        >
+                                            {[
+                                                'hsl(142, 71%, 45%)', // Cash - Green
+                                                'hsl(217, 91%, 60%)', // QR - Blue
+                                                'hsl(0, 84%, 60%)',   // Pending - Red
+                                                'hsl(32, 95%, 44%)'   // Other - Amber
+                                            ].map((color, index) => (
+                                                <Cell key={`cell-pay-${index}`} fill={color} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip formatter={(value: any) => [`Rs.${Number(value).toLocaleString()}`, 'Total']} />
+                                        <Legend
+                                            layout="horizontal"
+                                            align="center"
+                                            verticalAlign="bottom"
+                                            iconType="circle"
+                                            wrapperStyle={{ paddingTop: '20px' }}
+                                            formatter={(value, entry: any) => (
+                                                <span className="text-[10px] font-black uppercase text-slate-500 ml-1">
+                                                    {value}: <span className="text-slate-900 font-black">Rs.{Number(entry.payload.value).toLocaleString()}</span>
+                                                </span>
+                                            )}
+                                        />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            </div>
                         </div>
                     </div>
 
-                    {/* Recent Orders Section */}
-                    <div className="bg-white rounded-[2.5rem] border-2 border-slate-100 overflow-hidden shadow-sm">
-                        <div className="p-8 border-b flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <div>
-                                <h3 className="text-2xl font-black text-slate-800 tracking-tight">Recent Activity</h3>
-                                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mt-1">Live transaction feed</p>
-                            </div>
-                            <Button
-                                variant="outline"
-                                className="rounded-2xl font-black text-[10px] uppercase tracking-widest border-2 hover:bg-slate-50"
-                                onClick={() => navigate('/counter/orders')}
-                            >
-                                View All Transactions
-                                <ChevronRight className="ml-2 h-3 w-3" />
-                            </Button>
+                    {/* Main trend chart */}
+                    <div className="bg-white rounded-[2rem] border-2 border-slate-100 p-8 shadow-sm">
+                        <h3 className="text-xl font-black text-slate-800 tracking-tight mb-8 capitalize">{timeframe} Sales Trend</h3>
+                        <div className="h-[350px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={dashboardData?.trend_chart || []}>
+                                    <defs>
+                                        <linearGradient id="colorSalesTrend" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.15} />
+                                            <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                                    <XAxis dataKey="label" fontSize={11} fontWeight={700} axisLine={false} tickLine={false} dy={10} />
+                                    <YAxis fontSize={11} fontWeight={700} axisLine={false} tickLine={false} tickFormatter={(v) => `Rs.${v}`} />
+                                    <Tooltip formatter={(v: any) => [`Rs.${Number(v).toLocaleString()}`, 'Sales']} />
+                                    <Area
+                                        type="monotone"
+                                        dataKey="sales"
+                                        stroke="hsl(var(--primary))"
+                                        strokeWidth={4}
+                                        fill="url(#colorSalesTrend)"
+                                    />
+                                </AreaChart>
+                            </ResponsiveContainer>
                         </div>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left">
-                                <thead className="bg-slate-50/50">
-                                    <tr>
-                                        <th className="px-8 py-5 text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Order ID</th>
-                                        <th className="px-8 py-5 text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Customer</th>
-                                        <th className="px-8 py-5 text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Time</th>
-                                        <th className="px-8 py-5 text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Status</th>
-                                        <th className="px-8 py-5 text-right text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Amount</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-50">
-                                    {recentOrders.map((order) => (
-                                        <tr
-                                            key={order.id}
-                                            className="hover:bg-slate-50/50 transition-colors cursor-pointer group"
-                                            onClick={() => navigate('/counter/orders', { state: { orderId: order.id } })}
-                                        >
-                                            <td className="px-8 py-6">
-                                                <span className="font-mono text-sm font-bold text-slate-900 group-hover:text-primary transition-colors">#{order.invoice_number}</span>
-                                            </td>
-                                            <td className="px-8 py-6">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="h-7 w-7 rounded-full bg-slate-100 flex items-center justify-center">
-                                                        <User className="h-3.5 w-3.5 text-slate-400" />
-                                                    </div>
-                                                    <span className="text-sm font-bold text-slate-700">{order.customer_name || 'Walk-in'}</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-8 py-6">
-                                                <span className="text-xs font-bold text-slate-400">
-                                                    {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                </span>
-                                            </td>
-                                            <td className="px-8 py-6">
-                                                <StatusBadge status={(order.payment_status || "PENDING").toLowerCase()} className="h-7 px-3 text-[10px] font-black" />
-                                            </td>
-                                            <td className="px-8 py-6 text-right font-black text-slate-900 text-lg">
-                                                Rs.{parseFloat(order.total_amount).toFixed(2)}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {recentOrders.length === 0 && (
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Recent Activity Table */}
+                        <div className="bg-white rounded-[2rem] border-2 border-slate-100 overflow-hidden shadow-sm">
+                            <div className="p-8 border-b flex items-center justify-between">
+                                <h3 className="font-black text-slate-900 uppercase tracking-tighter text-sm">Recent Activity</h3>
+                                <Button
+                                    variant="outline"
+                                    className="rounded-2xl font-black text-[10px] uppercase tracking-widest border-2 hover:bg-slate-50"
+                                    onClick={() => navigate('/counter/orders')}
+                                >
+                                    View All
+                                </Button>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left">
+                                    <thead className="bg-slate-50/50">
                                         <tr>
-                                            <td colSpan={5} className="px-8 py-20 text-center">
-                                                <div className="flex flex-col items-center gap-3 opacity-20">
-                                                    <ShoppingBag className="h-12 w-12" />
-                                                    <p className="text-sm font-black uppercase tracking-widest">No recent activity</p>
-                                                </div>
-                                            </td>
+                                            <th className="px-6 py-4 text-left font-black text-[10px] uppercase text-slate-400">Order ID</th>
+                                            <th className="px-6 py-4 text-left font-black text-[10px] uppercase text-slate-400">Customer</th>
+                                            <th className="px-6 py-4 text-left font-black text-[10px] uppercase text-slate-400">Time</th>
+                                            <th className="px-6 py-4 text-left font-black text-[10px] uppercase text-slate-400">Status</th>
+                                            <th className="px-6 py-4 text-right font-black text-[10px] uppercase text-slate-400">Total</th>
                                         </tr>
-                                    )}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-50">
+                                        {recentOrders.map((order) => (
+                                            <tr
+                                                key={order.id}
+                                                className="hover:bg-slate-50 transition-colors cursor-pointer group"
+                                                onClick={() => navigate('/counter/orders', { state: { orderId: order.id } })}
+                                            >
+                                                <td className="px-6 py-4">
+                                                    <span className="font-mono text-xs font-bold text-slate-900 group-hover:text-primary transition-colors">#{order.invoice_number}</span>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <span className="text-sm font-bold text-slate-700">{order.customer_name || 'Walk-in'}</span>
+                                                </td>
+                                                <td className="px-6 py-4 text-slate-500 text-xs">
+                                                    {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <StatusBadge status={(order.payment_status || "PENDING").toLowerCase()} className="h-6 px-2 text-[9px]" />
+                                                </td>
+                                                <td className="px-6 py-4 text-right font-black text-slate-900">Rs.{parseFloat(order.total_amount).toFixed(2)}</td>
+                                            </tr>
+                                        ))}
+                                        {recentOrders.length === 0 && (
+                                            <tr>
+                                                <td colSpan={5} className="px-6 py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">
+                                                    No recent activity
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        {/* Top Products */}
+                        <div className="bg-white rounded-[2rem] border-2 border-slate-100 p-8 shadow-sm">
+                            <h3 className="font-black text-slate-900 uppercase tracking-tighter text-sm mb-6">Top Products</h3>
+                            <div className="space-y-4">
+                                {(dashboardData?.top_selling_items || []).slice(0, 5).map((item: any, idx: number) => (
+                                    <div key={idx} className="flex items-center justify-between p-3 rounded-2xl bg-slate-50/50 hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100 group">
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-8 w-8 rounded-xl bg-white shadow-sm flex items-center justify-center font-black text-xs text-slate-400">
+                                                {idx + 1}
+                                            </div>
+                                            <span className="font-bold text-slate-700 group-hover:text-primary transition-colors">{item.product__name}</span>
+                                        </div>
+                                        <span className="text-xs font-black bg-white px-3 py-1 rounded-full text-slate-500 border border-slate-100 shadow-sm">{item.total_sold_units || item.total_orders || 0} Sold</span>
+                                    </div>
+                                ))}
+                                {(!dashboardData?.top_selling_items || dashboardData.top_selling_items.length === 0) && (
+                                    <div className="py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">
+                                        No top products data yet
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
             </main>
-
-            {/* Mobile Footer Nav removed to use mobile sidebar layout instead */}
         </div>
     );
 }

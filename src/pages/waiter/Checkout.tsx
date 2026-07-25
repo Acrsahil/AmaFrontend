@@ -74,6 +74,8 @@ export default function Checkout() {
     const [receiptData, setReceiptData] = useState<any>(null);
     const [showReceipt, setShowReceipt] = useState(false);
     const [autoPrint, setAutoPrint] = useState(false);
+    const [showCardModal, setShowCardModal] = useState(false);
+    const [showCreditModal, setShowCreditModal] = useState(false);
 
     useEffect(() => {
         const loadBranch = async () => {
@@ -195,6 +197,7 @@ export default function Checkout() {
     };
 
     const finalizeOrder = async () => {
+        setCashReceived(total.toFixed(2));
         if (paymentTiming === "later") {
             try {
                 const result = await submitInvoice(false, 0);
@@ -214,9 +217,9 @@ export default function Checkout() {
             if (paymentMethod === "cod") {
                 setShowCashModal(true);
             } else if (paymentMethod === "card") {
-                handleCardPayment();
+                setShowCardModal(true);
             } else if (paymentMethod === "credit") {
-                handleCreditPayment();
+                setShowCreditModal(true);
             } else {
                 // QR Code payment
                 setShowPaymentConfirmation(true);
@@ -226,8 +229,13 @@ export default function Checkout() {
     };
 
     const handleCardPayment = async () => {
+        const receivedAmount = parseFloat(cashReceived);
+        if (!cashReceived || isNaN(receivedAmount) || receivedAmount <= 0) {
+            toast.error("Please enter a valid card amount");
+            return;
+        }
         try {
-            const result = await submitInvoice(true, total, "CARD");
+            const result = await submitInvoice(true, Math.min(total, receivedAmount), "CARD");
             setReceiptData({
                 cart: [...state.cart],
                 subtotal,
@@ -236,24 +244,30 @@ export default function Checkout() {
                 discountAmount,
                 discountPercent,
                 total,
-                cashReceived: total,
+                cashReceived: receivedAmount,
                 paymentMethod: "CARD",
                 customer,
                 invoice_no: result?.id || Date.now().toString().slice(-6)
             });
 
             toast.success("Payment Confirmed!", {
-                description: `Table ${state?.tableNumber} - Rs.${total.toFixed(2)} paid via Card`,
+                description: `Table ${state?.tableNumber} - Rs.${receivedAmount.toFixed(2)} paid via Card`,
                 icon: <CheckCircle2 className="h-5 w-5 text-success" />,
             });
 
+            setShowCardModal(false);
             navigate('/waiter/tables');
         } catch (err) { }
     };
 
     const handleCreditPayment = async () => {
+        const receivedAmount = parseFloat(cashReceived);
+        if (!cashReceived || isNaN(receivedAmount) || receivedAmount <= 0) {
+            toast.error("Please enter a valid credit amount");
+            return;
+        }
         try {
-            const result = await submitInvoice(true, total, "CREDIT");
+            const result = await submitInvoice(true, Math.min(total, receivedAmount), "CREDIT");
             setReceiptData({
                 cart: [...state.cart],
                 subtotal,
@@ -262,17 +276,18 @@ export default function Checkout() {
                 discountAmount,
                 discountPercent,
                 total,
-                cashReceived: total,
+                cashReceived: receivedAmount,
                 paymentMethod: "CREDIT",
                 customer,
                 invoice_no: result?.id || Date.now().toString().slice(-6)
             });
 
             toast.success("Credit Added!", {
-                description: `Table ${state?.tableNumber} - Rs.${total.toFixed(2)} added to credit`,
+                description: `Table ${state?.tableNumber} - Rs.${receivedAmount.toFixed(2)} added to credit`,
                 icon: <CheckCircle2 className="h-5 w-5 text-indigo-500" />,
             });
 
+            setShowCreditModal(false);
             navigate('/waiter/tables');
         } catch (err) { }
     };
@@ -284,13 +299,6 @@ export default function Checkout() {
             toast.error("Please enter amount received");
             return;
         }
-
-        // if (receivedAmount < total) {
-        //     toast.error("Insufficient amount", {
-        //         description: `Need Rs.${(total - receivedAmount).toFixed(2)} more`,
-        //     });
-        //     return;
-        // }
 
         try {
             const result = await submitInvoice(true, Math.min(total, receivedAmount), "CASH");
@@ -324,8 +332,13 @@ export default function Checkout() {
     };
 
     const handleQRPayment = async () => {
+        const receivedAmount = parseFloat(cashReceived);
+        if (!cashReceived || isNaN(receivedAmount) || receivedAmount <= 0) {
+            toast.error("Please enter a valid QR amount");
+            return;
+        }
         try {
-            const result = await submitInvoice(true, total, "QR");
+            const result = await submitInvoice(true, Math.min(total, receivedAmount), "QR");
             setReceiptData({
                 cart: [...state.cart],
                 subtotal,
@@ -334,14 +347,14 @@ export default function Checkout() {
                 discountAmount,
                 discountPercent,
                 total,
-                cashReceived: total,
+                cashReceived: receivedAmount,
                 paymentMethod: "QR",
                 customer,
                 invoice_no: result?.id || Date.now().toString().slice(-6)
             });
 
             toast.success("Payment Confirmed!", {
-                description: `Table ${state?.tableNumber} - Rs.${total.toFixed(2)} paid via QR Code`,
+                description: `Table ${state?.tableNumber} - Rs.${receivedAmount.toFixed(2)} paid via QR Code`,
                 icon: <CheckCircle2 className="h-5 w-5 text-success" />,
             });
 
@@ -690,7 +703,7 @@ export default function Checkout() {
                                     let value = e.target.value.replace(/\D/g, ""); // only digits
 
                                     if (value === "") {
-                                        setDiscountPercent("");
+                                        setDiscountPercent(0);
                                         return;
                                     }
 
@@ -951,7 +964,7 @@ export default function Checkout() {
                                 <Button
                                     className="flex-[1.5] h-14 text-lg font-bold gradient-warm shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
                                     onClick={handleCashPayment}
-                                    disabled={isProcessing || !cashReceived || parseFloat(cashReceived) < total}
+                                    disabled={isProcessing || !cashReceived || parseFloat(cashReceived) <= 0}
                                 >
                                     {isProcessing ? (
                                         <div className="h-6 w-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -979,21 +992,45 @@ export default function Checkout() {
                         </div>
 
                         <div className="p-4 text-center space-y-3">
-                            <div className="space-y-0.5">
-                                <p className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider">Customer Payment Amount</p>
-                                <p className="text-3xl font-black text-primary">Rs.{total.toFixed(2)}</p>
+                            <div className="flex justify-between items-center px-1 text-left">
+                                <span className="text-[10px] font-medium text-muted-foreground uppercase">Payable Total:</span>
+                                <span className="text-sm font-black text-primary">Rs.{total.toFixed(2)}</span>
+                            </div>
+
+                            <div className="space-y-1.5 text-left">
+                                <Label className="text-[10px] font-black uppercase tracking-wider text-muted-foreground ml-1">QR Payment Amount</Label>
+                                <div className="relative">
+                                    <div className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground text-sm">Rs.</div>
+                                    <Input
+                                        type="text"
+                                        inputMode="decimal"
+                                        placeholder="0.00"
+                                        value={cashReceived}
+                                        onChange={(e) => {
+                                            let value = e.target.value;
+                                            value = value.replace(/[^0-9.]/g, "");
+                                            const parts = value.split(".");
+                                            if (parts.length > 2) {
+                                                value = parts[0] + "." + parts.slice(1).join("");
+                                            }
+                                            setCashReceived(value);
+                                        }}
+                                        className="text-center text-xl h-10 font-black border-2 border-primary/20 focus:border-primary pl-6 rounded-xl bg-slate-50"
+                                        autoFocus
+                                    />
+                                </div>
                             </div>
 
                             <div className="relative group">
                                 <div className="absolute -inset-1 bg-gradient-to-r from-primary/20 to-primary/20 rounded-2xl blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200"></div>
-                                <div className="relative bg-white p-3 rounded-xl mx-auto border border-primary/10 shadow-xl flex flex-col items-center overflow-hidden">
+                                <div className="relative bg-white p-2 rounded-xl mx-auto border border-primary/10 shadow-md flex flex-col items-center overflow-hidden">
                                     <img
                                         src="/qr.png"
                                         alt="QR Code"
-                                        className="h-48 w-48 object-cover"
+                                        className="h-28 w-28 object-cover"
                                         onError={(e) => {
                                             const target = e.target as HTMLImageElement;
-                                            target.src = "https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=AMABAKERY_PAYMENT";
+                                            target.src = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=AMABAKERY_PAYMENT";
                                         }}
                                     />
                                 </div>
@@ -1010,9 +1047,9 @@ export default function Checkout() {
                                     Cancel
                                 </Button>
                                 <Button
-                                    className="flex-[1.5] h-10 text-xs font-bold bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 transition-all active:scale-95"
+                                    className="flex-[1.5] h-10 text-xs font-bold bg-primary hover:bg-primary/95 text-white shadow-lg shadow-primary/20 transition-all active:scale-95"
                                     onClick={handleQRPayment}
-                                    disabled={isProcessing}
+                                    disabled={isProcessing || !cashReceived || parseFloat(cashReceived) <= 0}
                                 >
                                     {isProcessing ? (
                                         <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -1020,6 +1057,148 @@ export default function Checkout() {
                                         <>
                                             <CheckCircle2 className="h-4 w-4 mr-2" />
                                             Confirm Paid
+                                        </>
+                                    )}
+                                </Button>
+                            </div>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Card Payment Modal */}
+                <Dialog open={showCardModal} onOpenChange={setShowCardModal}>
+                    <DialogContent className="max-w-[calc(100%-2rem)] w-[350px] rounded-2xl p-0 overflow-hidden border-none shadow-2xl">
+                        <div className="bg-primary p-6 text-white text-center">
+                            <div className="h-16 w-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-4 border border-white/30">
+                                <CreditCard className="h-8 w-8 text-white" />
+                            </div>
+                            <h3 className="text-xl font-bold">Card Payment</h3>
+                            <p className="text-white/80 text-sm">Swipe or Dip Card on Machine</p>
+                        </div>
+
+                        <div className="p-6 space-y-6">
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center px-1">
+                                    <span className="text-muted-foreground font-medium">Total Amount</span>
+                                    <span className="text-xl font-black text-primary">Rs.{total.toFixed(2)}</span>
+                                </div>
+
+                                <div className="space-y-2">
+                                     <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Card Payment Amount</Label>
+                                     <div className="relative">
+                                         <div className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-muted-foreground text-xl">Rs.</div>
+                                         <Input
+                                             type="text"
+                                             inputMode="decimal"
+                                             placeholder="0.00"
+                                             value={cashReceived}
+                                             onChange={(e) => {
+                                                 let value = e.target.value;
+                                                 value = value.replace(/[^0-9.]/g, "");
+                                                 const parts = value.split(".");
+                                                 if (parts.length > 2) {
+                                                     value = parts[0] + "." + parts.slice(1).join("");
+                                                 }
+                                                 setCashReceived(value);
+                                             }}
+                                             className="text-center text-3xl h-16 font-black border-2 border-primary/20 focus:border-primary pl-8 rounded-xl shadow-inner bg-slate-50"
+                                             autoFocus
+                                         />
+                                     </div>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-3">
+                                <Button
+                                    variant="ghost"
+                                    className="flex-1 h-14 font-bold text-muted-foreground hover:bg-slate-100"
+                                    onClick={() => setShowCardModal(false)}
+                                    disabled={isProcessing}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    className="flex-[1.5] h-14 text-lg font-bold gradient-warm shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                                    onClick={handleCardPayment}
+                                    disabled={isProcessing || !cashReceived || parseFloat(cashReceived) <= 0}
+                                >
+                                    {isProcessing ? (
+                                        <div className="h-6 w-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    ) : (
+                                        <>
+                                            <CheckCircle2 className="h-5 w-5 mr-2" />
+                                            Complete Paid
+                                        </>
+                                    )}
+                                </Button>
+                            </div>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Credit Payment Modal */}
+                <Dialog open={showCreditModal} onOpenChange={setShowCreditModal}>
+                    <DialogContent className="max-w-[calc(100%-2rem)] w-[350px] rounded-2xl p-0 overflow-hidden border-none shadow-2xl">
+                        <div className="bg-primary p-6 text-white text-center">
+                            <div className="h-16 w-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-4 border border-white/30">
+                                <IndianRupee className="h-8 w-8 text-white" />
+                            </div>
+                            <h3 className="text-xl font-bold">Credit Payment</h3>
+                            <p className="text-white/80 text-sm">Add to customer balance</p>
+                        </div>
+
+                        <div className="p-6 space-y-6">
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center px-1">
+                                    <span className="text-muted-foreground font-medium">Total Amount</span>
+                                    <span className="text-xl font-black text-primary">Rs.{total.toFixed(2)}</span>
+                                </div>
+
+                                <div className="space-y-2">
+                                     <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Amount to Credit</Label>
+                                     <div className="relative">
+                                         <div className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-muted-foreground text-xl">Rs.</div>
+                                         <Input
+                                             type="text"
+                                             inputMode="decimal"
+                                             placeholder="0.00"
+                                             value={cashReceived}
+                                             onChange={(e) => {
+                                                 let value = e.target.value;
+                                                 value = value.replace(/[^0-9.]/g, "");
+                                                 const parts = value.split(".");
+                                                 if (parts.length > 2) {
+                                                     value = parts[0] + "." + parts.slice(1).join("");
+                                                 }
+                                                 setCashReceived(value);
+                                             }}
+                                             className="text-center text-3xl h-16 font-black border-2 border-primary/20 focus:border-primary pl-8 rounded-xl shadow-inner bg-slate-50"
+                                             autoFocus
+                                         />
+                                     </div>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-3">
+                                <Button
+                                    variant="ghost"
+                                    className="flex-1 h-14 font-bold text-muted-foreground hover:bg-slate-100"
+                                    onClick={() => setShowCreditModal(false)}
+                                    disabled={isProcessing}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    className="flex-[1.5] h-14 text-lg font-bold gradient-warm shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                                    onClick={handleCreditPayment}
+                                    disabled={isProcessing || !cashReceived || parseFloat(cashReceived) <= 0}
+                                >
+                                    {isProcessing ? (
+                                        <div className="h-6 w-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    ) : (
+                                        <>
+                                            <CheckCircle2 className="h-5 w-5 mr-2" />
+                                            Complete Paid
                                         </>
                                     )}
                                 </Button>
@@ -1086,7 +1265,7 @@ export default function Checkout() {
                                 </Button>
                             </div>
                         </div>
-                        
+
                         <div className="thermal-receipt p-6">
                             <div className="thermal-header">
                                 <h1 className="thermal-title font-bold text-center">{branchInfo?.receipt_header || "AMA BAKERY"}</h1>
@@ -1169,7 +1348,7 @@ export default function Checkout() {
                         {/* Finalize Button for Draft Mode */}
                         {receiptData?.invoice_no === "PREVIEW" && (
                             <div className="p-6 bg-slate-50 border-t sticky bottom-0">
-                                <Button 
+                                <Button
                                     className="w-full h-14 text-lg font-black gradient-warm shadow-lg shadow-primary/20 active:scale-95 transition-all"
                                     onClick={finalizeOrder}
                                     disabled={isProcessing}

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { MobileHeader } from "@/components/layout/MobileHeader";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { WaiterBottomNav } from "@/components/waiter/WaiterBottomNav";
 import { ChefHat, Bell, Loader2, User, Users, Clock, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -32,6 +33,9 @@ export default function OrderStatus() {
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [selectedTransferOrder, setSelectedTransferOrder] = useState<any>(null);
   const [transferring, setTransferring] = useState(false);
+  const [showTransferTableModal, setShowTransferTableModal] = useState(false);
+  const [newTableNo, setNewTableNo] = useState("");
+  const [isTransferringTable, setIsTransferringTable] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -160,6 +164,27 @@ export default function OrderStatus() {
     }
   };
 
+  const submitTransferTable = async () => {
+    if (!selectedTransferOrder || !newTableNo) return;
+    const tableNum = parseInt(newTableNo);
+    if (isNaN(tableNum) || tableNum <= 0) {
+      toast.error("Please enter a valid table number");
+      return;
+    }
+    setIsTransferringTable(true);
+    try {
+      const res = await patchInvoice(selectedTransferOrder.id, { transfer_to_table: tableNum });
+      toast.success(res.message || `Transferred to Table ${tableNum}`);
+      setShowTransferTableModal(false);
+      setNewTableNo("");
+      loadData();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to transfer table");
+    } finally {
+      setIsTransferringTable(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background pb-20">
       <MobileHeader title="Orders" showBack={false} />
@@ -261,6 +286,13 @@ export default function OrderStatus() {
                           setSelectedTransferOrder(order);
                           setShowTransferModal(true);
                         }}
+                        onTransferTable={() => {
+                          setSelectedTransferOrder(order);
+                          const tableMatch = (order?.description || order?.invoice_description || "").match(/Table (\d+)/);
+                          const tableNo = order?.table_no || (tableMatch ? tableMatch[1] : "");
+                          setNewTableNo(tableNo ? String(tableNo) : "");
+                          setShowTransferTableModal(true);
+                        }}
                       />
                     ))}
                   </div>
@@ -342,6 +374,31 @@ export default function OrderStatus() {
         </DialogContent>
       </Dialog>
 
+      {/* Transfer Table Dialog */}
+      <Dialog open={showTransferTableModal} onOpenChange={setShowTransferTableModal}>
+        <DialogContent className="max-w-[320px] rounded-2xl p-6 z-[110]">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold">Transfer Table</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-3">
+            <Input
+              type="number"
+              placeholder="Enter table number"
+              value={newTableNo}
+              onChange={(e) => setNewTableNo(e.target.value)}
+              className="text-center font-bold text-xl h-12"
+            />
+            <Button
+              className="w-full h-12 rounded-xl font-bold bg-primary text-white"
+              onClick={submitTransferTable}
+              disabled={isTransferringTable}
+            >
+              {isTransferringTable ? <Loader2 className="h-5 w-5 animate-spin" /> : "Transfer"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <WaiterBottomNav />
     </div>
   );
@@ -358,6 +415,7 @@ function OrderCard({
   onUndo,
   onEdit,
   onTransfer,
+  onTransferTable,
 }: {
   order: any;
   showWaiter?: boolean;
@@ -368,6 +426,7 @@ function OrderCard({
   onUndo?: () => void;
   onEdit?: () => void;
   onTransfer?: () => void;
+  onTransferTable?: () => void;
 }) {
   const currentUser = getCurrentUser();
   const isReady = order.invoice_status === "READY";
@@ -543,15 +602,23 @@ function OrderCard({
         )}
 
         {!isPaid && !isCompleted && !notification && activeTab === 'mine' && (
-          <div className="flex gap-2 pt-3 pb-1 mt-2 border-t border-slate-100">
-            {onTransfer && (
-              <Button onClick={onTransfer} variant="outline" className="flex-1 h-9 rounded-xl text-xs gap-1.5 text-slate-500">
-                <MoveRight className="h-3.5 w-3.5" />
-                Transfer
-              </Button>
-            )}
+          <div className="flex flex-col gap-2 pt-3 pb-1 mt-2 border-t border-slate-100">
+            <div className="flex gap-2">
+              {onTransfer && (
+                <Button onClick={onTransfer} variant="outline" className="flex-1 h-9 rounded-xl text-xs gap-1.5 text-slate-500">
+                  <MoveRight className="h-3.5 w-3.5" />
+                  Floor Transfer
+                </Button>
+              )}
+              {onTransferTable && (
+                <Button onClick={onTransferTable} variant="outline" className="flex-1 h-9 rounded-xl text-xs gap-1.5 text-slate-500">
+                  <MoveRight className="h-3.5 w-3.5" />
+                  Table Transfer
+                </Button>
+              )}
+            </div>
             {onEdit && (
-              <Button onClick={onEdit} variant="outline" className="flex-1 h-9 rounded-xl text-xs gap-1.5 text-primary border-primary/20 hover:bg-primary/5">
+              <Button onClick={onEdit} variant="outline" className="w-full h-9 rounded-xl text-xs gap-1.5 text-primary border-primary/20 hover:bg-primary/5">
                 <Edit className="h-3.5 w-3.5" />
                 Edit Items
               </Button>

@@ -75,13 +75,9 @@ export default function KitchenDisplay() {
     localStorage.setItem('kitchenFloorFilter', id.toString());
   };
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-
+  // Initialize WebSocket connection
   const wsRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { isConnected: kitchenWsConnected } = useOrdersWebSocket(
+  const { isConnected: kitchenWsConnected, disconnect: disconnectWebSocket } = useOrdersWebSocket(
     useCallback(
       (data) => {
         if (wsRefreshTimerRef.current) clearTimeout(wsRefreshTimerRef.current);
@@ -98,9 +94,14 @@ export default function KitchenDisplay() {
           }
         }, 500);
       },
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       []
     )
   );
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   useEffect(() => {
     setSocketConnected(kitchenWsConnected);
@@ -109,8 +110,10 @@ export default function KitchenDisplay() {
   useEffect(() => {
     return () => {
       if (wsRefreshTimerRef.current) clearTimeout(wsRefreshTimerRef.current);
+      // Cleanup WebSocket on unmount
+      disconnectWebSocket();
     };
-  }, []);
+  }, [disconnectWebSocket]);
 
   const loadData = async () => {
     setLoading(true);
@@ -473,6 +476,9 @@ export default function KitchenDisplay() {
                 <DropdownMenuItem
                   className="h-10 rounded-xl cursor-pointer text-red-600 focus:text-red-700 focus:bg-red-50 transition-colors"
                   onClick={() => {
+                    // Close WebSocket before logout
+                    disconnectWebSocket();
+                    // Dispatch logout event
                     window.dispatchEvent(new CustomEvent("show-logout-confirm"));
                   }}
                 >

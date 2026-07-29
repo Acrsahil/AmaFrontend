@@ -66,6 +66,9 @@ export default function KitchenDisplay() {
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [loading, setLoading] = useState(true);
   const [socketConnected, setSocketConnected] = useState(false);
+  
+  // Track previous orders to preserve item statuses during updates
+  const previousOrdersRef = useRef<Map<string, any[]>>(new Map());
 
   const handleFloorChange = (id: number | 'all') => {
     setSelectedFloorId(id);
@@ -88,8 +91,11 @@ export default function KitchenDisplay() {
               description: "A new order has been placed",
               icon: <Bell className="h-5 w-5 text-primary" />,
             });
+            loadData();
+          } else if (data.type === "invoice_updated") {
+            // Intelligently merge updates instead of full reload
+            handleInvoiceUpdate(data.invoice_id);
           }
-          loadData();
         }, 500);
       },
       []
@@ -250,6 +256,116 @@ export default function KitchenDisplay() {
       return null;
     })
     .filter(Boolean);
+
+  const handleInvoiceUpdate = async (invoiceId?: string) => {
+    if (!invoiceId) {
+      loadData();
+      return;
+    }
+
+    try {
+      // Fetch only the updated invoice
+      const updatedInvoice = await fetchInvoiceDetail(invoiceId);
+      if (!updatedInvoice) {
+        loadData();
+        return;
+      }
+
+      const currentUser = getCurrentUser();
+      const kitchenTypeId = currentUser?.kitchentype_id;
+
+      const productData = products.length > 0 ? products : [];
+      const productsMap = productData.reduce((acc: any, p: any) => {
+        if (p && p.id) acc[String(p.id)] = p;
+        return acc;
+      }, {});
+
+      // Map the updated invoice
+      const tableMatch = (updatedInvoice.description || updatedInvoice.invoice_description || "").match(/Table (\d+)/);
+      const tableNumber = updatedInvoice.table_no || (tableMatch ? parseInt(tableMatch[1]) : 0);
+
+      const items = (updatedInvoice.items || [])
+        .filter(Boolean)
+        .map((item: any) => {
+          const product = productsMap[String(item.product)];
+          return {
+            quantity: item.quantity || 0,
+            status: item.status || 'PENDING',
+            menuItem: {
+              name: product?.name || `Product #${item.product}`,
+              category: product?.category_name || 'Uncategorized',
+              categoryId: product?.category,
+              kitchenTypeId: product?.kitchentype_id || product?.kitchenType
+            },
+            notes: item.description || ""
+          };
+        });
+
+      const kitchenStatus = kitchenTypeId
+        ? deriveKitchenOrderStatus(items)
+        : mapInvoiceStatusToKitchenStatus(updatedInvoice.invoice_status);
+
+      const mappedInvoice = {
+        id: (updatedInvoice.id || "").toString(),
+        invoiceNumber: updatedInvoice.invoice_number || "N/A",
+        tableNumber,
+        waiter: updatedInvoice.created_by_name || "Unknown",
+        floor: updatedInvoice.floor,
+        floorName: updatedInvoice.floor_name,
+        status: kitchenStatus,
+        total: parseFloat(updatedInvoice.total_amount || "0"),
+        notes: updatedInvoice.notes || (updatedInvoice.description?.includes('| NOTE:') ? updatedInvoice.description.split('| NOTE:')[1].trim() : ""),
+        items,
+        createdAt: updatedInvoice.created_at
+      };
+
+      setOrders((prevOrders) => {
+        const existingOrderIndex = prevOrders.findIndex(o => o.id === mappedInvoice.id);
+        
+        if (existingOrderIndex >= 0) {
+          // Preserve existing item statuses for items that haven't changed
+          const existingOrder = prevOrders[existingOrderIndex];
+          const existingItemsMap = new Map(
+            existingOrder.items.map((item: any) => [
+              `${item.menuItem?.name}_${item.quantity}`,
+              item.status
+            ])
+          );
+
+          // Merge: keep existing status for unchanged items, use new status for new/changed items
+          const mergedItems = mappedInvoice.items.map((newItem: any) => {
+            const key = `${newItem.menuItem?.name}_${newItem.quantity}`;
+            const existingStatus = existingItemsMap.get(key);
+            
+            // If item exists and has a status, preserve it; otherwise use new status
+            return {
+              ...newItem,
+              status: existingStatus || newItem.status
+            };
+          });
+
+          const mergedOrder = {
+            ...mappedInvoice,
+            items: mergedItems,
+            status: kitchenTypeId
+              ? deriveKitchenOrderStatus(mergedItems)
+              : mapInvoiceStatusToKitchenStatus(updatedInvoice.invoice_status)
+          };
+
+          const newOrders = [...prevOrders];
+          newOrders[existingOrderIndex] = mergedOrder;
+          return newOrders;
+        } else {
+          // New invoice, add it
+          return [...prevOrders, mappedInvoice];
+        }
+      });
+    } catch (err: any) {
+      console.error("Failed to handle invoice update:", err);
+      // Fallback to full reload on error
+      loadData();
+    }
+  };
 
   const handleStatusChange = async (orderId: string, newFrontendStatus: string) => {
     // Map frontend status to backend status

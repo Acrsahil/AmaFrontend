@@ -67,36 +67,48 @@ export default function KitchenDisplay() {
   const [loading, setLoading] = useState(true);
   const [socketConnected, setSocketConnected] = useState(false);
   
-  // Track previous orders to preserve item statuses during updates
-  const previousOrdersRef = useRef<Map<string, any[]>>(new Map());
-
+  // Refs to store latest function versions for WebSocket callback
+  const loadDataRef = useRef<(() => void) | null>(null);
+  const handleInvoiceUpdateRef = useRef<((id: string) => void) | null>(null);
+  
   const handleFloorChange = (id: number | 'all') => {
     setSelectedFloorId(id);
     localStorage.setItem('kitchenFloorFilter', id.toString());
   };
 
-  // Initialize WebSocket connection
+  // WebSocket message handler
   const wsRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  const handleWebSocketMessage = useCallback((data: any) => {
+    if (wsRefreshTimerRef.current) clearTimeout(wsRefreshTimerRef.current);
+    wsRefreshTimerRef.current = setTimeout(() => {
+      console.log("[WS] Message received:", data.type, data.invoice_id);
+      
+      if (data.type === "invoice_created") {
+        toast.success("New Order Received!", {
+          description: "A new order has been placed",
+          icon: <Bell className="h-5 w-5 text-primary" />,
+        });
+        loadDataRef.current?.();
+      } else if (data.type === "invoice_updated") {
+        // If invoice_id is provided, update that specific invoice
+        if (data.invoice_id) {
+          console.log("[WS] Updating specific invoice:", data.invoice_id);
+          // Intelligently merge updates instead of full reload
+          handleInvoiceUpdateRef.current?.(data.invoice_id);
+        } else {
+          // No specific invoice_id means a general update (e.g., product stock changed)
+          // Reload all data to reflect product name/availability changes
+          console.log("[WS] General update detected (possibly product change), reloading data");
+          loadDataRef.current?.();
+        }
+      }
+    }, 500);
+  }, []);
+
+  // Initialize WebSocket connection
   const { isConnected: kitchenWsConnected, disconnect: disconnectWebSocket } = useOrdersWebSocket(
-    useCallback(
-      (data) => {
-        if (wsRefreshTimerRef.current) clearTimeout(wsRefreshTimerRef.current);
-        wsRefreshTimerRef.current = setTimeout(() => {
-          if (data.type === "invoice_created") {
-            toast.success("New Order Received!", {
-              description: "A new order has been placed",
-              icon: <Bell className="h-5 w-5 text-primary" />,
-            });
-            loadData();
-          } else if (data.type === "invoice_updated") {
-            // Intelligently merge updates instead of full reload
-            handleInvoiceUpdate(data.invoice_id);
-          }
-        }, 500);
-      },
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      []
-    )
+    handleWebSocketMessage
   );
 
   useEffect(() => {
@@ -154,15 +166,16 @@ export default function KitchenDisplay() {
         return acc;
       }, {});
 
+      // Group items by status and create separate order cards for each status
       const mappedInvoices = detailedInvoices
         .filter((inv: any) =>
           inv && inv.is_active && (inv.invoice_status === 'PENDING' || inv.invoice_status === 'READY' || inv.invoice_status === 'COMPLETED')
         )
-        .map((inv: any) => {
+        .flatMap((inv: any) => {
           const tableMatch = (inv.description || inv.invoice_description || "").match(/Table (\d+)/);
           const tableNumber = inv.table_no || (tableMatch ? parseInt(tableMatch[1]) : 0);
 
-          const items = (inv.items || [])
+          const allItems = (inv.items || [])
             .filter(Boolean)
             .map((item: any) => {
               const product = productsMap[String(item.product)];
@@ -179,24 +192,44 @@ export default function KitchenDisplay() {
               };
             });
 
-          const kitchenStatus = kitchenTypeId
-            ? deriveKitchenOrderStatus(items)
-            : mapInvoiceStatusToKitchenStatus(inv.invoice_status);
+          // Group items by status
+          const itemsByStatus = allItems.reduce((acc: any, item: any) => {
+            const status = (item.status || 'PENDING').toUpperCase();
+            if (!acc[status]) {
+              acc[status] = [];
+            }
+            acc[status].push(item);
+            return acc;
+          }, {});
 
-          return {
-            id: (inv.id || "").toString(),
-            invoiceNumber: inv.invoice_number || "N/A",
-            tableNumber,
-            waiter: inv.created_by_name || "Unknown",
-            floor: inv.floor,
-            floorName: inv.floor_name,
-            status: kitchenStatus,
-            total: parseFloat(inv.total_amount || "0"),
-            notes: inv.notes || (inv.description?.includes('| NOTE:') ? inv.description.split('| NOTE:')[1].trim() : ""),
-            items,
-            createdAt: inv.created_at
-          };
+          // Create separate order cards for each status group
+          return Object.entries(itemsByStatus).map(([status, items]: [string, any[]]) => {
+            const kitchenStatus = status === 'PENDING' ? 'new' : status === 'READY' ? 'ready' : 'completed';
+            
+            return {
+              id: `${inv.id}-${status}`, // Unique ID for each status group
+              invoiceNumber: inv.invoice_number || "N/A",
+              invoiceId: inv.id,
+              tableNumber,
+              waiter: inv.created_by_name || "Unknown",
+              floor: inv.floor,
+              floorName: inv.floor_name,
+              status: kitchenStatus,
+              total: parseFloat(inv.total_amount || "0"),
+              notes: inv.notes || (inv.description?.includes('| NOTE:') ? inv.description.split('| NOTE:')[1].trim() : ""),
+              items: items as any[],
+              createdAt: inv.created_at,
+              itemStatus: status // Store the actual item status
+            };
+          });
         });
+
+      // Sort orders by creation time (FIFO - oldest first)
+      mappedInvoices.sort((a, b) => {
+        const dateA = new Date(a.createdAt || 0).getTime();
+        const dateB = new Date(b.createdAt || 0).getTime();
+        return dateA - dateB; // Ascending order (oldest first)
+      });
 
       setOrders(mappedInvoices);
     } catch (err: any) {
@@ -205,6 +238,9 @@ export default function KitchenDisplay() {
       setLoading(false);
     }
   };
+  
+  // Update refs after loadData is defined
+  loadDataRef.current = loadData;
 
   // Get current user and branch
   const user = getCurrentUser();
@@ -369,8 +405,14 @@ export default function KitchenDisplay() {
       loadData();
     }
   };
+  
+  // Update refs after handleInvoiceUpdate is defined
+  handleInvoiceUpdateRef.current = handleInvoiceUpdate;
 
   const handleStatusChange = async (orderId: string, newFrontendStatus: string) => {
+    // Extract the actual invoice ID from the order ID (format: "invoiceId-status")
+    const invoiceId = orderId.split('-').slice(0, -1).join('-');
+    
     // Map frontend status to backend status
     const backendStatusMap: Record<string, string> = {
       'new': 'PENDING',
@@ -379,49 +421,78 @@ export default function KitchenDisplay() {
     };
 
     const backendStatus = backendStatusMap[newFrontendStatus];
-    console.log(`Updating order ${orderId} to ${backendStatus}`);
+    console.log(`Updating invoice ${invoiceId} items to ${backendStatus}`);
 
     try {
-      const updatedInvoice = await updateInvoiceStatus(orderId, backendStatus);
+      // Update all items in the invoice to the new status
+      const updatedInvoice = await updateInvoiceStatus(invoiceId, backendStatus);
       toast.success(`Order updated to ${newFrontendStatus}`);
 
       // Apply the PATCH response immediately so the card moves columns without waiting for a full reload
       if (updatedInvoice) {
-        setOrders((prev) =>
-          prev.map((order) => {
-            if (order.id !== orderId) return order;
+        // Create products map for item name lookup
+        const productsMap = (products || []).reduce((acc: any, p: any) => {
+          if (p && p.id) {
+            acc[String(p.id)] = p;
+          }
+          return acc;
+        }, {});
 
-            const updatedItems = (updatedInvoice.items || [])
-              .filter(Boolean)
-              .map((item: any) => {
-                const existingItem = order.items.find(
-                  (i: any) => String(i.menuItem?.name) === String(item.product_name)
-                );
-                return {
-                  quantity: item.quantity || 0,
-                  status: item.status || backendStatus,
-                  menuItem: existingItem?.menuItem || {
-                    name: item.product_name || `Product #${item.product}`,
-                    category: 'Uncategorized',
-                  },
-                  notes: existingItem?.notes || "",
-                };
-              });
+        setOrders((prev) => {
+          // Remove all cards for this invoice (all status groups)
+          const filteredOrders = prev.filter(order => !order.id.startsWith(`${invoiceId}-`));
+          
+          // Process updated items
+          const updatedItems = (updatedInvoice.items || [])
+            .filter(Boolean)
+            .map((item: any) => {
+              const product = productsMap[String(item.product)];
+              return {
+                quantity: item.quantity || 0,
+                status: item.status || backendStatus,
+                menuItem: {
+                  name: product?.name || `Product #${item.product}`,
+                  category: product?.category_name || 'Uncategorized',
+                  categoryId: product?.category,
+                  kitchenTypeId: product?.kitchentype_id || product?.kitchenType
+                },
+                notes: item.description || ""
+              };
+            });
 
-            const nextItems = updatedItems.length > 0 ? updatedItems : order.items.map((item: any) => ({
-              ...item,
-              status: backendStatus,
-            }));
+          // Group updated items by status
+          const itemsByStatus = updatedItems.reduce((acc: any, item: any) => {
+            const status = (item.status || 'PENDING').toUpperCase();
+            if (!acc[status]) {
+              acc[status] = [];
+            }
+            acc[status].push(item);
+            return acc;
+          }, {});
 
+          // Create new order cards for each status group
+          const newOrderCards = Object.entries(itemsByStatus).map(([status, items]: [string, any[]]) => {
+            const kitchenStatus = status === 'PENDING' ? 'new' : status === 'READY' ? 'ready' : 'completed';
+            
             return {
-              ...order,
-              items: nextItems,
-              status: userKitchenId
-                ? deriveKitchenOrderStatus(nextItems)
-                : mapInvoiceStatusToKitchenStatus(updatedInvoice.invoice_status),
+              id: `${updatedInvoice.id}-${status}`,
+              invoiceNumber: updatedInvoice.invoice_number || "N/A",
+              invoiceId: updatedInvoice.id,
+              tableNumber: updatedInvoice.table_no,
+              waiter: updatedInvoice.created_by_name || "Unknown",
+              floor: updatedInvoice.floor,
+              floorName: updatedInvoice.floor_name,
+              status: kitchenStatus,
+              total: parseFloat(updatedInvoice.total_amount || "0"),
+              notes: updatedInvoice.notes || (updatedInvoice.description?.includes('| NOTE:') ? updatedInvoice.description.split('| NOTE:')[1].trim() : ""),
+              items: items as any[],
+              createdAt: updatedInvoice.created_at,
+              itemStatus: status
             };
-          })
-        );
+          });
+
+          return [...filteredOrders, ...newOrderCards];
+        });
       }
 
       await loadData();

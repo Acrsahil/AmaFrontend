@@ -107,7 +107,7 @@ export function OrderCard({ order, onStatusChange }: OrderCardProps) {
       {/* Card Header (Minimized Metadata) */}
       <div className="px-4 py-2 border-b border-slate-50 flex justify-between items-center bg-slate-50/30 gap-2">
         <div className="flex items-center gap-2 sm:gap-4 overflow-hidden">
-          <span className="text-[10px] sm:text-xs font-black text-slate-400 shrink-0">#{order.id.slice(-3)}</span>
+          <span className="text-[10px] sm:text-xs font-black text-slate-400 shrink-0">#{order.invoiceNumber}</span>
           {timeAgo && (
             <div className="flex items-center gap-1 bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded animate-pulse shrink-0">
               <Clock className="h-2.5 w-2.5" />

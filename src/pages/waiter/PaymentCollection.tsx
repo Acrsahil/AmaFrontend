@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { WaiterBottomNav } from "@/components/waiter/WaiterBottomNav";
-import { CreditCard, Banknote, CheckCircle2, IndianRupee, Printer, Clock, X, Loader2, Wallet, QrCode, ChevronDown, ChevronUp, User, Receipt, Edit } from "lucide-react";
+import { CreditCard, Banknote, CheckCircle2, IndianRupee, Printer, Clock, X, Loader2, Wallet, QrCode, ChevronDown, ChevronUp, User, Receipt, Edit, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
@@ -33,6 +33,7 @@ export default function PaymentCollection() {
   const [completedChange, setCompletedChange] = useState<number>(0);
   const [showAlreadyPaidDialog, setShowAlreadyPaidDialog] = useState(false);
   const [activeNonCashMethod, setActiveNonCashMethod] = useState<'QR' | 'CARD' | 'ONLINE'>('QR');
+  const [searchQuery, setSearchQuery] = useState("");
 
   const loadInvoices = useCallback(async () => {
     setLoading(true);
@@ -72,8 +73,12 @@ export default function PaymentCollection() {
       const user = getCurrentUser();
       if (user?.branch_id) {
         try {
-          const data = await fetchBranch(user.branch_id);
-          setBranchInfo(data?.data || data);
+          const response = await fetchBranch(user.branch_id);
+          // fetchBranch returns {success: true, data: {...}}
+          // Extract the actual branch data from the response
+          const branchData = response?.data || response;
+          console.log("Branch data loaded:", branchData);
+          setBranchInfo(branchData);
         } catch (err) {
           console.error("Failed to load branch info", err);
         }
@@ -331,8 +336,42 @@ export default function PaymentCollection() {
     }
   };
 
+  // Search functionality
+  const filterOrdersBySearch = (ordersList: any[]) => {
+    if (!searchQuery.trim()) return ordersList;
+    
+    const query = searchQuery.toLowerCase().trim();
+    
+    return ordersList.filter(order => {
+      // Search by invoice number
+      const invoiceMatch = order.invoice_number?.toLowerCase().includes(query);
+      
+      // Search by customer name
+      const customerMatch = order.customer_name?.toLowerCase().includes(query);
+      
+      // Search by customer phone (if available)
+      const phoneMatch = order.customer_phone?.toLowerCase().includes(query) || 
+                        order.customer?.phone?.toLowerCase().includes(query);
+      
+      // Search by product names
+      const productMatch = order.items?.some((item: any) => 
+        item.product_name?.toLowerCase().includes(query) ||
+        item.product?.name?.toLowerCase().includes(query)
+      );
+      
+      // Search by table number
+      const tableMatch = order.table_no?.toString().includes(query);
+      
+      return invoiceMatch || customerMatch || phoneMatch || productMatch || tableMatch;
+    });
+  };
+
   const pendingOrdersList = orders.filter(o => !(o.payment_status === 'PAID' || o.payment_status === 'WAITER RECEIVED' || (o.payment_status === 'PARTIAL' && o.received_by_waiter)));
   const completedOrdersList = orders.filter(o => o.payment_status === 'PAID' || o.payment_status === 'WAITER RECEIVED' || (o.payment_status === 'PARTIAL' && o.received_by_waiter));
+  
+  // Apply search filter
+  const filteredPendingOrders = filterOrdersBySearch(pendingOrdersList);
+  const filteredCompletedOrders = filterOrdersBySearch(completedOrdersList);
 
   // Extracted Order Card Component for better state management
   const PaymentOrderCard = ({ order, onPaymentClick }: { order: any; onPaymentClick: (order: any) => void }) => {
@@ -479,27 +518,58 @@ export default function PaymentCollection() {
           </div>
         ) : (
           <div className="space-y-4">
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                type="text"
+                placeholder="Search by invoice, customer, phone, product..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 h-11 rounded-xl border-2 border-slate-200 focus:border-primary bg-white"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 flex items-center justify-center rounded-full bg-slate-200 hover:bg-slate-300 text-slate-600"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+
+            {/* Pending Orders */}
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs font-black uppercase tracking-widest text-slate-400">
-                {pendingOrdersList.length} Pending Bills
+                {filteredPendingOrders.length} Pending Bill{filteredPendingOrders.length !== 1 ? 's' : ''}
+                {searchQuery && ` (from ${pendingOrdersList.length})`}
               </p>
               <Button variant="ghost" size="sm" onClick={loadInvoices} className="h-7 text-[10px] font-bold">
                 REFRESH
               </Button>
             </div>
 
-            {pendingOrdersList.map(order => (
-              <PaymentOrderCard key={order.id} order={order} onPaymentClick={handlePaymentClick} />
-            ))}
+            {filteredPendingOrders.length === 0 ? (
+              <div className="text-center py-12 text-slate-400">
+                <Search className="h-12 w-12 mx-auto mb-2 opacity-20" />
+                <p className="text-sm font-medium">No matching orders found</p>
+              </div>
+            ) : (
+              filteredPendingOrders.map(order => (
+                <PaymentOrderCard key={order.id} order={order} onPaymentClick={handlePaymentClick} />
+              ))
+            )}
 
-            {completedOrdersList.length > 0 && (
+            {/* Completed Orders */}
+            {filteredCompletedOrders.length > 0 && (
               <div className="mt-8">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-xs font-black uppercase tracking-widest text-slate-400">
-                    {completedOrdersList.length} Collected Today
+                    {filteredCompletedOrders.length} Collected Today
+                    {searchQuery && ` (from ${completedOrdersList.length})`}
                   </p>
                 </div>
-                {completedOrdersList.map(order => (
+                {filteredCompletedOrders.map(order => (
                   <PaymentOrderCard key={order.id} order={order} onPaymentClick={handlePaymentClick} />
                 ))}
               </div>

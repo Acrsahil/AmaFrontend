@@ -1,6 +1,6 @@
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, Clock, Layers } from "lucide-react";
+import { RotateCcw, Clock, Layers, AlertCircle, CheckCircle2, ChefHat } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { useState, useEffect } from "react";
@@ -47,6 +47,51 @@ export function OrderCard({ order, onStatusChange }: OrderCardProps) {
     const interval = setInterval(updateTime, 30000); // Update every 30 seconds
     return () => clearInterval(interval);
   }, [order.createdAt]);
+
+  // Group items by status
+  const groupedItems = order.items?.reduce((acc: any, item: any) => {
+    const status = (item.status || 'PENDING').toUpperCase();
+    if (!acc[status]) {
+      acc[status] = [];
+    }
+    acc[status].push(item);
+    return acc;
+  }, {});
+
+  // Define status order and styling
+  const statusConfig = {
+    'PENDING': {
+      label: 'Pending',
+      icon: AlertCircle,
+      bgColor: 'bg-amber-50',
+      borderColor: 'border-amber-200',
+      headerBg: 'bg-amber-100',
+      textColor: 'text-amber-900',
+      badgeColor: 'bg-amber-200 text-amber-900'
+    },
+    'READY': {
+      label: 'Ready',
+      icon: CheckCircle2,
+      bgColor: 'bg-emerald-50',
+      borderColor: 'border-emerald-200',
+      headerBg: 'bg-emerald-100',
+      textColor: 'text-emerald-900',
+      badgeColor: 'bg-emerald-200 text-emerald-900'
+    },
+    'COMPLETED': {
+      label: 'Completed',
+      icon: CheckCircle2,
+      bgColor: 'bg-slate-50',
+      borderColor: 'border-slate-200',
+      headerBg: 'bg-slate-100',
+      textColor: 'text-slate-700',
+      badgeColor: 'bg-slate-200 text-slate-700'
+    }
+  };
+
+  const getStatusConfig = (status: string) => {
+    return statusConfig[status as keyof typeof statusConfig] || statusConfig['PENDING'];
+  };
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full hover:shadow-lg transition-all duration-300">
@@ -95,28 +140,65 @@ export function OrderCard({ order, onStatusChange }: OrderCardProps) {
         </div>
       </div>
 
-      {/* Items List */}
-      <div className="p-4 flex-grow space-y-2">
-        {order.items?.map((item: any, index: number) => (
-          <div key={index} className="flex flex-col group bg-slate-50/30 p-3 rounded-xl border border-transparent hover:border-slate-200 transition-all">
-            <div className="flex justify-between items-center gap-4">
-              <p className="text-lg font-black text-slate-800 leading-tight tracking-tight capitalize">
-                {item.menuItem.name}
-              </p>
-              <div className="flex-shrink-0 min-w-[40px] h-10 px-2 rounded-lg bg-white border-2 border-slate-200 flex items-center justify-center text-xl font-black text-slate-900 shadow-sm">
-                x{item.quantity}
-              </div>
-            </div>
-            {item.notes && (
-              <div className="mt-2 flex items-start gap-1.5 bg-amber-50 px-2 py-1 rounded-lg border border-amber-100">
-                <span className="text-amber-600 text-[10px] font-black uppercase mt-0.5 tracking-tighter">ITEM SPEC:</span>
-                <p className="text-[13px] text-amber-700 font-bold italic leading-tight">
-                  {item.notes}
-                </p>
-              </div>
-            )}
+      {/* Items List Grouped by Status */}
+      <div className="p-4 flex-grow space-y-3">
+        {groupedItems && Object.keys(groupedItems).length > 0 ? (
+          Object.entries(groupedItems)
+            .sort(([a], [b]) => {
+              // Sort: PENDING first, then READY, then COMPLETED
+              const order = ['PENDING', 'READY', 'COMPLETED'];
+              return order.indexOf(a) - order.indexOf(b);
+            })
+            .map(([status, items]: [string, any[]]) => {
+              const config = getStatusConfig(status);
+              const StatusIcon = config.icon;
+
+              return (
+                <div key={status} className={cn("rounded-lg border overflow-hidden", config.borderColor)}>
+                  {/* Status Header */}
+                  <div className={cn("px-3 py-2 flex items-center gap-2 border-b", config.headerBg)}>
+                    <StatusIcon className={cn("h-4 w-4", config.textColor)} />
+                    <span className={cn("text-xs font-black uppercase tracking-wider", config.textColor)}>
+                      {config.label}
+                    </span>
+                    <span className={cn("ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full", config.badgeColor)}>
+                      {items.length}
+                    </span>
+                  </div>
+
+                  {/* Items in this status */}
+                  <div className={cn("p-2 space-y-1.5", config.bgColor)}>
+                    {items.map((item: any, index: number) => (
+                      <div key={index} className="flex flex-col group bg-white/60 p-2.5 rounded-lg border border-slate-100">
+                        <div className="flex justify-between items-center gap-3">
+                          <p className="text-base font-black text-slate-800 leading-tight tracking-tight capitalize">
+                            {item.menuItem.name}
+                          </p>
+                          <div className="flex-shrink-0 min-w-[36px] h-8 px-2 rounded-md bg-white border-2 border-slate-200 flex items-center justify-center text-lg font-black text-slate-900 shadow-sm">
+                            x{item.quantity}
+                          </div>
+                        </div>
+                        {item.notes && (
+                          <div className="mt-1.5 flex items-start gap-1.5 bg-amber-50 px-2 py-1 rounded-md border border-amber-100">
+                            <span className="text-amber-600 text-[9px] font-black uppercase mt-0.5 tracking-tighter">NOTE:</span>
+                            <p className="text-[11px] text-amber-700 font-bold italic leading-tight">
+                              {item.notes}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })
+        ) : (
+          <div className="text-center py-8 text-slate-400">
+            <ChefHat className="h-12 w-12 mx-auto mb-2 opacity-20" />
+            <p className="text-sm font-medium">No items in this order</p>
           </div>
-        ))}
+        )}
+
         {order.notes && (
           <div className="mt-3 p-3 bg-red-50 border border-red-100 rounded-xl relative overflow-hidden">
             <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-500"></div>

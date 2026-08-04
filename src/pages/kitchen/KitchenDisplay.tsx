@@ -31,7 +31,7 @@ import {
 import { toast } from "sonner";
 import { getCurrentUser, logout } from "../../auth/auth";
 import { ChangePasswordModal } from "@/components/auth/ChangePasswordModal";
-import { fetchInvoices, fetchProducts, fetchCategories, updateInvoiceStatus, fetchTables, fetchInvoiceDetail } from "../../api/index.js";
+import { fetchInvoices, fetchProducts, fetchCategories, updateInvoiceStatus, updateInvoiceItemStatus, fetchTables, fetchInvoiceDetail } from "../../api/index.js";
 import { useOrdersWebSocket } from "@/hooks/useOrdersWebSocket";
 
 /** Derive kanban column from this kitchen's item statuses (matches backend item-wise logic). */
@@ -70,6 +70,7 @@ export default function KitchenDisplay() {
   // Refs to store latest function versions for WebSocket callback
   const loadDataRef = useRef<(() => void) | null>(null);
   const handleInvoiceUpdateRef = useRef<((id: string) => void) | null>(null);
+  const isManualReloadRef = useRef(false);
   
   const handleFloorChange = (id: number | 'all') => {
     setSelectedFloorId(id);
@@ -84,18 +85,33 @@ export default function KitchenDisplay() {
     wsRefreshTimerRef.current = setTimeout(() => {
       console.log("[WS] Message received:", data.type, data.invoice_id);
       
+      // Skip WebSocket merge if we're in the middle of a manual reload
+      // This prevents the race condition where WebSocket overwrites our updates
+      if (isManualReloadRef.current) {
+        console.log("[WS] Skipping merge - manual reload in progress");
+        return;
+      }
+      
       if (data.type === "invoice_created") {
         toast.success("New Order Received!", {
           description: "A new order has been placed",
           icon: <Bell className="h-5 w-5 text-primary" />,
         });
+        console.log("[WS] Calling loadData for invoice_created");
         loadDataRef.current?.();
       } else if (data.type === "invoice_updated") {
         // If invoice_id is provided, update that specific invoice
         if (data.invoice_id) {
           console.log("[WS] Updating specific invoice:", data.invoice_id);
+          console.log("[WS] handleInvoiceUpdateRef exists:", !!handleInvoiceUpdateRef.current);
           // Intelligently merge updates instead of full reload
-          handleInvoiceUpdateRef.current?.(data.invoice_id);
+          if (handleInvoiceUpdateRef.current) {
+            console.log("[WS] Calling handleInvoiceUpdate");
+            handleInvoiceUpdateRef.current(data.invoice_id);
+          } else {
+            console.log("[WS] handleInvoiceUpdateRef is null, falling back to loadData");
+            loadDataRef.current?.();
+          }
         } else {
           // No specific invoice_id means a general update (e.g., product stock changed)
           // Reload all data to reflect product name/availability changes
@@ -128,6 +144,7 @@ export default function KitchenDisplay() {
   }, [disconnectWebSocket]);
 
   const loadData = async () => {
+    console.log("[loadData] Starting data load...");
     setLoading(true);
     try {
       const currentUser = getCurrentUser();
@@ -140,11 +157,15 @@ export default function KitchenDisplay() {
         fetchTables()
       ]);
 
+      console.log("[loadData] Fetched invoices:", invoiceRes);
+      console.log("[loadData] Fetched products:", productsResponse?.length || 0);
+
       const productData = productsResponse?.results || (Array.isArray(productsResponse) ? productsResponse : []);
 
       setFloors(floorData || []);
 
       const basicInvoices = invoiceRes.results || invoiceRes;
+      console.log("[loadData] Basic invoices:", basicInvoices?.length || 0);
 
       // Fetch full details for all invoices returned for today
       // Filtering will happen after we have full status info
@@ -158,6 +179,7 @@ export default function KitchenDisplay() {
           }
         })
       );
+      console.log("[loadData] Detailed invoices:", detailedInvoices?.length || 0);
 
       const productsMap = (productData || []).reduce((acc: any, p: any) => {
         if (p && p.id) {
@@ -167,11 +189,19 @@ export default function KitchenDisplay() {
       }, {});
 
       // Group items by status and create separate order cards for each status
-      const mappedInvoices = detailedInvoices
-        .filter((inv: any) =>
-          inv && inv.is_active && (inv.invoice_status === 'PENDING' || inv.invoice_status === 'READY' || inv.invoice_status === 'COMPLETED')
-        )
+      console.log("[loadData] Filtering invoices...");
+      const filteredInvoices = detailedInvoices.filter((inv: any) => {
+        const isActive = inv && inv.is_active;
+        const hasValidStatus = inv && (inv.invoice_status === 'PENDING' || inv.invoice_status === 'READY' || inv.invoice_status === 'COMPLETED');
+        console.log(`[loadData] Invoice ${inv?.id}: active=${isActive}, status=${inv?.invoice_status}, valid=${hasValidStatus}`);
+        return isActive && hasValidStatus;
+      });
+      console.log("[loadData] Filtered invoices:", filteredInvoices?.length || 0);
+
+      const mappedInvoices = filteredInvoices
         .flatMap((inv: any) => {
+          console.log(`[loadData] Processing invoice ${inv.id}, items count: ${inv.items?.length || 0}`);
+          
           const tableMatch = (inv.description || inv.invoice_description || "").match(/Table (\d+)/);
           const tableNumber = inv.table_no || (tableMatch ? parseInt(tableMatch[1]) : 0);
 
@@ -179,7 +209,9 @@ export default function KitchenDisplay() {
             .filter(Boolean)
             .map((item: any) => {
               const product = productsMap[String(item.product)];
+              console.log(`[loadData] Item ${item.id}: product=${item.product}, status=${item.status}, productName=${product?.name}`);
               return {
+                id: item.id, // Store the actual database ID
                 quantity: item.quantity || 0,
                 status: item.status || 'PENDING',
                 menuItem: {
@@ -201,6 +233,8 @@ export default function KitchenDisplay() {
             acc[status].push(item);
             return acc;
           }, {});
+
+          console.log(`[loadData] Invoice ${inv.id} status groups:`, Object.keys(itemsByStatus));
 
           // Create separate order cards for each status group
           return Object.entries(itemsByStatus).map(([status, items]: [string, any[]]) => {
@@ -224,6 +258,9 @@ export default function KitchenDisplay() {
           });
         });
 
+      console.log("[loadData] Mapped invoices:", mappedInvoices?.length || 0);
+      console.log("[loadData] Sample order:", mappedInvoices?.[0]);
+
       // Sort orders by creation time (FIFO - oldest first)
       mappedInvoices.sort((a, b) => {
         const dateA = new Date(a.createdAt || 0).getTime();
@@ -231,11 +268,15 @@ export default function KitchenDisplay() {
         return dateA - dateB; // Ascending order (oldest first)
       });
 
+      console.log("[loadData] Setting orders, count:", mappedInvoices.length);
       setOrders(mappedInvoices);
+      console.log("[loadData] Orders set successfully");
     } catch (err: any) {
+      console.error("[loadData] Error:", err);
       toast.error(err.message || "Failed to load kitchen data");
     } finally {
       setLoading(false);
+      console.log("[loadData] Loading complete");
     }
   };
   
@@ -302,6 +343,14 @@ export default function KitchenDisplay() {
       return;
     }
 
+    // If a manual reload just happened, do a full reload instead of merge
+    // This ensures we don't merge stale WebSocket data with fresh server data
+    if (isManualReloadRef.current) {
+      console.log("[handleInvoiceUpdate] Doing full reload instead of merge - manual reload just completed");
+      loadData();
+      return;
+    }
+
     try {
       // Fetch only the updated invoice
       const updatedInvoice = await fetchInvoiceDetail(invoiceId);
@@ -328,6 +377,7 @@ export default function KitchenDisplay() {
         .map((item: any) => {
           const product = productsMap[String(item.product)];
           return {
+            id: item.id, // Preserve the database ID
             quantity: item.quantity || 0,
             status: item.status || 'PENDING',
             menuItem: {
@@ -344,60 +394,43 @@ export default function KitchenDisplay() {
         ? deriveKitchenOrderStatus(items)
         : mapInvoiceStatusToKitchenStatus(updatedInvoice.invoice_status);
 
-      const mappedInvoice = {
-        id: (updatedInvoice.id || "").toString(),
-        invoiceNumber: updatedInvoice.invoice_number || "N/A",
-        tableNumber,
-        waiter: updatedInvoice.created_by_name || "Unknown",
-        floor: updatedInvoice.floor,
-        floorName: updatedInvoice.floor_name,
-        status: kitchenStatus,
-        total: parseFloat(updatedInvoice.total_amount || "0"),
-        notes: updatedInvoice.notes || (updatedInvoice.description?.includes('| NOTE:') ? updatedInvoice.description.split('| NOTE:')[1].trim() : ""),
-        items,
-        createdAt: updatedInvoice.created_at
-      };
+      // Group items by status and create separate order cards for each status
+      const itemsByStatus = items.reduce((acc: any, item: any) => {
+        const status = (item.status || 'PENDING').toUpperCase();
+        if (!acc[status]) {
+          acc[status] = [];
+        }
+        acc[status].push(item);
+        return acc;
+      }, {});
+
+      // Create new order cards for each status group
+      const newOrderCards = Object.entries(itemsByStatus).map(([status, statusItems]: [string, any[]]) => {
+        const kitchenStatus = status === 'PENDING' ? 'new' : status === 'READY' ? 'ready' : 'completed';
+        
+        return {
+          id: `${updatedInvoice.id}-${status}`,
+          invoiceNumber: updatedInvoice.invoice_number || "N/A",
+          invoiceId: updatedInvoice.id,
+          tableNumber,
+          waiter: updatedInvoice.created_by_name || "Unknown",
+          floor: updatedInvoice.floor,
+          floorName: updatedInvoice.floor_name,
+          status: kitchenStatus,
+          total: parseFloat(updatedInvoice.total_amount || "0"),
+          notes: updatedInvoice.notes || (updatedInvoice.description?.includes('| NOTE:') ? updatedInvoice.description.split('| NOTE:')[1].trim() : ""),
+          items: statusItems,
+          createdAt: updatedInvoice.created_at,
+          itemStatus: status
+        };
+      });
 
       setOrders((prevOrders) => {
-        const existingOrderIndex = prevOrders.findIndex(o => o.id === mappedInvoice.id);
+        // Remove ALL existing cards for this invoice (all status groups)
+        const filteredOrders = prevOrders.filter(order => !order.id.startsWith(`${invoiceId}-`));
         
-        if (existingOrderIndex >= 0) {
-          // Preserve existing item statuses for items that haven't changed
-          const existingOrder = prevOrders[existingOrderIndex];
-          const existingItemsMap = new Map(
-            existingOrder.items.map((item: any) => [
-              `${item.menuItem?.name}_${item.quantity}`,
-              item.status
-            ])
-          );
-
-          // Merge: keep existing status for unchanged items, use new status for new/changed items
-          const mergedItems = mappedInvoice.items.map((newItem: any) => {
-            const key = `${newItem.menuItem?.name}_${newItem.quantity}`;
-            const existingStatus = existingItemsMap.get(key);
-            
-            // If item exists and has a status, preserve it; otherwise use new status
-            return {
-              ...newItem,
-              status: existingStatus || newItem.status
-            };
-          });
-
-          const mergedOrder = {
-            ...mappedInvoice,
-            items: mergedItems,
-            status: kitchenTypeId
-              ? deriveKitchenOrderStatus(mergedItems)
-              : mapInvoiceStatusToKitchenStatus(updatedInvoice.invoice_status)
-          };
-
-          const newOrders = [...prevOrders];
-          newOrders[existingOrderIndex] = mergedOrder;
-          return newOrders;
-        } else {
-          // New invoice, add it
-          return [...prevOrders, mappedInvoice];
-        }
+        // Add the new order cards
+        return [...filteredOrders, ...newOrderCards];
       });
     } catch (err: any) {
       console.error("Failed to handle invoice update:", err);
@@ -408,6 +441,50 @@ export default function KitchenDisplay() {
   
   // Update refs after handleInvoiceUpdate is defined
   handleInvoiceUpdateRef.current = handleInvoiceUpdate;
+
+  const handleItemStatusChange = async (orderId: string, itemId: string, newStatus: string) => {
+    // Extract the actual invoice ID from the order ID (format: "invoiceId-status")
+    const invoiceId = orderId.split('-').slice(0, -1).join('-');
+    
+    console.log(`Updating item ${itemId} in invoice ${invoiceId} to ${newStatus}`);
+
+    try {
+      // itemId is now the actual database ID (passed directly from OrderCard)
+      const actualItemId = parseInt(itemId);
+
+      if (!actualItemId) {
+        toast.error("Invalid item ID");
+        return;
+      }
+
+      // Update the specific item
+      await updateInvoiceItemStatus(invoiceId, [
+        { item_id: actualItemId, status: newStatus }
+      ]);
+      
+      toast.success(`Item marked as ${newStatus.toLowerCase()}`);
+
+      // Disable WebSocket merge temporarily to prevent stale data from overwriting our update
+      // The WebSocket will fire with old data, but we'll ignore it and do a clean reload
+      isManualReloadRef.current = true;
+      
+      // Wait a bit to ensure the API call completes and WebSocket event arrives
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Force a complete reload to get the true state from the server
+      await loadData();
+      
+      // Keep flag true for a bit longer to ensure WebSocket doesn't merge stale data
+      // WebSocket has 500ms delay, so we need to keep it disabled for at least that long
+      setTimeout(() => {
+        isManualReloadRef.current = false;
+      }, 1500);
+    } catch (err: any) {
+      console.error("Item status update error:", err);
+      toast.error(err.message || "Failed to update item status");
+      isManualReloadRef.current = false;
+    }
+  };
 
   const handleStatusChange = async (orderId: string, newFrontendStatus: string) => {
     // Extract the actual invoice ID from the order ID (format: "invoiceId-status")
@@ -424,8 +501,22 @@ export default function KitchenDisplay() {
     console.log(`Updating invoice ${invoiceId} items to ${backendStatus}`);
 
     try {
-      // Update all items in the invoice to the new status
-      const updatedInvoice = await updateInvoiceStatus(invoiceId, backendStatus);
+      // Find the order to get the items that need to be updated
+      const order = orders.find(o => o.id === orderId);
+      if (!order || !order.items || order.items.length === 0) {
+        toast.error("Order not found or has no items");
+        return;
+      }
+
+      // Only update the items currently displayed in this card
+      // This prevents resetting items from other status groups
+      const itemUpdates = order.items.map((item: any) => ({
+        item_id: item.id,
+        status: backendStatus
+      }));
+
+      // Use item-level update instead of bulk invoice update
+      const updatedInvoice = await updateInvoiceItemStatus(invoiceId, itemUpdates);
       toast.success(`Order updated to ${newFrontendStatus}`);
 
       // Apply the PATCH response immediately so the card moves columns without waiting for a full reload
@@ -448,6 +539,7 @@ export default function KitchenDisplay() {
             .map((item: any) => {
               const product = productsMap[String(item.product)];
               return {
+                id: item.id, // Preserve database ID
                 quantity: item.quantity || 0,
                 status: item.status || backendStatus,
                 menuItem: {
@@ -511,7 +603,7 @@ export default function KitchenDisplay() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-6">
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="h-auto p-2 hover:bg-slate-50 flex items-center gap-4 rounded-2xl transition-all -ml-2 text-left">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0 shadow-sm">
                     <ChefHat className="h-6 w-6" />
@@ -717,6 +809,7 @@ export default function KitchenDisplay() {
                         key={order.id}
                         order={order}
                         onStatusChange={handleStatusChange}
+                        onItemStatusChange={handleItemStatusChange}
                       />
                     ))}
                 </div>
@@ -749,6 +842,7 @@ export default function KitchenDisplay() {
                         key={order.id}
                         order={order}
                         onStatusChange={handleStatusChange}
+                        onItemStatusChange={handleItemStatusChange}
                       />
                     ))}
                 </div>

@@ -628,6 +628,16 @@ export async function updateInvoiceStatus(id, status, extraData = {}) {
   return data.data;
 }
 
+export async function updateInvoiceItemStatus(invoiceId, itemStatusUpdates) {
+  const res = await apiFetch(`/api/invoice/${invoiceId}/`, {
+    method: "PATCH",
+    body: JSON.stringify({ item_status_updates: itemStatusUpdates }),
+  });
+  const data = await safeJson(res);
+  if (!res.ok) throw new Error(data?.message || "Failed to update item status");
+  return data.data;
+}
+
 export async function addPayment(invoiceId, paymentData) {
   const res = await apiFetch(`/api/invoice/${invoiceId}/payments/`, {
     method: "POST",

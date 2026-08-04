@@ -124,7 +124,7 @@ export default function PaymentCollection() {
       setActiveNonCashMethod(method);
       setShowPaymentDialog(false);
       setShowOnlineDialog(true);
-      setOnlineReceived(String(selectedOrder.due_amount || selectedOrder.total_amount || 0));
+      setOnlineReceived(""); // Don't pre-fill - allow partial payments
     }
   };
 
@@ -807,15 +807,27 @@ export default function PaymentCollection() {
             {activeNonCashMethod === 'QR' && (
               <div className="relative p-3 bg-white rounded-[1.5rem] border-4 border-slate-50 shadow-inner group">
                 <div className="h-48 w-48 bg-slate-100 rounded-xl flex items-center justify-center overflow-hidden border border-slate-200">
-                  <img
-                    src={branchInfo?.image_url || "/qr.png"}
-                    alt="QR Code"
-                    className="h-full w-full object-cover"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.src = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=AMABAKERY_PAYMENT";
-                    }}
-                  />
+                  {branchInfo?.image_url ? (
+                    <img
+                      src={branchInfo.image_url}
+                      alt="QR Code"
+                      className="h-full w-full object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.src = "/qr.png";
+                      }}
+                    />
+                  ) : (
+                    <img
+                      src="/qr.png"
+                      alt="QR Code"
+                      className="h-full w-full object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.src = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=AMABAKERY_PAYMENT";
+                      }}
+                    />
+                  )}
                 </div>
                 <div className="absolute -top-2 -right-2 h-8 w-8 bg-primary text-white rounded-full flex items-center justify-center shadow-lg animate-bounce">
                   <div className="h-4 w-4 rounded-full border-2 border-white animate-ping absolute" />

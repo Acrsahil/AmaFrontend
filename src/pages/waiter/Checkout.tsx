@@ -23,7 +23,8 @@ import {
     Wallet,
     Printer,
     X,
-    ChevronRight
+    ChevronRight,
+    Loader2
 } from "lucide-react";
 import { toast } from "sonner";
 import { MenuItem } from "@/lib/mockData";
@@ -83,9 +84,16 @@ export default function Checkout() {
             if (user?.branch_id) {
                 try {
                     const data = await fetchBranch(user.branch_id);
-                    setBranchInfo(data?.data || data);
+                    console.log("🏪 Branch API Response:", data);
+                    if (data?.success) {
+                        console.log("✅ Branch data:", data.data);
+                        console.log("🖼️ QR Code URL:", data.data?.image_url);
+                        setBranchInfo(data.data);
+                    } else {
+                        console.warn("❌ Branch fetch returned unsuccessful response:", data);
+                    }
                 } catch (err) {
-                    console.error("Failed to load branch info", err);
+                    console.error("❌ Failed to load branch info:", err);
                 }
             }
         };
@@ -1023,16 +1031,27 @@ export default function Checkout() {
 
                             <div className="relative group">
                                 <div className="absolute -inset-1 bg-gradient-to-r from-primary/20 to-primary/20 rounded-2xl blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200"></div>
-                                <div className="relative bg-white p-2 rounded-xl mx-auto border border-primary/10 shadow-md flex flex-col items-center overflow-hidden">
-                                    <img
-                                        src="/qr.png"
-                                        alt="QR Code"
-                                        className="h-28 w-28 object-cover"
-                                        onError={(e) => {
-                                            const target = e.target as HTMLImageElement;
-                                            target.src = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=AMABAKERY_PAYMENT";
-                                        }}
-                                    />
+                                <div className="relative bg-white p-2 rounded-xl mx-auto border border-primary/10 shadow-md flex flex-col items-center justify-center overflow-hidden min-h-[140px]">
+                                    {!branchInfo ? (
+                                        <div className="flex flex-col items-center justify-center py-8">
+                                            <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
+                                            <p className="text-[10px] text-muted-foreground font-bold">Loading QR Code...</p>
+                                        </div>
+                                    ) : (
+                                        <img
+                                            src={branchInfo?.image_url || "/qr.png"}
+                                            alt="QR Code"
+                                            className="h-28 w-28 object-cover"
+                                            onError={(e) => {
+                                                const target = e.target as HTMLImageElement;
+                                                console.log("❌ QR Code failed to load, using fallback");
+                                                target.src = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=AMABAKERY_PAYMENT";
+                                            }}
+                                            onLoad={() => {
+                                                console.log("✅ QR Code loaded successfully:", branchInfo?.image_url);
+                                            }}
+                                        />
+                                    )}
                                 </div>
                             </div>
 

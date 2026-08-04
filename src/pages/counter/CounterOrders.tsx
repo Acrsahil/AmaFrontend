@@ -89,8 +89,8 @@ export default function CounterOrders() {
     const [loadingMore, setLoadingMore] = useState(false);
     const [dateFilter, setDateFilter] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
     const keyboardRef = useRef<HTMLDivElement>(null);
-    const backspaceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const backspaceIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const backspaceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const backspaceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const stopBackspace = () => {
         if (backspaceTimeoutRef.current) clearTimeout(backspaceTimeoutRef.current);
@@ -1091,6 +1091,36 @@ export default function CounterOrders() {
                                                         ))}
                                                     </div>
                                                 </div>
+
+                                                {/* QR Code Display */}
+                                                {paymentMethod === 'QR' && (
+                                                    <div className="flex flex-col items-center gap-2 pt-2">
+                                                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Scan QR Code</Label>
+                                                        <div className="bg-white p-2 rounded-2xl shadow-md border border-slate-100 w-32 h-32 flex items-center justify-center overflow-hidden mx-auto">
+                                                            {branchInfo?.image_url ? (
+                                                                <img
+                                                                    src={branchInfo.image_url}
+                                                                    alt="QR Code"
+                                                                    className="h-full w-full object-cover"
+                                                                    onError={(e) => {
+                                                                        const target = e.target as HTMLImageElement;
+                                                                        target.src = "/qr.png";
+                                                                    }}
+                                                                />
+                                                            ) : (
+                                                                <img
+                                                                    src="/qr.png"
+                                                                    alt="QR Code"
+                                                                    className="h-full w-full object-cover"
+                                                                    onError={(e) => {
+                                                                        const target = e.target as HTMLImageElement;
+                                                                        target.src = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=AMABAKERY_PAYMENT";
+                                                                    }}
+                                                                />
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
 
                                                 <Button
                                                     className="w-full h-16 rounded-[1.5rem] font-black text-xl gradient-warm shadow-xl shadow-primary/20"

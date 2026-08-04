@@ -7,8 +7,8 @@ type MessageHandler = (data: { type: string; invoice_id?: string; status?: strin
 // WebSocket connection constants
 const MIN_RECONNECT_MS = 1000;
 const MAX_RECONNECT_MS = 30000;
-const HEARTBEAT_INTERVAL_MS = 30000;
-const HEARTBEAT_TIMEOUT_MS = 10000;
+const HEARTBEAT_INTERVAL_MS = 15000; // Send ping every 15 seconds
+const HEARTBEAT_TIMEOUT_MS = 30000; // Expect pong within 30 seconds
 const MAX_RECONNECT_ATTEMPTS = 50;
 
 // Message deduplication cache
@@ -27,6 +27,7 @@ export function useOrdersWebSocket(onMessage: MessageHandler) {
   
   const [isConnected, setIsConnected] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'reconnecting'>('disconnected');
+  const hasSentHeartbeatRef = useRef(false);
 
   onMessageRef.current = onMessage;
 
@@ -60,6 +61,7 @@ export function useOrdersWebSocket(onMessage: MessageHandler) {
       try {
         socketRef.current.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
         lastHeartbeatRef.current = Date.now();
+        hasSentHeartbeatRef.current = true;
       } catch (err) {
         console.error("[WS] Heartbeat send failed:", err);
       }
@@ -68,9 +70,14 @@ export function useOrdersWebSocket(onMessage: MessageHandler) {
 
   // Check heartbeat timeout
   const checkHeartbeatTimeout = useCallback(() => {
+    // Skip check if we haven't sent a heartbeat yet
+    if (!hasSentHeartbeatRef.current) {
+      return;
+    }
+    
     const timeSinceLastHeartbeat = Date.now() - lastHeartbeatRef.current;
     if (timeSinceLastHeartbeat > HEARTBEAT_TIMEOUT_MS && socketRef.current?.readyState === WebSocket.OPEN) {
-      console.warn("[WS] Heartbeat timeout, closing connection");
+      console.warn(`[WS] Heartbeat timeout: ${timeSinceLastHeartbeat}ms since last heartbeat, closing connection`);
       socketRef.current.close();
     }
   }, []);
@@ -143,13 +150,24 @@ export function useOrdersWebSocket(onMessage: MessageHandler) {
         console.log("[WS] Connected successfully");
         reconnectAttemptRef.current = 0;
         lastHeartbeatRef.current = Date.now();
+        hasSentHeartbeatRef.current = false;
         setIsConnected(true);
         setConnectionStatus('connected');
 
         // Start heartbeat
         clearHeartbeatTimers();
+        // Send first heartbeat immediately
+        console.log("[WS] Sending initial heartbeat...");
+        sendHeartbeat();
+        // Then send periodically
         heartbeatTimerRef.current = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
-        heartbeatTimeoutRef.current = setInterval(checkHeartbeatTimeout, HEARTBEAT_TIMEOUT_MS / 2);
+        // Start timeout checker after HEARTBEAT_TIMEOUT_MS to give time for first pong response
+        // This ensures we don't timeout before receiving the first pong
+        heartbeatTimeoutRef.current = setTimeout(() => {
+          console.log("[WS] Starting heartbeat timeout checker...");
+          // Convert to interval after initial delay
+          heartbeatTimeoutRef.current = setInterval(checkHeartbeatTimeout, HEARTBEAT_TIMEOUT_MS / 2);
+        }, HEARTBEAT_TIMEOUT_MS);
       };
 
       socket.onmessage = (event) => {
@@ -160,9 +178,13 @@ export function useOrdersWebSocket(onMessage: MessageHandler) {
           
           // Handle pong responses
           if (data.type === 'pong') {
+            console.log("[WS] Pong received, updating heartbeat timestamp");
             lastHeartbeatRef.current = Date.now();
             return;
           }
+          
+          // Log other message types
+          console.log("[WS] Processing message:", data.type, data.invoice_id || 'no invoice');
           
           // Deduplicate messages
           const messageId = generateMessageId(data);

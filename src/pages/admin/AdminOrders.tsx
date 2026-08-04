@@ -269,7 +269,7 @@ export default function AdminOrders() {
     setIsUpdatingItem(true);
     try {
       const payload = tempAddedItems.map(item => ({
-        product: parseInt(item.product.id),
+        product: parseInt(item.product.id || item.product),
         quantity: item.quantity
       }));
       const updatedInvoice = await patchInvoice(selectedOrder.id, {

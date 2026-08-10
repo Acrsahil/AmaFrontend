@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { WS_BASE_URL } from "../api/config";
 import { getAccessToken } from "../api/index.js";
 
-type MessageHandler = (data: { type: string; invoice_id?: string; status?: string; [key: string]: any }) => void;
+type MessageHandler = (data: { type: string; invoice_id?: string; status?: string;[key: string]: any }) => void;
 
 // WebSocket connection constants
 const MIN_RECONNECT_MS = 1000;
@@ -15,7 +15,7 @@ const MAX_RECONNECT_ATTEMPTS = 50;
 const processedMessages = new Set<string>();
 const MESSAGE_CACHE_TTL = 5000; // 5 seconds
 
-export function useOrdersWebSocket(onMessage: MessageHandler) {
+export function useOrdersWebSocket(onMessage: MessageHandler, branchId?: string | number | null) {
   const socketRef = useRef<WebSocket | null>(null);
   const onMessageRef = useRef(onMessage);
   const heartbeatTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -24,7 +24,7 @@ export function useOrdersWebSocket(onMessage: MessageHandler) {
   const reconnectAttemptRef = useRef(0);
   const intentionalCloseRef = useRef(false);
   const lastHeartbeatRef = useRef<number>(Date.now());
-  
+
   const [isConnected, setIsConnected] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'reconnecting'>('disconnected');
   const hasSentHeartbeatRef = useRef(false);
@@ -39,18 +39,18 @@ export function useOrdersWebSocket(onMessage: MessageHandler) {
   // Check if message is a duplicate
   const isDuplicateMessage = useCallback((messageId: string): boolean => {
     const now = Date.now();
-    
+
     // Clean old messages from cache
     for (const id of processedMessages) {
       if (now - parseInt(id.split('_')[2]) > MESSAGE_CACHE_TTL) {
         processedMessages.delete(id);
       }
     }
-    
+
     if (processedMessages.has(messageId)) {
       return true;
     }
-    
+
     processedMessages.add(messageId);
     return false;
   }, []);
@@ -74,7 +74,7 @@ export function useOrdersWebSocket(onMessage: MessageHandler) {
     if (!hasSentHeartbeatRef.current) {
       return;
     }
-    
+
     const timeSinceLastHeartbeat = Date.now() - lastHeartbeatRef.current;
     if (timeSinceLastHeartbeat > HEARTBEAT_TIMEOUT_MS && socketRef.current?.readyState === WebSocket.OPEN) {
       console.warn(`[WS] Heartbeat timeout: ${timeSinceLastHeartbeat}ms since last heartbeat, closing connection`);
@@ -137,10 +137,13 @@ export function useOrdersWebSocket(onMessage: MessageHandler) {
     }
 
     const token = getAccessToken();
-    let wsUrl = WS_BASE_URL + "/ws/orders/";
+    // Build URL with branch_id if available
+    let wsUrl = branchId
+      ? `${WS_BASE_URL}/ws/orders/${branchId}/`
+      : `${WS_BASE_URL}/ws/orders/`;
     if (token) wsUrl += `?token=${token}`;
 
-    console.log("[WS] Creating new socket:", wsUrl);
+    console.log("[WS] Creating new socket with branch_id:", branchId || "none", "URL:", wsUrl);
     setConnectionStatus('connecting');
 
     try {
@@ -162,10 +165,8 @@ export function useOrdersWebSocket(onMessage: MessageHandler) {
         // Then send periodically
         heartbeatTimerRef.current = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
         // Start timeout checker after HEARTBEAT_TIMEOUT_MS to give time for first pong response
-        // This ensures we don't timeout before receiving the first pong
         heartbeatTimeoutRef.current = setTimeout(() => {
           console.log("[WS] Starting heartbeat timeout checker...");
-          // Convert to interval after initial delay
           heartbeatTimeoutRef.current = setInterval(checkHeartbeatTimeout, HEARTBEAT_TIMEOUT_MS / 2);
         }, HEARTBEAT_TIMEOUT_MS);
       };
@@ -175,24 +176,24 @@ export function useOrdersWebSocket(onMessage: MessageHandler) {
 
         try {
           const data = JSON.parse(event.data);
-          
+
           // Handle pong responses
           if (data.type === 'pong') {
             console.log("[WS] Pong received, updating heartbeat timestamp");
             lastHeartbeatRef.current = Date.now();
             return;
           }
-          
+
           // Log other message types
           console.log("[WS] Processing message:", data.type, data.invoice_id || 'no invoice');
-          
+
           // Deduplicate messages
           const messageId = generateMessageId(data);
           if (isDuplicateMessage(messageId)) {
             console.log("[WS] Duplicate message ignored:", data.type, data.invoice_id);
             return;
           }
-          
+
           onMessageRef.current(data);
         } catch (err) {
           console.error("[WS] Invalid JSON message:", err);
@@ -226,7 +227,7 @@ export function useOrdersWebSocket(onMessage: MessageHandler) {
       console.error("[WS] Failed to create socket:", err);
       scheduleReconnect();
     }
-  }, [clearHeartbeatTimers, sendHeartbeat, checkHeartbeatTimeout, scheduleReconnect, generateMessageId, isDuplicateMessage]);
+  }, [clearHeartbeatTimers, sendHeartbeat, checkHeartbeatTimeout, scheduleReconnect, generateMessageId, isDuplicateMessage, branchId]);
 
   // Expose manual connect/disconnect for logout
   const disconnect = useCallback(() => {
@@ -234,13 +235,13 @@ export function useOrdersWebSocket(onMessage: MessageHandler) {
     intentionalCloseRef.current = true;
     clearReconnectTimer();
     clearHeartbeatTimers();
-    
+
     const socket = socketRef.current;
     if (socket) {
       socket.close(1000, "User logged out");
       socketRef.current = null;
     }
-    
+
     setIsConnected(false);
     setConnectionStatus('disconnected');
   }, [clearReconnectTimer, clearHeartbeatTimers]);
@@ -255,7 +256,7 @@ export function useOrdersWebSocket(onMessage: MessageHandler) {
       intentionalCloseRef.current = true;
       clearReconnectTimer();
       clearHeartbeatTimers();
-      
+
       const socket = socketRef.current;
       if (socket) {
         socket.close(1000, "Component unmounted");
@@ -267,10 +268,10 @@ export function useOrdersWebSocket(onMessage: MessageHandler) {
     };
   }, [connect, clearReconnectTimer, clearHeartbeatTimers]);
 
-  return { 
-    socketRef, 
-    isConnected, 
+  return {
+    socketRef,
+    isConnected,
     connectionStatus,
-    disconnect 
+    disconnect
   };
 }

@@ -96,7 +96,8 @@ export default function OrderStatus() {
         }
       },
       [loadData]
-    )
+    ),
+    currentUser?.branch_id
   );
 
   // Filtering logic

@@ -66,12 +66,12 @@ export default function KitchenDisplay() {
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [loading, setLoading] = useState(true);
   const [socketConnected, setSocketConnected] = useState(false);
-  
+
   // Refs to store latest function versions for WebSocket callback
   const loadDataRef = useRef<(() => void) | null>(null);
   const handleInvoiceUpdateRef = useRef<((id: string) => void) | null>(null);
   const isManualReloadRef = useRef(false);
-  
+
   const handleFloorChange = (id: number | 'all') => {
     setSelectedFloorId(id);
     localStorage.setItem('kitchenFloorFilter', id.toString());
@@ -79,19 +79,19 @@ export default function KitchenDisplay() {
 
   // WebSocket message handler
   const wsRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  
+
   const handleWebSocketMessage = useCallback((data: any) => {
     if (wsRefreshTimerRef.current) clearTimeout(wsRefreshTimerRef.current);
     wsRefreshTimerRef.current = setTimeout(() => {
       console.log("[WS] Message received:", data.type, data.invoice_id);
-      
+
       // Skip WebSocket merge if we're in the middle of a manual reload
       // This prevents the race condition where WebSocket overwrites our updates
       if (isManualReloadRef.current) {
         console.log("[WS] Skipping merge - manual reload in progress");
         return;
       }
-      
+
       if (data.type === "invoice_created") {
         toast.success("New Order Received!", {
           description: "A new order has been placed",
@@ -122,9 +122,15 @@ export default function KitchenDisplay() {
     }, 500);
   }, []);
 
-  // Initialize WebSocket connection
+  // Get current user and branch
+  const user = getCurrentUser();
+  const userName = user?.username || "Chef";
+  const branchName = user?.branch_name || "Ama Bakery";
+
+  // Initialize WebSocket connection with branch_id
   const { isConnected: kitchenWsConnected, disconnect: disconnectWebSocket } = useOrdersWebSocket(
-    handleWebSocketMessage
+    handleWebSocketMessage,
+    user?.branch_id
   );
 
   useEffect(() => {
@@ -201,7 +207,7 @@ export default function KitchenDisplay() {
       const mappedInvoices = filteredInvoices
         .flatMap((inv: any) => {
           console.log(`[loadData] Processing invoice ${inv.id}, items count: ${inv.items?.length || 0}`);
-          
+
           const tableMatch = (inv.description || inv.invoice_description || "").match(/Table (\d+)/);
           const tableNumber = inv.table_no || (tableMatch ? parseInt(tableMatch[1]) : 0);
 
@@ -239,7 +245,7 @@ export default function KitchenDisplay() {
           // Create separate order cards for each status group
           return Object.entries(itemsByStatus).map(([status, items]: [string, any[]]) => {
             const kitchenStatus = status === 'PENDING' ? 'new' : status === 'READY' ? 'ready' : 'completed';
-            
+
             return {
               id: `${inv.id}-${status}`, // Unique ID for each status group
               invoiceNumber: inv.invoice_number || "N/A",
@@ -279,14 +285,9 @@ export default function KitchenDisplay() {
       console.log("[loadData] Loading complete");
     }
   };
-  
+
   // Update refs after loadData is defined
   loadDataRef.current = loadData;
-
-  // Get current user and branch
-  const user = getCurrentUser();
-  const userName = user?.username || "Chef";
-  const branchName = user?.branch_name || "Ama Bakery";
 
   // Determine User's Kitchen assignment
   const userKitchenId = user?.kitchentype_id;
@@ -407,7 +408,7 @@ export default function KitchenDisplay() {
       // Create new order cards for each status group
       const newOrderCards = Object.entries(itemsByStatus).map(([status, statusItems]: [string, any[]]) => {
         const kitchenStatus = status === 'PENDING' ? 'new' : status === 'READY' ? 'ready' : 'completed';
-        
+
         return {
           id: `${updatedInvoice.id}-${status}`,
           invoiceNumber: updatedInvoice.invoice_number || "N/A",
@@ -428,7 +429,7 @@ export default function KitchenDisplay() {
       setOrders((prevOrders) => {
         // Remove ALL existing cards for this invoice (all status groups)
         const filteredOrders = prevOrders.filter(order => !order.id.startsWith(`${invoiceId}-`));
-        
+
         // Add the new order cards
         return [...filteredOrders, ...newOrderCards];
       });
@@ -438,14 +439,14 @@ export default function KitchenDisplay() {
       loadData();
     }
   };
-  
+
   // Update refs after handleInvoiceUpdate is defined
   handleInvoiceUpdateRef.current = handleInvoiceUpdate;
 
   const handleItemStatusChange = async (orderId: string, itemId: string, newStatus: string) => {
     // Extract the actual invoice ID from the order ID (format: "invoiceId-status")
     const invoiceId = orderId.split('-').slice(0, -1).join('-');
-    
+
     console.log(`Updating item ${itemId} in invoice ${invoiceId} to ${newStatus}`);
 
     try {
@@ -461,19 +462,19 @@ export default function KitchenDisplay() {
       await updateInvoiceItemStatus(invoiceId, [
         { item_id: actualItemId, status: newStatus }
       ]);
-      
+
       toast.success(`Item marked as ${newStatus.toLowerCase()}`);
 
       // Disable WebSocket merge temporarily to prevent stale data from overwriting our update
       // The WebSocket will fire with old data, but we'll ignore it and do a clean reload
       isManualReloadRef.current = true;
-      
+
       // Wait a bit to ensure the API call completes and WebSocket event arrives
       await new Promise(resolve => setTimeout(resolve, 300));
-      
+
       // Force a complete reload to get the true state from the server
       await loadData();
-      
+
       // Keep flag true for a bit longer to ensure WebSocket doesn't merge stale data
       // WebSocket has 500ms delay, so we need to keep it disabled for at least that long
       setTimeout(() => {
@@ -489,7 +490,7 @@ export default function KitchenDisplay() {
   const handleStatusChange = async (orderId: string, newFrontendStatus: string) => {
     // Extract the actual invoice ID from the order ID (format: "invoiceId-status")
     const invoiceId = orderId.split('-').slice(0, -1).join('-');
-    
+
     // Map frontend status to backend status
     const backendStatusMap: Record<string, string> = {
       'new': 'PENDING',
@@ -532,7 +533,7 @@ export default function KitchenDisplay() {
         setOrders((prev) => {
           // Remove all cards for this invoice (all status groups)
           const filteredOrders = prev.filter(order => !order.id.startsWith(`${invoiceId}-`));
-          
+
           // Process updated items
           const updatedItems = (updatedInvoice.items || [])
             .filter(Boolean)
@@ -565,7 +566,7 @@ export default function KitchenDisplay() {
           // Create new order cards for each status group
           const newOrderCards = Object.entries(itemsByStatus).map(([status, items]: [string, any[]]) => {
             const kitchenStatus = status === 'PENDING' ? 'new' : status === 'READY' ? 'ready' : 'completed';
-            
+
             return {
               id: `${updatedInvoice.id}-${status}`,
               invoiceNumber: updatedInvoice.invoice_number || "N/A",
@@ -603,7 +604,7 @@ export default function KitchenDisplay() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-6">
             <DropdownMenu>
-               <DropdownMenuTrigger asChild>
+              <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="h-auto p-2 hover:bg-slate-50 flex items-center gap-4 rounded-2xl transition-all -ml-2 text-left">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0 shadow-sm">
                     <ChefHat className="h-6 w-6" />

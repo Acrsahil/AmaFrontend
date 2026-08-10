@@ -71,7 +71,7 @@ export default function CounterOrders() {
     const [showReceipt, setShowReceipt] = useState(false);
     const [autoPrint, setAutoPrint] = useState(false);
     const [showChangePassword, setShowChangePassword] = useState(false);
-    const [currentUser, setCurrentUser] = useState<any>(null);
+    const [currentUser, setCurrentUser] = useState<any>(() => getCurrentUser());
     const [isUpdatingItem, setIsUpdatingItem] = useState(false);
     const [showAddItemsModal, setShowAddItemsModal] = useState(false);
     const [showTransferTableModal, setShowTransferTableModal] = useState(false);
@@ -311,7 +311,8 @@ export default function CounterOrders() {
         useCallback(() => {
             if (wsRefreshTimerRef.current) clearTimeout(wsRefreshTimerRef.current);
             wsRefreshTimerRef.current = setTimeout(() => loadInvoices(1, true), 500);
-        }, [loadInvoices])
+        }, [loadInvoices]),
+        currentUser?.branch_id
     );
 
     useEffect(() => {
@@ -1019,10 +1020,10 @@ export default function CounterOrders() {
                                                             <span className={cn(
                                                                 "text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider",
                                                                 payment.payment_method === "CASH" ? "bg-green-100 text-green-700" :
-                                                                payment.payment_method === "QR" ? "bg-blue-100 text-blue-700" :
-                                                                payment.payment_method === "ONLINE" ? "bg-purple-100 text-purple-700" :
-                                                                payment.payment_method === "CARD" ? "bg-amber-100 text-amber-700" :
-                                                                "bg-slate-100 text-slate-700"
+                                                                    payment.payment_method === "QR" ? "bg-blue-100 text-blue-700" :
+                                                                        payment.payment_method === "ONLINE" ? "bg-purple-100 text-purple-700" :
+                                                                            payment.payment_method === "CARD" ? "bg-amber-100 text-amber-700" :
+                                                                                "bg-slate-100 text-slate-700"
                                                             )}>
                                                                 {payment.payment_method}
                                                             </span>

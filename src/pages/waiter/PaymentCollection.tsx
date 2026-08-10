@@ -91,6 +91,7 @@ export default function PaymentCollection() {
 
 
   // WebSocket: auto-refresh when invoice created or status updated
+  const wsCurrentUser = getCurrentUser();
   useOrdersWebSocket(
     useCallback(
       (data) => {
@@ -102,7 +103,8 @@ export default function PaymentCollection() {
         }
       },
       [loadInvoices]
-    )
+    ),
+    wsCurrentUser?.branch_id
   );
 
   const handlePaymentClick = (order: any) => {
@@ -339,36 +341,36 @@ export default function PaymentCollection() {
   // Search functionality
   const filterOrdersBySearch = (ordersList: any[]) => {
     if (!searchQuery.trim()) return ordersList;
-    
+
     const query = searchQuery.toLowerCase().trim();
-    
+
     return ordersList.filter(order => {
       // Search by invoice number
       const invoiceMatch = order.invoice_number?.toLowerCase().includes(query);
-      
+
       // Search by customer name
       const customerMatch = order.customer_name?.toLowerCase().includes(query);
-      
+
       // Search by customer phone (if available)
-      const phoneMatch = order.customer_phone?.toLowerCase().includes(query) || 
-                        order.customer?.phone?.toLowerCase().includes(query);
-      
+      const phoneMatch = order.customer_phone?.toLowerCase().includes(query) ||
+        order.customer?.phone?.toLowerCase().includes(query);
+
       // Search by product names
-      const productMatch = order.items?.some((item: any) => 
+      const productMatch = order.items?.some((item: any) =>
         item.product_name?.toLowerCase().includes(query) ||
         item.product?.name?.toLowerCase().includes(query)
       );
-      
+
       // Search by table number
       const tableMatch = order.table_no?.toString().includes(query);
-      
+
       return invoiceMatch || customerMatch || phoneMatch || productMatch || tableMatch;
     });
   };
 
   const pendingOrdersList = orders.filter(o => !(o.payment_status === 'PAID' || o.payment_status === 'WAITER RECEIVED' || (o.payment_status === 'PARTIAL' && o.received_by_waiter)));
   const completedOrdersList = orders.filter(o => o.payment_status === 'PAID' || o.payment_status === 'WAITER RECEIVED' || (o.payment_status === 'PARTIAL' && o.received_by_waiter));
-  
+
   // Apply search filter
   const filteredPendingOrders = filterOrdersBySearch(pendingOrdersList);
   const filteredCompletedOrders = filterOrdersBySearch(completedOrdersList);

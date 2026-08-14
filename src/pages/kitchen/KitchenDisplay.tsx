@@ -168,6 +168,8 @@ export default function KitchenDisplay() {
 
       const productData = productsResponse?.results || (Array.isArray(productsResponse) ? productsResponse : []);
 
+      setProducts(productData);
+      setCategories(categoryData || []);
       setFloors(floorData || []);
 
       const basicInvoices = invoiceRes.results || invoiceRes;
@@ -360,10 +362,37 @@ export default function KitchenDisplay() {
         return;
       }
 
+      const isActive = updatedInvoice.is_active;
+      const hasValidStatus = updatedInvoice.invoice_status === 'PENDING' || updatedInvoice.invoice_status === 'READY' || updatedInvoice.invoice_status === 'COMPLETED';
+
       const currentUser = getCurrentUser();
       const kitchenTypeId = currentUser?.kitchentype_id;
 
-      const productData = products.length > 0 ? products : [];
+      // Defensive checks: fetch fallback products/categories if empty to avoid websocket load race conditions
+      let productData = products;
+      if (productData.length === 0) {
+        console.log("[handleInvoiceUpdate] Products list was empty! Fetching products...");
+        try {
+          const fetched = await fetchProducts({ page_size: 1000 });
+          productData = fetched?.results || (Array.isArray(fetched) ? fetched : []);
+          setProducts(productData);
+        } catch (err) {
+          console.error("[handleInvoiceUpdate] Failed to fetch fallback products list:", err);
+        }
+      }
+
+      let categoriesData = categories;
+      if (categoriesData.length === 0) {
+        console.log("[handleInvoiceUpdate] Categories list was empty! Fetching categories...");
+        try {
+          const fetched = await fetchCategories();
+          categoriesData = fetched || [];
+          setCategories(categoriesData);
+        } catch (err) {
+          console.error("[handleInvoiceUpdate] Failed to fetch fallback categories:", err);
+        }
+      }
+
       const productsMap = productData.reduce((acc: any, p: any) => {
         if (p && p.id) acc[String(p.id)] = p;
         return acc;
@@ -391,10 +420,6 @@ export default function KitchenDisplay() {
           };
         });
 
-      const kitchenStatus = kitchenTypeId
-        ? deriveKitchenOrderStatus(items)
-        : mapInvoiceStatusToKitchenStatus(updatedInvoice.invoice_status);
-
       // Group items by status and create separate order cards for each status
       const itemsByStatus = items.reduce((acc: any, item: any) => {
         const status = (item.status || 'PENDING').toUpperCase();
@@ -405,26 +430,28 @@ export default function KitchenDisplay() {
         return acc;
       }, {});
 
-      // Create new order cards for each status group
-      const newOrderCards = Object.entries(itemsByStatus).map(([status, statusItems]: [string, any[]]) => {
-        const kitchenStatus = status === 'PENDING' ? 'new' : status === 'READY' ? 'ready' : 'completed';
+      // Create new order cards for each status group only if active and status is eligible
+      const newOrderCards = (isActive && hasValidStatus)
+        ? Object.entries(itemsByStatus).map(([status, statusItems]: [string, any[]]) => {
+          const kitchenStatus = status === 'PENDING' ? 'new' : status === 'READY' ? 'ready' : 'completed';
 
-        return {
-          id: `${updatedInvoice.id}-${status}`,
-          invoiceNumber: updatedInvoice.invoice_number || "N/A",
-          invoiceId: updatedInvoice.id,
-          tableNumber,
-          waiter: updatedInvoice.created_by_name || "Unknown",
-          floor: updatedInvoice.floor,
-          floorName: updatedInvoice.floor_name,
-          status: kitchenStatus,
-          total: parseFloat(updatedInvoice.total_amount || "0"),
-          notes: updatedInvoice.notes || (updatedInvoice.description?.includes('| NOTE:') ? updatedInvoice.description.split('| NOTE:')[1].trim() : ""),
-          items: statusItems,
-          createdAt: updatedInvoice.created_at,
-          itemStatus: status
-        };
-      });
+          return {
+            id: `${updatedInvoice.id}-${status}`,
+            invoiceNumber: updatedInvoice.invoice_number || "N/A",
+            invoiceId: updatedInvoice.id,
+            tableNumber,
+            waiter: updatedInvoice.created_by_name || "Unknown",
+            floor: updatedInvoice.floor,
+            floorName: updatedInvoice.floor_name,
+            status: kitchenStatus,
+            total: parseFloat(updatedInvoice.total_amount || "0"),
+            notes: updatedInvoice.notes || (updatedInvoice.description?.includes('| NOTE:') ? updatedInvoice.description.split('| NOTE:')[1].trim() : ""),
+            items: statusItems,
+            createdAt: updatedInvoice.created_at,
+            itemStatus: status
+          };
+        })
+        : [];
 
       setOrders((prevOrders) => {
         // Remove ALL existing cards for this invoice (all status groups)

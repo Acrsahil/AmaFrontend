@@ -614,8 +614,8 @@ export async function patchInvoice(id, payload) {
     const errorMsg = data?.error || data?.message || (Array.isArray(data?.errors) ? data.errors.join("; ") : data?.errors) || "Failed to patch invoice";
     throw new Error(errorMsg);
   }
-  // Backend returns the invoice object directly, not nested under data
-  return data;
+  // Backend returns { success: True, data: {...invoice...} }
+  return data.data || data;
 }
 
 export async function updateInvoiceStatus(id, status, extraData = {}) {

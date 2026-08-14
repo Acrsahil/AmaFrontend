@@ -588,10 +588,25 @@ export default function KitchenDisplay() {
         });
       }
 
+      // Disable WebSocket merge temporarily to prevent stale data from overwriting our update
+      // The WebSocket will fire with old data, but we'll ignore it and do a clean reload
+      isManualReloadRef.current = true;
+
+      // Wait a bit to ensure the API call completes and WebSocket event arrives
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      // Force a complete reload to get the true state from the server
       await loadData();
+
+      // Keep flag true for a bit longer to ensure WebSocket doesn't merge stale data
+      // WebSocket has 500ms delay, so we need to keep it disabled for at least that long
+      setTimeout(() => {
+        isManualReloadRef.current = false;
+      }, 1500);
     } catch (err: any) {
       console.error("Status update error:", err);
       toast.error(err.message || "Failed to update order status");
+      isManualReloadRef.current = false;
     }
   };
 

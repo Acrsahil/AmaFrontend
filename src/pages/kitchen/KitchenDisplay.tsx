@@ -34,6 +34,28 @@ import { ChangePasswordModal } from "@/components/auth/ChangePasswordModal";
 import { fetchInvoices, fetchProducts, fetchCategories, updateInvoiceStatus, updateInvoiceItemStatus, fetchTables, fetchInvoiceDetail } from "../../api/index.js";
 import { useOrdersWebSocket } from "@/hooks/useOrdersWebSocket";
 
+// Play the notification bell sound when a new order arrives or an order is updated
+const notificationAudioRef: { current: HTMLAudioElement | null } = { current: null };
+
+function playNotificationSound() {
+  try {
+    // Lazily create the audio element so it works across re-renders
+    if (!notificationAudioRef.current) {
+      notificationAudioRef.current = new Audio("/noti.mp3");
+      notificationAudioRef.current.preload = "auto";
+    }
+
+    // Reset to start so rapid notifications still ring
+    const audio = notificationAudioRef.current;
+    audio.currentTime = 0;
+    audio.play().catch((err) => {
+      console.warn("[Notification] Failed to play sound:", err);
+    });
+  } catch (err) {
+    console.warn("[Notification] Error playing sound:", err);
+  }
+}
+
 /** Derive kanban column from this kitchen's item statuses (matches backend item-wise logic). */
 function deriveKitchenOrderStatus(items: { status?: string }[]): 'new' | 'ready' | 'completed' {
   if (!items?.length) return 'completed';
@@ -93,6 +115,8 @@ export default function KitchenDisplay() {
       }
 
       if (data.type === "invoice_created") {
+        // Ring the bell for a new order
+        playNotificationSound();
         toast.success("New Order Received!", {
           description: "A new order has been placed",
           icon: <Bell className="h-5 w-5 text-primary" />,
@@ -100,6 +124,8 @@ export default function KitchenDisplay() {
         console.log("[WS] Calling loadData for invoice_created");
         loadDataRef.current?.();
       } else if (data.type === "invoice_updated") {
+        // Ring the bell when an order is updated in the kitchen
+        playNotificationSound();
         // If invoice_id is provided, update that specific invoice
         if (data.invoice_id) {
           console.log("[WS] Updating specific invoice:", data.invoice_id);

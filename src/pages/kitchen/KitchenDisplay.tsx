@@ -32,7 +32,7 @@ import { toast } from "sonner";
 import { getCurrentUser, logout } from "../../auth/auth";
 import { ChangePasswordModal } from "@/components/auth/ChangePasswordModal";
 import { fetchInvoices, fetchProducts, fetchCategories, updateInvoiceStatus, updateInvoiceItemStatus, fetchTables, fetchInvoiceDetail } from "../../api/index.js";
-import { useOrdersWebSocket } from "@/hooks/useOrdersWebSocket";
+import { useKitchenWebSocket } from "@/hooks/useKitchenWebSocket";
 
 // Play the notification bell sound when a new order arrives or an order is updated
 const notificationAudioRef: { current: HTMLAudioElement | null } = { current: null };
@@ -104,7 +104,7 @@ export default function KitchenDisplay() {
 
   const handleWebSocketMessage = useCallback((data: any) => {
     if (wsRefreshTimerRef.current) clearTimeout(wsRefreshTimerRef.current);
-    wsRefreshTimerRef.current = setTimeout(() => {
+    wsRefreshTimerRef.current = setTimeout(async () => {
       console.log("[WS] Message received:", data.type, data.invoice_id);
 
       // Skip WebSocket merge if we're in the middle of a manual reload
@@ -114,49 +114,91 @@ export default function KitchenDisplay() {
         return;
       }
 
-      if (data.type === "invoice_created") {
-        // Ring the bell for a new order
-        playNotificationSound();
-        toast.success("New Order Received!", {
-          description: "A new order has been placed",
-          icon: <Bell className="h-5 w-5 text-primary" />,
-        });
-        console.log("[WS] Calling loadData for invoice_created");
-        loadDataRef.current?.();
-      } else if (data.type === "invoice_updated") {
-        // Ring the bell when an order is updated in the kitchen
-        playNotificationSound();
-        // If invoice_id is provided, update that specific invoice
-        if (data.invoice_id) {
-          console.log("[WS] Updating specific invoice:", data.invoice_id);
-          console.log("[WS] handleInvoiceUpdateRef exists:", !!handleInvoiceUpdateRef.current);
-          // Intelligently merge updates instead of full reload
+      if (data.invoice_id) {
+        try {
+          // Fetch the invoice details to check items and their kitchen types
+          const updatedInvoice = await fetchInvoiceDetail(data.invoice_id);
+          if (!updatedInvoice) {
+            console.log("[WS] Invoice details not found, skipping.");
+            return;
+          }
+
+          // Filter out null/undefined items (e.g. ones stripped by the backend serializer for this kitchen type)
+          const relevantItems = (updatedInvoice.items || []).filter(Boolean);
+
+          const currentUser = getCurrentUser();
+          const userKitchenId = currentUser?.kitchentype_id;
+
+          // If the user is a restricted kitchen, decide if they should be notified
+          if (userKitchenId) {
+            const hasItemsForMyKitchen = relevantItems.length > 0;
+            const isCurrentlyDisplayed = orders.some(o => o.invoiceId === Number(data.invoice_id) || o.invoiceId === String(data.invoice_id));
+
+            // If it has NO items for our kitchen, and it is NOT currently displayed, ignore it completely
+            if (!hasItemsForMyKitchen && !isCurrentlyDisplayed) {
+              console.log(`[WS] Invoice ${data.invoice_id} has no items for kitchen ${userKitchenId} and is not displayed. Ignoring.`);
+              return;
+            }
+
+            // Decide to ring and notify only if there are items for our kitchen
+            if (hasItemsForMyKitchen) {
+              // If it's a completely new order for this kitchen (not currently displayed on screen)
+              if (!isCurrentlyDisplayed) {
+                playNotificationSound();
+                toast.success("New Order Received!", {
+                  description: `Order #${updatedInvoice.invoice_number || updatedInvoice.id} has been placed`,
+                  icon: <Bell className="h-5 w-5 text-primary" />,
+                });
+              } else {
+                // If it is already displayed, play sound for items modification update
+                playNotificationSound();
+              }
+            }
+          } else {
+            // General admin / manager user who sees everything
+            playNotificationSound();
+            if (data.type === "invoice_created") {
+              toast.success("New Order Received!", {
+                description: `Order #${updatedInvoice.invoice_number || updatedInvoice.id} has been placed`,
+                icon: <Bell className="h-5 w-5 text-primary" />,
+              });
+            }
+          }
+
+          // Process the update / insert into state
+          console.log("[WS] Merging invoice updates:", data.invoice_id);
           if (handleInvoiceUpdateRef.current) {
-            console.log("[WS] Calling handleInvoiceUpdate");
             handleInvoiceUpdateRef.current(data.invoice_id);
           } else {
-            console.log("[WS] handleInvoiceUpdateRef is null, falling back to loadData");
             loadDataRef.current?.();
           }
-        } else {
-          // No specific invoice_id means a general update (e.g., product stock changed)
-          // Reload all data to reflect product name/availability changes
-          console.log("[WS] General update detected (possibly product change), reloading data");
+          return;
+        } catch (error) {
+          console.error("[WS] Error processing invoice details:", error);
+          // Fallback: just load data normally
           loadDataRef.current?.();
+          return;
         }
       }
+
+      // Fallback for general updates without invoice_id
+      if (data.type === "invoice_updated") {
+        console.log("[WS] General update received, reloading...");
+        loadDataRef.current?.();
+      }
     }, 500);
-  }, []);
+  }, [orders]);
 
   // Get current user and branch
   const user = getCurrentUser();
   const userName = user?.username || "Chef";
   const branchName = user?.branch_name || "Ama Bakery";
 
-  // Initialize WebSocket connection with branch_id
-  const { isConnected: kitchenWsConnected, disconnect: disconnectWebSocket } = useOrdersWebSocket(
+  // Initialize WebSocket connection with branch_id and kitchentype_id
+  const { isConnected: kitchenWsConnected, disconnect: disconnectWebSocket } = useKitchenWebSocket(
     handleWebSocketMessage,
-    user?.branch_id
+    user?.branch_id,
+    user?.kitchentype_id
   );
 
   useEffect(() => {

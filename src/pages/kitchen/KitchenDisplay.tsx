@@ -150,8 +150,42 @@ export default function KitchenDisplay() {
                   icon: <Bell className="h-5 w-5 text-primary" />,
                 });
               } else {
-                // If it is already displayed, play sound for items modification update
-                playNotificationSound();
+                // If it is already displayed on our kitchen screen, check if any of our items actually changed
+                const existingOrderCards = orders.filter(
+                  o => String(o.invoiceId) === String(data.invoice_id)
+                );
+                const existingKitchenItems = existingOrderCards.flatMap(o => o.items || []);
+
+                let itemsChanged = false;
+                if (relevantItems.length !== existingKitchenItems.length) {
+                  itemsChanged = true;
+                } else {
+                  for (const newItem of relevantItems) {
+                    const existingItem = existingKitchenItems.find(
+                      (ei: any) => Number(ei.id) === Number(newItem.id)
+                    );
+                    if (!existingItem) {
+                      itemsChanged = true;
+                      break;
+                    }
+                    const newStatus = (newItem.status || 'PENDING').toUpperCase();
+                    const existingStatus = (existingItem.status || 'PENDING').toUpperCase();
+                    if (
+                      Number(existingItem.quantity) !== Number(newItem.quantity) ||
+                      existingStatus !== newStatus
+                    ) {
+                      itemsChanged = true;
+                      break;
+                    }
+                  }
+                }
+
+                if (itemsChanged) {
+                  console.log(`[WS] Items changed for kitchen ${userKitchenId}. Playing bell sound.`);
+                  playNotificationSound();
+                } else {
+                  console.log(`[WS] Items unchanged for kitchen ${userKitchenId}. Skipping bell sound.`);
+                }
               }
             }
           } else {

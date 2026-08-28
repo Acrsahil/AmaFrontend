@@ -165,7 +165,7 @@ export default function AdminMenu() {
             if (branchId) params.branch = branchId;
 
             const data = await fetchProducts(params);
-            
+
             let results = [];
             let nextUrl = null;
             let count = 0;
@@ -188,7 +188,7 @@ export default function AdminMenu() {
             } else {
                 setProducts(prev => [...prev, ...scoped]);
             }
-            
+
             setHasMore(!!nextUrl);
             setTotalCount(count);
             if (!isReset) setPage(pageNumber);
@@ -306,15 +306,13 @@ export default function AdminMenu() {
 
     const handleAddCategory = async () => {
         if (newCategoryInput.trim()) {
-            if (!selectedKitchenId) {
-                toast.error("Please select a kitchen for this category");
-                return;
-            }
             try {
                 const categoryPayload: any = {
-                    name: newCategoryInput.trim(),
-                    kitchentype: selectedKitchenId
+                    name: newCategoryInput.trim()
                 };
+                if (selectedKitchenId) {
+                    categoryPayload.kitchentype = selectedKitchenId;
+                }
                 if (branchId) {
                     categoryPayload.branch = branchId;
                 }
@@ -333,8 +331,10 @@ export default function AdminMenu() {
     const handleUpdateCategory = async (id: number) => {
         if (!editingCategoryName.trim()) return;
         try {
-            const payload: any = { name: editingCategoryName.trim() };
-            if (selectedKitchenId) payload.kitchentype = selectedKitchenId;
+            const payload: any = {
+                name: editingCategoryName.trim(),
+                kitchentype: selectedKitchenId || null
+            };
 
             const response = await updateCategory(id, payload);
             setCategories(prev => prev.map(c => c.id === id ? response.data : c));
@@ -466,7 +466,7 @@ export default function AdminMenu() {
                         }
                     }
                 }
-                
+
                 // Get latest kitchens for mapping
                 const kits = await fetchKitchenTypes();
                 const latestKits = branchId ? kits.filter((k: any) => k.branch === branchId) : kits;
@@ -502,7 +502,7 @@ export default function AdminMenu() {
                             const price = row["Selling Price"] || row.selling_price || "0.00";
                             const catName = row.Category || row.category;
                             const available = row.Available === "Yes" || row.available === true;
-                            
+
                             const category = latestCats.find((c: any) => c.name.toLowerCase() === (catName || "").toLowerCase());
                             if (category) {
                                 const payload: any = {
@@ -522,7 +522,8 @@ export default function AdminMenu() {
                 }
 
                 toast.success("Import completed successfully!");
-                await loadData();
+                await loadMetadata();
+                await loadProducts(1, true);
                 setIsImportDialogOpen(false);
                 setImportFile(null);
             } catch (err) {
@@ -611,15 +612,15 @@ export default function AdminMenu() {
                                 </DialogHeader>
                                 <div className="mt-6 space-y-4">
                                     <p className="text-slate-600 font-medium">Upload an XLSX file to bulk add Kitchens, Categories, and Products.</p>
-                                    
+
                                     <div className={cn(
                                         "relative border-2 border-dashed rounded-2xl p-8 transition-all flex flex-col items-center justify-center gap-3",
                                         importFile ? "border-primary bg-primary/5" : "border-slate-200 hover:border-primary/50 hover:bg-slate-50"
                                     )}>
-                                        <input 
-                                            type="file" 
-                                            accept=".xlsx, .xls" 
-                                            className="absolute inset-0 opacity-0 cursor-pointer" 
+                                        <input
+                                            type="file"
+                                            accept=".xlsx, .xls"
+                                            className="absolute inset-0 opacity-0 cursor-pointer"
                                             onChange={(e) => setImportFile(e.target.files?.[0] || null)}
                                         />
                                         {importFile ? (
@@ -649,8 +650,8 @@ export default function AdminMenu() {
                                 </div>
                                 <div className="mt-8 flex flex-col sm:flex-row gap-3">
                                     <Button variant="ghost" className="flex-1 rounded-xl h-10 sm:h-12 font-bold uppercase tracking-widest text-[10px] sm:text-xs" onClick={() => { setIsImportDialogOpen(false); setImportFile(null); }}>Cancel</Button>
-                                    <Button 
-                                        className="flex-1 rounded-xl h-10 sm:h-12 font-black uppercase tracking-widest text-[10px] sm:text-xs shadow-lg shadow-primary/20" 
+                                    <Button
+                                        className="flex-1 rounded-xl h-10 sm:h-12 font-black uppercase tracking-widest text-[10px] sm:text-xs shadow-lg shadow-primary/20"
                                         onClick={handleImportXLSX}
                                         disabled={!importFile || importLoading}
                                     >
@@ -690,18 +691,18 @@ export default function AdminMenu() {
                                     </div>
                                     <div className="space-y-2">
                                         <Label htmlFor="selling_price" className="text-[10px] font-black uppercase tracking-widest text-slate-400 pl-1">Selling Value (Rs.)</Label>
-                                        <Input 
-                                            id="selling_price" 
-                                            name="selling_price" 
-                                            className="h-11 sm:h-14 text-xl sm:text-2xl font-black rounded-2xl bg-white/50 backdrop-blur-sm border-2 border-slate-100 focus:border-primary transition-all text-primary shadow-inner" 
-                                            type="text" 
+                                        <Input
+                                            id="selling_price"
+                                            name="selling_price"
+                                            className="h-11 sm:h-14 text-xl sm:text-2xl font-black rounded-2xl bg-white/50 backdrop-blur-sm border-2 border-slate-100 focus:border-primary transition-all text-primary shadow-inner"
+                                            type="text"
                                             inputMode="decimal"
-                                            placeholder="0.00" 
-                                            defaultValue={editItem?.selling_price} 
+                                            placeholder="0.00"
+                                            defaultValue={editItem?.selling_price}
                                             onInput={(e: any) => {
                                                 e.target.value = e.target.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
                                             }}
-                                            required 
+                                            required
                                         />
                                     </div>
                                     <div className="grid grid-cols-2 gap-6 items-end">
@@ -749,7 +750,7 @@ export default function AdminMenu() {
                                                                         <span>{cat.name}</span>
                                                                         <span className="text-[10px] text-slate-400 font-black uppercase tracking-tight flex items-center gap-1.5 mt-0.5">
                                                                             <CookingPot className="h-3 w-3" />
-                                                                            {cat.kitchentype_name}
+                                                                            {cat.kitchentype_name || "No Kitchen"}
                                                                         </span>
                                                                     </div>
                                                                     {selectedCategoryId === cat.id && <CheckCircle2 className="h-5 w-5 text-primary" />}
@@ -826,15 +827,13 @@ export default function AdminMenu() {
                                                                     type="button"
                                                                     className="w-full h-11 rounded-xl font-black text-[10px] uppercase shadow-lg shadow-primary/10 active:scale-95 transition-all"
                                                                     onClick={async () => {
-                                                                        if (!selectedKitchenId) {
-                                                                            toast.error("Please select or create a kitchen for the new category");
-                                                                            return;
-                                                                        }
                                                                         try {
                                                                             const catPayload: any = {
-                                                                                name: catSearchValue.trim(),
-                                                                                kitchentype: selectedKitchenId
+                                                                                name: catSearchValue.trim()
                                                                             };
+                                                                            if (selectedKitchenId) {
+                                                                                catPayload.kitchentype = selectedKitchenId;
+                                                                            }
                                                                             if (branchId) {
                                                                                 catPayload.branch = branchId;
                                                                             }
@@ -844,7 +843,11 @@ export default function AdminMenu() {
                                                                             setSelectedCategoryId(newCat.id);
                                                                             setCatSearchValue(newCat.name);
                                                                             setIsCatDropdownOpen(false);
-                                                                            toast.success(`Category "${newCat.name}" added to ${newCat.kitchentype_name}`);
+                                                                            if (newCat.kitchentype_name) {
+                                                                                toast.success(`Category "${newCat.name}" added to ${newCat.kitchentype_name}`);
+                                                                            } else {
+                                                                                toast.success(`Category "${newCat.name}" created`);
+                                                                            }
                                                                         } catch (err: any) {
                                                                             toast.error(err.message || "Failed to add category");
                                                                         }
@@ -1163,7 +1166,7 @@ export default function AdminMenu() {
                                                             <h4 className="font-bold text-slate-800 text-lg">{cat.name}</h4>
                                                             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1">
                                                                 <CookingPot className="h-2.5 w-2.5" />
-                                                                {cat.kitchentype_name}
+                                                                {cat.kitchentype_name || "No Kitchen"}
                                                             </p>
                                                         </>
                                                     )}

@@ -86,16 +86,52 @@ export default function OrderStatus() {
     useCallback(
       (data) => {
         if (data.type === "invoice_updated" && data.status === "READY") {
-          // Order is ready
-          toast.success("A kitchen order is ready for pickup!", {
-            icon: <ChefHat className="h-5 w-5 text-success" />
-          });
-          loadData();
+          fetchInvoiceDetail(data.invoice_id)
+            .then((order) => {
+              if (order && String(order.created_by) === String(currentUser?.id)) {
+                const tableMatch = (order?.description || order?.invoice_description || "").match(/Table (\d+)/);
+                const tableNo = order?.table_no || (tableMatch ? tableMatch[1] : "");
+                const tableText = tableNo ? `Table ${tableNo}` : "Takeaway";
+
+                // Play the bell sound
+                try {
+                  const audio = new Audio("/noti.mp3");
+                  audio.play().catch((err) => console.log("Audio play deferred:", err));
+                } catch (e) {
+                  console.warn("Audio play failed:", e);
+                }
+
+                // Speak order ready
+                setTimeout(() => {
+                  try {
+                    if ("speechSynthesis" in window) {
+                      window.speechSynthesis.cancel();
+                      const utterance = new SpeechSynthesisUtterance(`Order for ${tableText} is ready to pickup`);
+                      utterance.rate = 0.95;
+                      window.speechSynthesis.speak(utterance);
+                    }
+                  } catch (e) {
+                    console.warn("Speech synthesis failed:", e);
+                  }
+                }, 850);
+
+                toast.success(`Order for ${tableText} is ready for pickup!`, {
+                  icon: <Bell className="h-5 w-5 text-success animate-bounce" />,
+                  duration: 6000,
+                });
+              }
+            })
+            .catch((err) => {
+              console.error("Failed to fetch order detail on WS notify:", err);
+            })
+            .finally(() => {
+              loadData();
+            });
         } else if (data.type === "invoice_created" || data.type === "invoice_updated") {
           loadData();
         }
       },
-      [loadData]
+      [loadData, currentUser?.id]
     ),
     currentUser?.branch_id
   );
@@ -449,14 +485,14 @@ function OrderCard({
     <div
       className={cn(
         "card-elevated overflow-hidden transition-all",
-        isReady && "ring-2 ring-success/50 shadow-lg shadow-success/10",
+        isReady && "border-2 border-emerald-500 bg-emerald-50/80 shadow-lg shadow-emerald-100/80 ring-2 ring-emerald-400/20",
         isPaid && "opacity-75"
       )}
     >
       {/* Header */}
       <div className={cn(
         "px-4 py-2.5 flex items-center justify-between border-b border-slate-100",
-        isReady && "bg-success/5",
+        isReady && "bg-emerald-100/90 text-emerald-950 border-emerald-250",
         isPaid && "bg-slate-50"
       )}>
         <div className="flex items-center gap-2">

@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { WaiterBottomNav } from "@/components/waiter/WaiterBottomNav";
-import { CreditCard, Banknote, CheckCircle2, IndianRupee, Printer, Clock, X, Loader2, Wallet, QrCode, ChevronDown, ChevronUp, User, Receipt, Edit, Search } from "lucide-react";
+import { CreditCard, Banknote, CheckCircle2, IndianRupee, Printer, Clock, X, Loader2, Wallet, QrCode, ChevronDown, ChevronUp, User, Receipt, Edit, Search, Bell } from "lucide-react";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
@@ -96,13 +96,52 @@ export default function PaymentCollection() {
     useCallback(
       (data) => {
         if (data.type === "invoice_updated" && data.status === "READY") {
-          // Order ready - refresh list
-          loadInvoices();
+          fetchInvoiceDetail(data.invoice_id)
+            .then((order) => {
+              if (order && String(order.created_by) === String(wsCurrentUser?.id)) {
+                const tableMatch = (order?.description || order?.invoice_description || "").match(/Table (\d+)/);
+                const tableNo = order?.table_no || (tableMatch ? tableMatch[1] : "");
+                const tableText = tableNo ? `Table ${tableNo}` : "Takeaway";
+
+                // Play the bell sound
+                try {
+                  const audio = new Audio("/noti.mp3");
+                  audio.play().catch((err) => console.log("Audio play deferred:", err));
+                } catch (e) {
+                  console.warn("Audio play failed:", e);
+                }
+
+                // Speak order ready
+                setTimeout(() => {
+                  try {
+                    if ("speechSynthesis" in window) {
+                      window.speechSynthesis.cancel();
+                      const utterance = new SpeechSynthesisUtterance(`Order for ${tableText} is ready to pickup`);
+                      utterance.rate = 0.95;
+                      window.speechSynthesis.speak(utterance);
+                    }
+                  } catch (e) {
+                    console.warn("Speech synthesis failed:", e);
+                  }
+                }, 850);
+
+                toast.success(`Order for ${tableText} is ready for pickup!`, {
+                  icon: <Bell className="h-5 w-5 text-success animate-bounce" />,
+                  duration: 6000,
+                });
+              }
+            })
+            .catch((err) => {
+              console.error("Failed to fetch order detail on WS notify:", err);
+            })
+            .finally(() => {
+              loadInvoices();
+            });
         } else if (data.type === "invoice_created" || data.type === "invoice_updated") {
           loadInvoices();
         }
       },
-      [loadInvoices]
+      [loadInvoices, wsCurrentUser?.id]
     ),
     wsCurrentUser?.branch_id
   );

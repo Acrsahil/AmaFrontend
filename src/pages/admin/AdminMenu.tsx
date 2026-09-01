@@ -2,11 +2,13 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+
 import {
     Plus,
     Search,
@@ -70,7 +72,9 @@ interface BackendCategory {
     branch_name: string;
     kitchentype: number;
     kitchentype_name: string;
+    is_kitchen_item: boolean;
 }
+
 
 export default function AdminMenu() {
     const user = getCurrentUser();
@@ -89,6 +93,8 @@ export default function AdminMenu() {
     const [newCategoryInput, setNewCategoryInput] = useState("");
     const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
     const [editingCategoryName, setEditingCategoryName] = useState("");
+    const [newCategoryIsKitchenItem, setNewCategoryIsKitchenItem] = useState(true);
+    const [editingCategoryIsKitchenItem, setEditingCategoryIsKitchenItem] = useState(true);
     const [formAvailable, setFormAvailable] = useState(true);
     const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
     const [isCatDropdownOpen, setIsCatDropdownOpen] = useState(false);
@@ -308,7 +314,8 @@ export default function AdminMenu() {
         if (newCategoryInput.trim()) {
             try {
                 const categoryPayload: any = {
-                    name: newCategoryInput.trim()
+                    name: newCategoryInput.trim(),
+                    is_kitchen_item: newCategoryIsKitchenItem
                 };
                 if (selectedKitchenId) {
                     categoryPayload.kitchentype = selectedKitchenId;
@@ -319,6 +326,7 @@ export default function AdminMenu() {
                 const response = await createCategory(categoryPayload);
                 setCategories(prev => [...prev, response.data].sort((a, b) => a.name.localeCompare(b.name)));
                 setNewCategoryInput("");
+                setNewCategoryIsKitchenItem(true);
                 setSelectedKitchenId(null);
                 setKitchenSearchValue("");
                 toast.success(response.message || "Category added");
@@ -333,13 +341,15 @@ export default function AdminMenu() {
         try {
             const payload: any = {
                 name: editingCategoryName.trim(),
-                kitchentype: selectedKitchenId || null
+                kitchentype: selectedKitchenId || null,
+                is_kitchen_item: editingCategoryIsKitchenItem
             };
 
             const response = await updateCategory(id, payload);
             setCategories(prev => prev.map(c => c.id === id ? response.data : c));
             setEditingCategoryId(null);
             setSelectedKitchenId(null);
+            setEditingCategoryIsKitchenItem(true);
             toast.success(response.message || "Category updated");
         } catch (err: any) {
             toast.error(err.message || "Failed to update category");
@@ -1135,6 +1145,20 @@ export default function AdminMenu() {
                                         Add Category
                                     </Button>
                                 </div>
+                                <div className="md:col-span-12 flex items-center gap-4 mt-2">
+                                    <Checkbox
+                                        id="newCategoryIsKitchenItem"
+                                        checked={newCategoryIsKitchenItem}
+                                        onCheckedChange={(checked) => setNewCategoryIsKitchenItem(checked === true)}
+                                        className="h-6 w-6 border-2 border-slate-300 data-[state=checked]:border-primary data-[state=checked]:bg-primary rounded-md"
+                                    />
+                                    <Label htmlFor="newCategoryIsKitchenItem" className="text-base font-black text-slate-700 cursor-pointer flex items-center gap-2">
+                                        <span>Mark as Kitchen Item</span>
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                                            {newCategoryIsKitchenItem ? "ON" : "OFF"}
+                                        </span>
+                                    </Label>
+                                </div>
                             </div>
                         </div>
 
@@ -1157,6 +1181,12 @@ export default function AdminMenu() {
                                                                 className="h-8 w-40 text-sm font-bold"
                                                                 autoFocus
                                                             />
+                                                            <Checkbox
+                                                                checked={editingCategoryIsKitchenItem}
+                                                                onCheckedChange={(checked) => setEditingCategoryIsKitchenItem(checked === true)}
+                                                                className="h-5 w-5 border-2 border-slate-300 data-[state=checked]:border-primary data-[state=checked]:bg-primary rounded-md"
+                                                                title="Kitchen Item"
+                                                            />
                                                             <Button size="sm" onClick={() => handleUpdateCategory(cat.id)} className="h-8 w-8 p-0">
                                                                 <Check className="h-4 w-4" />
                                                             </Button>
@@ -1168,6 +1198,12 @@ export default function AdminMenu() {
                                                                 <CookingPot className="h-2.5 w-2.5" />
                                                                 {cat.kitchentype_name || "No Kitchen"}
                                                             </p>
+                                                            {cat.is_kitchen_item && (
+                                                                <Badge className="mt-1 bg-primary/15 text-primary border border-primary/20 px-3 py-1 rounded-full font-black text-[10px] uppercase tracking-widest flex items-center gap-1">
+                                                                    <CookingPot className="h-3 w-3" />
+                                                                    Kitchen Item
+                                                                </Badge>
+                                                            )}
                                                         </>
                                                     )}
                                                 </div>
@@ -1181,6 +1217,7 @@ export default function AdminMenu() {
                                                         setEditingCategoryId(cat.id);
                                                         setEditingCategoryName(cat.name);
                                                         setSelectedKitchenId(cat.kitchentype);
+                                                        setEditingCategoryIsKitchenItem(cat.is_kitchen_item ?? true);
                                                     }}
                                                 >
                                                     <Pencil className="h-4 w-4" />

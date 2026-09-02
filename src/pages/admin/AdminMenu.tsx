@@ -30,7 +30,8 @@ import {
     ChevronDown,
     Download,
     Upload,
-    FileSpreadsheet
+    FileSpreadsheet,
+    X
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
@@ -106,6 +107,9 @@ export default function AdminMenu() {
     const [editingKitchenName, setEditingKitchenName] = useState("");
     const [kitchenSearchValue, setKitchenSearchValue] = useState("");
     const [isKitchenDropdownOpen, setIsKitchenDropdownOpen] = useState(false);
+    const [editingKitchenSearchValue, setEditingKitchenSearchValue] = useState("");
+    const [editingSelectedKitchenId, setEditingSelectedKitchenId] = useState<number | null>(null);
+    const [isEditingKitchenDropdownOpen, setIsEditingKitchenDropdownOpen] = useState(false);
     const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
     const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
     const [importFile, setImportFile] = useState<File | null>(null);
@@ -312,14 +316,16 @@ export default function AdminMenu() {
 
     const handleAddCategory = async () => {
         if (newCategoryInput.trim()) {
+            if (!selectedKitchenId) {
+                toast.error("Please select a kitchen type");
+                return;
+            }
             try {
                 const categoryPayload: any = {
                     name: newCategoryInput.trim(),
-                    is_kitchen_item: newCategoryIsKitchenItem
+                    is_kitchen_item: newCategoryIsKitchenItem,
+                    kitchentype: selectedKitchenId
                 };
-                if (selectedKitchenId) {
-                    categoryPayload.kitchentype = selectedKitchenId;
-                }
                 if (branchId) {
                     categoryPayload.branch = branchId;
                 }
@@ -338,22 +344,42 @@ export default function AdminMenu() {
 
     const handleUpdateCategory = async (id: number) => {
         if (!editingCategoryName.trim()) return;
+        if (!editingSelectedKitchenId) {
+            toast.error("Please select a kitchen type");
+            return;
+        }
         try {
             const payload: any = {
                 name: editingCategoryName.trim(),
-                kitchentype: selectedKitchenId || null,
+                kitchentype: editingSelectedKitchenId,
                 is_kitchen_item: editingCategoryIsKitchenItem
             };
 
             const response = await updateCategory(id, payload);
             setCategories(prev => prev.map(c => c.id === id ? response.data : c));
-            setEditingCategoryId(null);
-            setSelectedKitchenId(null);
-            setEditingCategoryIsKitchenItem(true);
+            cancelEditingCategory();
             toast.success(response.message || "Category updated");
         } catch (err: any) {
             toast.error(err.message || "Failed to update category");
         }
+    };
+
+    const startEditingCategory = (cat: BackendCategory) => {
+        setEditingCategoryId(cat.id);
+        setEditingCategoryName(cat.name);
+        setEditingSelectedKitchenId(cat.kitchentype ?? null);
+        setEditingKitchenSearchValue(cat.kitchentype_name || "");
+        setEditingCategoryIsKitchenItem(cat.is_kitchen_item ?? true);
+        setIsEditingKitchenDropdownOpen(false);
+    };
+
+    const cancelEditingCategory = () => {
+        setEditingCategoryId(null);
+        setEditingCategoryName("");
+        setEditingSelectedKitchenId(null);
+        setEditingKitchenSearchValue("");
+        setEditingCategoryIsKitchenItem(true);
+        setIsEditingKitchenDropdownOpen(false);
     };
 
     const handleDeleteCategory = async (catId: number, catName: string) => {
@@ -773,7 +799,7 @@ export default function AdminMenu() {
                                                                     <p className="text-[10px] font-black uppercase text-primary tracking-widest pl-1">Setup New Station Mapping</p>
                                                                     <div className="relative">
                                                                         <Input
-                                                                            placeholder="Target Kitchen..."
+                                                                            placeholder="Target Kitchen (required)..."
                                                                             value={kitchenSearchValue}
                                                                             onChange={(e) => {
                                                                                 setKitchenSearchValue(e.target.value);
@@ -835,15 +861,18 @@ export default function AdminMenu() {
                                                                 </div>
                                                                 <Button
                                                                     type="button"
+                                                                    disabled={!selectedKitchenId}
                                                                     className="w-full h-11 rounded-xl font-black text-[10px] uppercase shadow-lg shadow-primary/10 active:scale-95 transition-all"
                                                                     onClick={async () => {
+                                                                        if (!selectedKitchenId) {
+                                                                            toast.error("Please select a kitchen type");
+                                                                            return;
+                                                                        }
                                                                         try {
                                                                             const catPayload: any = {
-                                                                                name: catSearchValue.trim()
+                                                                                name: catSearchValue.trim(),
+                                                                                kitchentype: selectedKitchenId
                                                                             };
-                                                                            if (selectedKitchenId) {
-                                                                                catPayload.kitchentype = selectedKitchenId;
-                                                                            }
                                                                             if (branchId) {
                                                                                 catPayload.branch = branchId;
                                                                             }
@@ -1080,18 +1109,18 @@ export default function AdminMenu() {
                                 <div className="md:col-span-4 space-y-1.5 relative">
                                     <div className="relative">
                                         <Input
-                                            placeholder="Select Kitchen..."
-                                            value={kitchenSearchValue}
-                                            onChange={(e) => {
-                                                setKitchenSearchValue(e.target.value);
-                                                setIsKitchenDropdownOpen(true);
-                                                const match = kitchenTypes.find(k => k.name.toLowerCase() === e.target.value.toLowerCase());
-                                                if (match) setSelectedKitchenId(match.id);
-                                                else setSelectedKitchenId(null);
-                                            }}
-                                            onFocus={() => setIsKitchenDropdownOpen(true)}
-                                            className="h-11 sm:h-14 rounded-2xl bg-white border border-slate-200 focus:ring-2 focus:ring-primary/20 pr-12 font-bold text-slate-700"
-                                        />
+                                        placeholder="Select Kitchen (required)..."
+                                        value={kitchenSearchValue}
+                                        onChange={(e) => {
+                                            setKitchenSearchValue(e.target.value);
+                                            setIsKitchenDropdownOpen(true);
+                                            const match = kitchenTypes.find(k => k.name.toLowerCase() === e.target.value.toLowerCase());
+                                            if (match) setSelectedKitchenId(match.id);
+                                            else setSelectedKitchenId(null);
+                                        }}
+                                        onFocus={() => setIsKitchenDropdownOpen(true)}
+                                        className="h-11 sm:h-14 rounded-2xl bg-white border border-slate-200 focus:ring-2 focus:ring-primary/20 pr-12 font-bold text-slate-700"
+                                    />
                                         <div className="absolute right-4 top-1/2 -translate-y-1/2 text-primary/40 pointer-events-none">
                                             <CookingPot className="h-6 w-6" />
                                         </div>
@@ -1139,6 +1168,7 @@ export default function AdminMenu() {
                                 <div className="md:col-span-3">
                                     <Button
                                         onClick={handleAddCategory}
+                                        disabled={!newCategoryInput.trim() || !selectedKitchenId}
                                         className="w-full h-14 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-primary/20 active:scale-95 transition-all"
                                     >
                                         <Plus className="h-4 w-4 mr-2" />
@@ -1166,77 +1196,214 @@ export default function AdminMenu() {
                             <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2 ml-1 block">Total Categories</Label>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 {categories.map((cat) => (
-                                    <div key={cat.id} className="group transition-all hover:scale-[1.02]">
+                                    <div
+                                        key={cat.id}
+                                        className={cn(
+                                            "group transition-all",
+                                            editingCategoryId === cat.id ? "sm:col-span-2" : "hover:scale-[1.02]"
+                                        )}
+                                    >
                                         <Card className={cn(
-                                            "p-4 border-2 border-slate-100 hover:border-primary/20 transition-all bg-white rounded-[1.5rem] shadow-sm hover:shadow-md flex items-center justify-between",
-                                            cat.is_kitchen_item && "border-primary/40 bg-primary/[0.04] shadow-md shadow-primary/10"
+                                            "border-2 transition-all shadow-sm",
+                                            editingCategoryId === cat.id
+                                                ? "p-6 border-primary/30 bg-gradient-to-br from-primary/[0.04] to-white rounded-[1.75rem] shadow-lg shadow-primary/10"
+                                                : cn(
+                                                    "p-4 rounded-[1.5rem] flex items-center justify-between",
+                                                    cat.is_kitchen_item
+                                                        ? "bg-white border-primary/25 hover:border-primary hover:bg-primary/[0.06] hover:shadow-lg hover:shadow-primary/10"
+                                                        : "bg-white border-slate-200 hover:border-primary/40 hover:bg-slate-50 hover:shadow-md"
+                                                )
                                         )}>
-                                            <div className="flex items-center gap-4">
-                                                <div className={cn(
-                                                    "h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-primary/10 group-hover:text-primary transition-all",
-                                                    cat.is_kitchen_item && "bg-primary/20 ring-2 ring-primary/30 text-primary"
-                                                )}>
-                                                    <Tag className="h-5 w-5" />
-                                                </div>
-                                                <div>
-                                                    {editingCategoryId === cat.id ? (
-                                                        <div className="flex items-center gap-2">
+                                            {editingCategoryId === cat.id ? (
+                                                <div className="space-y-5">
+                                                    <div className="flex items-start justify-between gap-4">
+                                                        <div>
+                                                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary mb-1">Edit Category</p>
+                                                            <h4 className="font-black text-slate-800 text-lg">{cat.name}</h4>
+                                                        </div>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-9 w-9 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                                                            onClick={cancelEditingCategory}
+                                                        >
+                                                            <X className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        <div className="space-y-2">
+                                                            <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">Category Name</Label>
                                                             <Input
                                                                 value={editingCategoryName}
                                                                 onChange={(e) => setEditingCategoryName(e.target.value)}
-                                                                className="h-8 w-40 text-sm font-bold"
+                                                                placeholder="Category name"
+                                                                className="h-12 rounded-xl bg-white border-2 border-slate-100 focus:border-primary font-bold"
                                                                 autoFocus
                                                             />
-                                                            <Checkbox
-                                                                checked={editingCategoryIsKitchenItem}
-                                                                onCheckedChange={(checked) => setEditingCategoryIsKitchenItem(checked === true)}
-                                                                className="h-5 w-5 border-2 border-slate-300 data-[state=checked]:border-primary data-[state=checked]:bg-primary rounded-md"
-                                                                title="Kitchen Item"
-                                                            />
-                                                            <Button size="sm" onClick={() => handleUpdateCategory(cat.id)} className="h-8 w-8 p-0">
-                                                                <Check className="h-4 w-4" />
-                                                            </Button>
                                                         </div>
-                                                    ) : (
-                                                        <>
-                                                            <h4 className="font-bold text-slate-800 text-lg">{cat.name}</h4>
-                                                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1">
-                                                                <CookingPot className="h-2.5 w-2.5" />
-                                                                {cat.kitchentype_name || "No Kitchen"}
+
+                                                        <div className="space-y-2 relative">
+                                                            <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">Kitchen Type</Label>
+                                                            <div className="relative">
+                                                                <Input
+                                                                    placeholder="Select kitchen (required)..."
+                                                                    value={editingKitchenSearchValue}
+                                                                    onChange={(e) => {
+                                                                        setEditingKitchenSearchValue(e.target.value);
+                                                                        setIsEditingKitchenDropdownOpen(true);
+                                                                        const match = kitchenTypes.find(k => k.name.toLowerCase() === e.target.value.toLowerCase());
+                                                                        if (match) setEditingSelectedKitchenId(match.id);
+                                                                        else setEditingSelectedKitchenId(null);
+                                                                    }}
+                                                                    onFocus={() => setIsEditingKitchenDropdownOpen(true)}
+                                                                    className={cn(
+                                                                        "h-12 rounded-xl bg-white border-2 pr-12 font-bold transition-all",
+                                                                        editingSelectedKitchenId
+                                                                            ? "border-primary/30 focus:border-primary"
+                                                                            : "border-amber-200 focus:border-amber-400"
+                                                                    )}
+                                                                />
+                                                                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-primary/40 pointer-events-none">
+                                                                    <CookingPot className="h-5 w-5" />
+                                                                </div>
+
+                                                                {isEditingKitchenDropdownOpen && (
+                                                                    <>
+                                                                        <div className="fixed inset-0 z-[50]" onClick={() => setIsEditingKitchenDropdownOpen(false)} />
+                                                                        <Card className="absolute top-full left-0 right-0 mt-2 z-[60] rounded-2xl border border-slate-100 shadow-xl overflow-hidden max-h-[220px] overflow-y-auto p-2 animate-in fade-in slide-in-from-top-2">
+                                                                            {kitchenTypes
+                                                                                .filter(k => k.name.toLowerCase().includes(editingKitchenSearchValue.toLowerCase()))
+                                                                                .map(k => (
+                                                                                    <button
+                                                                                        key={k.id}
+                                                                                        type="button"
+                                                                                        className={cn(
+                                                                                            "w-full text-left px-4 py-3 text-sm font-bold transition-all flex items-center justify-between rounded-xl",
+                                                                                            editingSelectedKitchenId === k.id
+                                                                                                ? "bg-primary/10 text-primary"
+                                                                                                : "hover:bg-primary/5 hover:text-primary"
+                                                                                        )}
+                                                                                        onClick={() => {
+                                                                                            setEditingSelectedKitchenId(k.id);
+                                                                                            setEditingKitchenSearchValue(k.name);
+                                                                                            setIsEditingKitchenDropdownOpen(false);
+                                                                                        }}
+                                                                                    >
+                                                                                        {k.name}
+                                                                                        {editingSelectedKitchenId === k.id && <Check className="h-4 w-4 text-primary" />}
+                                                                                    </button>
+                                                                                ))}
+
+                                                                            {editingKitchenSearchValue.trim() && !kitchenTypes.some(k => k.name.toLowerCase() === editingKitchenSearchValue.toLowerCase()) && (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    className="w-full text-left px-4 py-3 text-sm font-black text-primary bg-primary/5 hover:bg-primary/10 transition-all flex items-center gap-2 border-t border-slate-50"
+                                                                                    onClick={async () => {
+                                                                                        const newK = await handleAddKitchen(editingKitchenSearchValue.trim());
+                                                                                        if (newK) {
+                                                                                            setEditingSelectedKitchenId(newK.id);
+                                                                                            setEditingKitchenSearchValue(newK.name);
+                                                                                            setIsEditingKitchenDropdownOpen(false);
+                                                                                        }
+                                                                                    }}
+                                                                                >
+                                                                                    <Plus className="h-3 w-3" />
+                                                                                    Add Kitchen "{editingKitchenSearchValue}"
+                                                                                </button>
+                                                                            )}
+
+                                                                            {kitchenTypes.length === 0 && (
+                                                                                <p className="px-4 py-3 text-xs font-bold text-slate-400">No kitchen stations yet. Create one first.</p>
+                                                                            )}
+                                                                        </Card>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                            {!editingSelectedKitchenId && (
+                                                                <p className="text-[10px] font-bold text-amber-600 ml-1">Kitchen type is required</p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-4 rounded-2xl border border-slate-100 bg-white/80 px-4 py-3">
+                                                        <Checkbox
+                                                            id={`editCategoryIsKitchenItem-${cat.id}`}
+                                                            checked={editingCategoryIsKitchenItem}
+                                                            onCheckedChange={(checked) => setEditingCategoryIsKitchenItem(checked === true)}
+                                                            className="h-5 w-5 border-2 border-slate-300 data-[state=checked]:border-primary data-[state=checked]:bg-primary rounded-md"
+                                                        />
+                                                        <Label htmlFor={`editCategoryIsKitchenItem-${cat.id}`} className="text-sm font-black text-slate-700 cursor-pointer flex items-center gap-2">
+                                                            <span>Mark as Kitchen Item</span>
+                                                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                                                                {editingCategoryIsKitchenItem ? "ON" : "OFF"}
+                                                            </span>
+                                                        </Label>
+                                                    </div>
+
+                                                    <div className="flex flex-col sm:flex-row gap-3 pt-1">
+                                                        <Button
+                                                            onClick={() => handleUpdateCategory(cat.id)}
+                                                            disabled={!editingCategoryName.trim() || !editingSelectedKitchenId}
+                                                            className="h-12 flex-1 rounded-xl font-black uppercase tracking-widest text-xs shadow-lg shadow-primary/20"
+                                                        >
+                                                            <Check className="h-4 w-4 mr-2" />
+                                                            Save Changes
+                                                        </Button>
+                                                        <Button
+                                                            variant="outline"
+                                                            onClick={cancelEditingCategory}
+                                                            className="h-12 flex-1 rounded-xl font-black uppercase tracking-widest text-xs border-2"
+                                                        >
+                                                            Cancel
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div className="flex items-center gap-4 min-w-0">
+                                                        <div className={cn(
+                                                            "h-10 w-10 shrink-0 rounded-xl flex items-center justify-center transition-all",
+                                                            cat.is_kitchen_item
+                                                                ? "bg-primary/15 text-primary ring-2 ring-primary/20 group-hover:bg-primary group-hover:text-white group-hover:ring-primary/40"
+                                                                : "bg-slate-100 text-slate-500 group-hover:bg-primary group-hover:text-white"
+                                                        )}>
+                                                            <Tag className="h-5 w-5" />
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <h4 className="font-bold text-slate-900 text-lg group-hover:text-primary transition-colors truncate">{cat.name}</h4>
+                                                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 group-hover:text-slate-700 flex items-center gap-1 transition-colors">
+                                                                <CookingPot className="h-2.5 w-2.5 shrink-0" />
+                                                                <span className="truncate">{cat.kitchentype_name || "No Kitchen"}</span>
                                                             </p>
                                                             {cat.is_kitchen_item && (
-                                                                <Badge className="mt-1 bg-primary/25 text-primary border-2 border-primary/40 px-3 py-1.5 rounded-full font-black text-[10px] uppercase tracking-widest flex items-center gap-1 shadow-sm">
+                                                                <Badge className="mt-1 bg-primary text-white border-0 px-3 py-1 rounded-full font-black text-[10px] uppercase tracking-widest flex items-center gap-1 shadow-sm w-fit">
                                                                     <CookingPot className="h-3 w-3" />
                                                                     Kitchen Item
                                                                 </Badge>
                                                             )}
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-8 w-8 text-slate-400 hover:text-primary hover:bg-primary/5 rounded-lg"
-                                                    onClick={() => {
-                                                        setEditingCategoryId(cat.id);
-                                                        setEditingCategoryName(cat.name);
-                                                        setSelectedKitchenId(cat.kitchentype);
-                                                        setEditingCategoryIsKitchenItem(cat.is_kitchen_item ?? true);
-                                                    }}
-                                                >
-                                                    <Pencil className="h-4 w-4" />
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                                                    onClick={() => handleDeleteCategory(cat.id, cat.name)}
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex gap-1.5 shrink-0 ml-3 opacity-60 group-hover:opacity-100 transition-opacity">
+                                                        <Button
+                                                            variant="outline"
+                                                            size="icon"
+                                                            className="h-9 w-9 bg-white text-slate-600 border-slate-200 hover:text-primary hover:border-primary/40 hover:bg-primary/5 rounded-xl shadow-sm"
+                                                            onClick={() => startEditingCategory(cat)}
+                                                        >
+                                                            <Pencil className="h-4 w-4" />
+                                                        </Button>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="icon"
+                                                            className="h-9 w-9 bg-white text-slate-600 border-slate-200 hover:text-red-600 hover:border-red-200 hover:bg-red-50 rounded-xl shadow-sm"
+                                                            onClick={() => handleDeleteCategory(cat.id, cat.name)}
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+                                                </>
+                                            )}
                                         </Card>
                                     </div>
                                 ))}

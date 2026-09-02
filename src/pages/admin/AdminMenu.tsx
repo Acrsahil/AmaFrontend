@@ -1167,9 +1167,15 @@ export default function AdminMenu() {
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 {categories.map((cat) => (
                                     <div key={cat.id} className="group transition-all hover:scale-[1.02]">
-                                        <Card className="p-4 border-2 border-slate-100 hover:border-primary/20 transition-all bg-white rounded-[1.5rem] shadow-sm hover:shadow-md flex items-center justify-between">
+                                        <Card className={cn(
+                                            "p-4 border-2 border-slate-100 hover:border-primary/20 transition-all bg-white rounded-[1.5rem] shadow-sm hover:shadow-md flex items-center justify-between",
+                                            cat.is_kitchen_item && "border-primary/40 bg-primary/[0.04] shadow-md shadow-primary/10"
+                                        )}>
                                             <div className="flex items-center gap-4">
-                                                <div className="h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-primary/10 group-hover:text-primary transition-all">
+                                                <div className={cn(
+                                                    "h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-primary/10 group-hover:text-primary transition-all",
+                                                    cat.is_kitchen_item && "bg-primary/20 ring-2 ring-primary/30 text-primary"
+                                                )}>
                                                     <Tag className="h-5 w-5" />
                                                 </div>
                                                 <div>
@@ -1199,7 +1205,7 @@ export default function AdminMenu() {
                                                                 {cat.kitchentype_name || "No Kitchen"}
                                                             </p>
                                                             {cat.is_kitchen_item && (
-                                                                <Badge className="mt-1 bg-primary/15 text-primary border border-primary/20 px-3 py-1 rounded-full font-black text-[10px] uppercase tracking-widest flex items-center gap-1">
+                                                                <Badge className="mt-1 bg-primary/25 text-primary border-2 border-primary/40 px-3 py-1.5 rounded-full font-black text-[10px] uppercase tracking-widest flex items-center gap-1 shadow-sm">
                                                                     <CookingPot className="h-3 w-3" />
                                                                     Kitchen Item
                                                                 </Badge>

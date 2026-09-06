@@ -242,6 +242,7 @@ const App = () => {
               }
             >
               <Route index element={<AdminDashboard />} />
+              <Route path="pos" element={<CounterPOS />} />
               <Route path="orders" element={<AdminOrders />} />
               <Route path="menu" element={<AdminMenu />} />
               <Route path="inventory" element={<AdminInventory />} />

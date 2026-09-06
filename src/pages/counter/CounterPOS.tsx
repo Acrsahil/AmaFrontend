@@ -596,70 +596,74 @@ export default function CounterPOS() {
         }
     };
 
+    const hideHeader = location.pathname.includes('/admin/dashboard');
+
     return (
-        <div className="h-screen bg-stone-50 flex flex-col overflow-hidden font-sans">
+        <div className={cn("bg-stone-50 flex flex-col overflow-hidden font-sans", hideHeader ? "h-[calc(100vh-64px)] md:h-[calc(100vh-64px)]" : "h-screen")}>
             {/* Top Header */}
-            <header className="h-16 bg-white border-b px-6 pr-14 flex items-center justify-between shrink-0 z-10">
-                <div className="flex items-center gap-4">
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="md:hidden rounded-xl h-10 w-10"
-                        onClick={() => window.dispatchEvent(new CustomEvent("open-counter-sidebar"))}
-                    >
-                        <Menu className="h-6 w-6 text-slate-600" />
-                    </Button>
-                    {(operator?.role === "ADMIN" || operator?.role === "BRANCH_MANAGER" || operator?.role === "SUPER_ADMIN") && (
+            {!hideHeader && (
+                <header className="h-16 bg-white border-b px-6 pr-14 flex items-center justify-between shrink-0 z-10">
+                    <div className="flex items-center gap-4">
                         <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => navigate('/admin/dashboard')}
-                            className="mr-2 rounded-xl text-slate-400 hover:text-primary hover:bg-primary/5 h-10 w-10"
-                            title="Back to Admin Dashboard"
+                            className="md:hidden rounded-xl h-10 w-10"
+                            onClick={() => window.dispatchEvent(new CustomEvent("open-counter-sidebar"))}
                         >
-                            <LayoutDashboard className="h-5 w-5" />
+                            <Menu className="h-6 w-6 text-slate-600" />
                         </Button>
-                    )}
-                    <div>
-                        <h1 className="text-lg md:text-xl font-bold text-slate-800 leading-none">POS</h1>
-                    </div>
-                </div>
-
-                <div className="flex items-center gap-4">
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-auto p-2 hover:bg-slate-50 flex items-center gap-3 rounded-2xl transition-all text-left">
-                                <div className="text-right hidden md:block">
-                                    <p className="text-sm font-black text-slate-700">{operator?.name || "Counter User"}</p>
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{operator?.role}</p>
-                                </div>
-                                <div className="h-9 w-9 md:h-10 md:w-10 rounded-full bg-slate-900 flex items-center justify-center text-white shrink-0 shadow-sm">
-                                    <User className="h-4 w-4 md:h-5 md:w-5" />
-                                </div>
+                        {(operator?.role === "ADMIN" || operator?.role === "BRANCH_MANAGER" || operator?.role === "SUPER_ADMIN") && (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => navigate('/admin/dashboard')}
+                                className="mr-2 rounded-xl text-slate-400 hover:text-primary hover:bg-primary/5 h-10 w-10"
+                                title="Back to Admin Dashboard"
+                            >
+                                <LayoutDashboard className="h-5 w-5" />
                             </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-56 rounded-2xl p-2 font-bold z-[100]">
-                            <DropdownMenuItem
-                                className="h-10 rounded-xl cursor-pointer transition-colors"
-                                onClick={() => setShowChangePassword(true)}
-                            >
-                                <Key className="mr-2 h-4 w-4 text-slate-400" />
-                                <span>Change Password</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator className="bg-slate-100 my-1" />
-                            <DropdownMenuItem
-                                className="h-10 rounded-xl cursor-pointer text-red-600 focus:text-red-700 focus:bg-red-50 transition-colors"
-                                onClick={() => {
-                                    window.dispatchEvent(new CustomEvent("show-logout-confirm"));
-                                }}
-                            >
-                                <LogOut className="mr-2 h-4 w-4" />
-                                <span>Logout</span>
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                </div>
-            </header>
+                        )}
+                        <div>
+                            <h1 className="text-lg md:text-xl font-bold text-slate-800 leading-none">POS</h1>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" className="h-auto p-2 hover:bg-slate-50 flex items-center gap-3 rounded-2xl transition-all text-left">
+                                    <div className="text-right hidden md:block">
+                                        <p className="text-sm font-black text-slate-700">{operator?.name || "Counter User"}</p>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{operator?.role}</p>
+                                    </div>
+                                    <div className="h-9 w-9 md:h-10 md:w-10 rounded-full bg-slate-900 flex items-center justify-center text-white shrink-0 shadow-sm">
+                                        <User className="h-4 w-4 md:h-5 md:w-5" />
+                                    </div>
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56 rounded-2xl p-2 font-bold z-[100]">
+                                <DropdownMenuItem
+                                    className="h-10 rounded-xl cursor-pointer transition-colors"
+                                    onClick={() => setShowChangePassword(true)}
+                                >
+                                    <Key className="mr-2 h-4 w-4 text-slate-400" />
+                                    <span>Change Password</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator className="bg-slate-100 my-1" />
+                                <DropdownMenuItem
+                                    className="h-10 rounded-xl cursor-pointer text-red-600 focus:text-red-700 focus:bg-red-50 transition-colors"
+                                    onClick={() => {
+                                        window.dispatchEvent(new CustomEvent("show-logout-confirm"));
+                                    }}
+                                >
+                                    <LogOut className="mr-2 h-4 w-4" />
+                                    <span>Logout</span>
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
+                </header>
+            )}
 
             <ChangePasswordModal
                 isOpen={showChangePassword}

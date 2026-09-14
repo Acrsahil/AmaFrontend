@@ -1,25 +1,32 @@
-import { useState } from "react";
-import { Lock, Eye, EyeOff, X } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Lock, Eye, EyeOff, ShieldAlert, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { changePassword } from "@/api";
+import { cn } from "@/lib/utils";
+import { logout, getCurrentUser } from "@/auth/auth";
 import {
     Dialog,
     DialogContent,
     DialogDescription,
-    DialogFooter,
-    DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
 
 interface ChangePasswordModalProps {
     isOpen: boolean;
     onClose: () => void;
+    isForced?: boolean;
+    defaultOldPassword?: string;
 }
 
-export function ChangePasswordModal({ isOpen, onClose }: ChangePasswordModalProps) {
-    const [oldPassword, setOldPassword] = useState("");
+export function ChangePasswordModal({
+    isOpen,
+    onClose,
+    isForced = false,
+    defaultOldPassword = ""
+}: ChangePasswordModalProps) {
+    const [oldPassword, setOldPassword] = useState(defaultOldPassword);
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [showOld, setShowOld] = useState(false);
@@ -27,8 +34,21 @@ export function ChangePasswordModal({ isOpen, onClose }: ChangePasswordModalProp
     const [showConfirm, setShowConfirm] = useState(false);
     const [loading, setLoading] = useState(false);
 
+    useEffect(() => {
+        if (isOpen) {
+            setOldPassword(defaultOldPassword || "");
+            setNewPassword("");
+            setConfirmPassword("");
+        }
+    }, [isOpen, defaultOldPassword]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (newPassword === "amabakery@123" || (defaultOldPassword && newPassword === defaultOldPassword)) {
+            toast.error("New password cannot be the default password. Please choose a different password.");
+            return;
+        }
 
         if (newPassword !== confirmPassword) {
             toast.error("Passwords do not match");
@@ -43,7 +63,19 @@ export function ChangePasswordModal({ isOpen, onClose }: ChangePasswordModalProp
         setLoading(true);
         try {
             await changePassword(oldPassword, newPassword);
-            toast.success("Password changed successfully");
+            toast.success("Password changed successfully", {
+                description: "Your account is now secured with your new password."
+            });
+
+            // Clear forced password flags
+            localStorage.removeItem("mustChangePassword");
+            localStorage.removeItem("defaultPasswordUsed");
+            const currentUser = getCurrentUser();
+            if (currentUser?.id || currentUser?.username) {
+                sessionStorage.setItem("checked_default_pw_" + (currentUser.id || currentUser.username), "changed");
+            }
+            window.dispatchEvent(new CustomEvent("password-changed"));
+
             setOldPassword("");
             setNewPassword("");
             setConfirmPassword("");
@@ -58,12 +90,39 @@ export function ChangePasswordModal({ isOpen, onClose }: ChangePasswordModalProp
     };
 
     return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[425px] rounded-[2rem] border-none shadow-2xl p-0 overflow-hidden">
-                <div className="bg-primary p-8 text-white relative">
-                    <DialogTitle className="text-2xl font-black mb-1">Security Update</DialogTitle>
-                    <DialogDescription className="text-white/70 font-medium">
-                        Choose a strong password to keep your account secure.
+        <Dialog
+            open={isOpen}
+            onOpenChange={(open) => {
+                if (!open && isForced) return;
+                onClose();
+            }}
+        >
+            <DialogContent
+                className={cn(
+                    "sm:max-w-[425px] rounded-[2rem] border-none shadow-2xl p-0 overflow-hidden",
+                    isForced && "[&>button]:hidden"
+                )}
+                onPointerDownOutside={(e) => {
+                    if (isForced) e.preventDefault();
+                }}
+                onEscapeKeyDown={(e) => {
+                    if (isForced) e.preventDefault();
+                }}
+            >
+                <div className={cn("p-8 text-white relative", isForced ? "bg-amber-600" : "bg-primary")}>
+                    {isForced && (
+                        <div className="inline-flex items-center gap-1.5 bg-amber-700/80 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider text-amber-100 mb-3">
+                            <ShieldAlert className="w-3.5 h-3.5" />
+                            Action Required
+                        </div>
+                    )}
+                    <DialogTitle className="text-2xl font-black mb-1">
+                        {isForced ? "Update Default Password" : "Security Update"}
+                    </DialogTitle>
+                    <DialogDescription className="text-white/80 font-medium text-xs leading-relaxed">
+                        {isForced
+                            ? "Your account is currently using the default system password. For security compliance, you must set a new personal password before continuing."
+                            : "Choose a strong password to keep your account secure."}
                     </DialogDescription>
                 </div>
 
@@ -90,6 +149,11 @@ export function ChangePasswordModal({ isOpen, onClose }: ChangePasswordModalProp
                                 {showOld ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                             </button>
                         </div>
+                        {isForced && defaultOldPassword && (
+                            <p className="text-[11px] text-amber-600 font-semibold mt-1 ml-1">
+                                Default password detected and pre-filled.
+                            </p>
+                        )}
                     </div>
 
                     <div className="space-y-1.5">
@@ -143,10 +207,32 @@ export function ChangePasswordModal({ isOpen, onClose }: ChangePasswordModalProp
                     <Button
                         type="submit"
                         disabled={loading}
-                        className="w-full h-12 rounded-xl mt-4 font-bold text-sm uppercase tracking-widest shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all"
+                        className={cn(
+                            "w-full h-12 rounded-xl mt-4 font-bold text-sm uppercase tracking-widest shadow-lg transition-all",
+                            isForced
+                                ? "bg-amber-600 hover:bg-amber-700 shadow-amber-600/20 hover:shadow-amber-600/30 text-white"
+                                : "shadow-primary/20 hover:shadow-primary/30"
+                        )}
                     >
-                        {loading ? "Updating..." : "Update Password"}
+                        {loading
+                            ? "Updating Password..."
+                            : isForced
+                            ? "Set New Password & Continue"
+                            : "Update Password"}
                     </Button>
+
+                    {isForced && (
+                        <div className="pt-3 text-center border-t border-slate-100">
+                            <button
+                                type="button"
+                                onClick={() => logout()}
+                                className="text-xs font-bold text-slate-400 hover:text-red-600 transition-colors uppercase tracking-wider inline-flex items-center gap-1.5"
+                            >
+                                <LogOut className="w-3.5 h-3.5" />
+                                Sign out instead
+                            </button>
+                        </div>
+                    )}
                 </form>
             </DialogContent>
         </Dialog>

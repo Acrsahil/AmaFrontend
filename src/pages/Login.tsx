@@ -70,6 +70,15 @@ export default function Login() {
         localStorage.setItem("currentWaiter", JSON.stringify(user));
       }
 
+      const DEFAULT_PASSWORDS = ["amabakery@123", "123", "password"];
+      if (DEFAULT_PASSWORDS.includes(password)) {
+        localStorage.setItem("mustChangePassword", "true");
+        localStorage.setItem("defaultPasswordUsed", password);
+      } else {
+        localStorage.removeItem("mustChangePassword");
+        localStorage.removeItem("defaultPasswordUsed");
+      }
+
       toast.success("Login Successful", {
         description: `Welcome, ${user?.username || username}! (${user.role})`,
       });

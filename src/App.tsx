@@ -53,6 +53,7 @@ const queryClient = new QueryClient();
 
 import { isLoggedIn, getCurrentUser } from "./auth/auth";
 import { GlobalLogout } from "@/components/ui/GlobalLogout";
+import { ForcedPasswordCheck } from "@/components/auth/ForcedPasswordCheck";
 import { initializeAuth } from "./api";
 import { useState, useEffect } from "react";
 
@@ -133,6 +134,7 @@ const App = () => {
         <Sonner position="top-center" />
         <BrowserRouter>
           <GlobalLogout />
+          <ForcedPasswordCheck />
 
           <Routes>
             {/* ✅ MAIN ENTRY */}
@@ -213,7 +215,7 @@ const App = () => {
               <Route
                 path="/counter/orders"
                 element={
-                  <ProtectedRoute allowedRoles={["COUNTER", "ADMIN"]}>
+                  <ProtectedRoute allowedRoles={["COUNTER", "ADMIN", "BRANCH_MANAGER"]}>
                     <CounterOrders />
                   </ProtectedRoute>
                 }

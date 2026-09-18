@@ -96,6 +96,8 @@ export function getCurrentUser() {
 }
 
 export async function logout() {
+  localStorage.removeItem("mustChangePassword");
+  localStorage.removeItem("defaultPasswordUsed");
   await clearTokens();
   window.location.replace("/login");
 }

@@ -32,14 +32,16 @@ import {
     LayoutDashboard,
     IndianRupee,
     Keyboard,
-    Menu
+    Menu,
+    Layers,
+    Hash
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { logout, getCurrentUser } from "../../auth/auth";
 import { ChangePasswordModal } from "@/components/auth/ChangePasswordModal";
 import { CustomerSelector } from "@/components/pos/CustomerSelector";
-import { fetchProducts, fetchCategories, createInvoice, fetchInvoices, fetchBranch } from "@/api/index.js";
+import { fetchProducts, fetchCategories, createInvoice, fetchInvoices, fetchBranch, fetchTables } from "@/api/index.js";
 import { MenuItem, User as UserType } from "@/lib/mockData";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,6 +78,7 @@ export default function CounterPOS() {
     const [operator, setOperator] = useState<UserType | null>(null);
     const [products, setProducts] = useState<MenuItem[]>([]);
     const [categories, setCategories] = useState<string[]>([]);
+    const [floors, setFloors] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedCategory, setSelectedCategory] = useState("All");
     const [showChangePassword, setShowChangePassword] = useState(false);
@@ -88,7 +91,7 @@ export default function CounterPOS() {
     // Billing States
     const [customer, setCustomer] = useState<any>(null);
     const [selectedFloor, setSelectedFloor] = useState<any>(null);
-    const [tableNo, setTableNo] = useState<string>("1");
+    const [tableNo, setTableNo] = useState<string>("");
     const [paymentMethod, setPaymentMethod] = useState<"cash" | "qr" | "online" | "card" | "credit" | null>(null);
     const [activeKeypadField, setActiveKeypadField] = useState<'cash' | 'discount' | 'customer' | 'productSearch' | 'table' | null>(null);
     const [showKeypad, setShowKeypad] = useState(false);
@@ -143,8 +146,7 @@ export default function CounterPOS() {
         console.log("🏪 (POS) Starting data fetch for user:", user);
 
         try {
-            // Fetch everything in parallel but catch individual errors to prevent blocking
-            const [productsResponse, categoriesResponse, branchResponse] = await Promise.all([
+            const [productsResponse, categoriesResponse, branchResponse, floorsResponse] = await Promise.all([
                 fetchProducts({ page_size: 1000 }).catch(err => {
                     console.error("❌ fetchProducts failed:", err);
                     return null;
@@ -156,7 +158,11 @@ export default function CounterPOS() {
                 user?.branch_id ? fetchBranch(user.branch_id).catch(err => {
                     console.error("⚠️ fetchBranch failed (non-critical):", err);
                     return null;
-                }) : Promise.resolve(null)
+                }) : Promise.resolve(null),
+                fetchTables().catch(err => {
+                    console.error("⚠️ fetchTables failed (non-critical):", err);
+                    return null;
+                })
             ]);
 
             // 1. Process Branch Info (Non-critical)
@@ -165,6 +171,11 @@ export default function CounterPOS() {
             } else if (branchResponse) {
                 // If it's the raw branch data without 'success' wrapper (check API)
                 setBranchInfo(branchResponse);
+            }
+
+            // Floors
+            if (floorsResponse) {
+                setFloors(floorsResponse);
             }
 
             // 2. Process Products
@@ -321,6 +332,11 @@ export default function CounterPOS() {
     const total = subtotal + taxAmount - discountAmount;
 
     const addToCart = (item: MenuItem) => {
+        if (!selectedFloor || !tableNo || tableNo.trim() === '') {
+            toast.error("Please select a Floor and enter Table No. first");
+            return;
+        }
+
         setCart(prev => {
             const existing = prev.find(c => c.item.id === item.id);
             if (existing) {
@@ -397,8 +413,8 @@ export default function CounterPOS() {
             const invoiceData = {
                 branch: user?.branch_id,
                 customer: customer?.id || null,
-                floor: null,
-                table_no: 1,
+                floor: selectedFloor?.id || null,
+                table_no: parseInt(tableNo) || 1,
                 invoice_type: "SALE",
                 description: "Counter Sale",
                 tax_amount: taxAmount,
@@ -433,7 +449,7 @@ export default function CounterPOS() {
             setCart([]);
             setCustomer(null);
             setSelectedFloor(null);
-            setTableNo("1");
+            setTableNo("");
             setPaymentMethod(null);
             setCashReceived("");
             setDiscountPercent(0);
@@ -452,7 +468,7 @@ export default function CounterPOS() {
         setCart([]);
         setCustomer(null);
         setSelectedFloor(null);
-        setTableNo("1");
+        setTableNo("");
         setPaymentMethod(null);
         setCashReceived("");
         setDiscountPercent(0);
@@ -677,6 +693,46 @@ export default function CounterPOS() {
                 <section className="flex-1 flex flex-col overflow-hidden p-6 gap-6">
                     {/* Search & Categories */}
                     <div className="flex flex-col gap-4 shrink-0">
+                        <div className="flex gap-4 w-full">
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" className="flex-1 justify-start h-12 md:h-14 rounded-2xl bg-white focus:border-primary border-2 border-slate-200">
+                                        <Layers className="h-5 w-5 text-slate-400 mr-2" />
+                                        <span className={cn("font-bold text-sm md:text-base", !selectedFloor && "text-slate-400")}>
+                                            {selectedFloor ? selectedFloor.name : "Select Floor"}
+                                        </span>
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent className="w-[200px] rounded-xl z-[100]">
+                                    {floors.map(floor => (
+                                        <DropdownMenuItem key={floor.id} onClick={() => { setSelectedFloor(floor); setTableNo(""); }} className="cursor-pointer font-bold h-10">
+                                            {floor.name}
+                                        </DropdownMenuItem>
+                                    ))}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild disabled={!selectedFloor}>
+                                    <Button variant="outline" className={cn("flex-1 justify-start h-12 md:h-14 rounded-2xl bg-white focus:border-primary border-2 border-slate-200", !selectedFloor && "opacity-50 cursor-not-allowed")}>
+                                        <Hash className="h-5 w-5 text-slate-400 mr-2" />
+                                        <span className={cn("font-bold text-sm md:text-base", !tableNo && "text-slate-400")}>
+                                            {tableNo ? `Table ${tableNo}` : "Select Table"}
+                                        </span>
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                {selectedFloor && (
+                                    <DropdownMenuContent className="w-[200px] rounded-xl z-[100] max-h-64 overflow-y-auto">
+                                        {Array.from({ length: selectedFloor.table_count || 0 }, (_, i) => i + 1).map(num => (
+                                            <DropdownMenuItem key={num} onClick={() => setTableNo(num.toString())} className="cursor-pointer font-bold h-10">
+                                                Table {num}
+                                            </DropdownMenuItem>
+                                        ))}
+                                    </DropdownMenuContent>
+                                )}
+                            </DropdownMenu>
+                        </div>
+
                         <div className="relative">
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
                             <Input

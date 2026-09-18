@@ -21,7 +21,7 @@ import { useState } from "react";
 
 const allNavItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/admin/dashboard" },
-  { icon: Monitor, label: "POS Terminal", path: "/counter/pos" },
+  { icon: Monitor, label: "POS Terminal", path: "/admin/dashboard/pos" },
   { icon: ClipboardList, label: "Orders", path: "/admin/dashboard/orders" },
   { icon: UtensilsCrossed, label: "Menu", path: "/admin/dashboard/menu" },
   { icon: Users, label: "Customers", path: "/admin/dashboard/customers" },

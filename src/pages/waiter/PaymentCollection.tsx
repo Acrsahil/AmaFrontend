@@ -429,9 +429,16 @@ export default function PaymentCollection() {
           <div className="bg-slate-50/80 px-4 py-3 flex items-center justify-between border-b border-slate-100">
             <div className="flex items-center gap-2">
               <span className="font-bold text-base">Order #{order.invoice_number?.slice(-4) || '??'}</span>
-              <span className="text-[10px] bg-white border border-slate-200 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider text-slate-500">
-                Table {order.table_no || order.floor_name || '??'}
-              </span>
+              {(order.table_no || !order.floor_name) && (
+                <span className="text-[10px] bg-white border border-slate-200 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider text-slate-500">
+                  Table {order.table_no || '??'}
+                </span>
+              )}
+              {order.floor_name && (
+                <span className="text-[10px] bg-primary/5 text-primary border border-primary/20 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                  {order.floor_name}
+                </span>
+              )}
             </div>
             <StatusBadge
               status={
@@ -725,7 +732,10 @@ export default function PaymentCollection() {
               <Banknote className="h-8 w-8 text-white" />
             </div>
             <h3 className="text-xl font-bold font-serif italic">Cash Collection</h3>
-            <p className="text-white/80 text-sm italic">Table {selectedOrder?.table_no}</p>
+            <p className="text-white/80 text-sm italic">
+              Table {selectedOrder?.table_no}
+              {selectedOrder?.floor_name && ` • ${selectedOrder.floor_name}`}
+            </p>
           </div>
 
           <div className="p-6 space-y-6">
@@ -825,6 +835,7 @@ export default function PaymentCollection() {
               {activeNonCashMethod === 'QR' && "Scan QR to pay"}
               {activeNonCashMethod === 'CARD' && "Insert/Swipe card to pay"}
               {activeNonCashMethod === 'ONLINE' && "Process online wallet payment"} • Table {selectedOrder?.table_no}
+              {selectedOrder?.floor_name && ` • ${selectedOrder.floor_name}`}
             </p>
           </div>
 

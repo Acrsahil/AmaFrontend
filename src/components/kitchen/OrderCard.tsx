@@ -129,8 +129,8 @@ export function OrderCard({ order, onStatusChange, onItemStatusChange }: OrderCa
             ) : (
               <span className="text-xs font-black text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200 shadow-sm">TAKEAWAY</span>
             )}
-            {order.tableNumber && order.floorName && (
-              <div className="flex items-center gap-1.5 bg-primary/5 px-2 py-1 rounded-lg border border-primary/10 shadow-sm">
+            {order.floorName && (
+              <div className="flex items-center gap-1.5 bg-primary/5 px-2 py-1 rounded-lg border border-primary/10 shadow-sm mt-1">
                 <Layers className="h-3 w-3 text-primary opacity-70" />
                 <span className="text-[10px] sm:text-xs font-black text-primary uppercase tracking-tight">
                   {order.floorName}
@@ -172,7 +172,7 @@ export function OrderCard({ order, onStatusChange, onItemStatusChange }: OrderCa
                     {items.map((item: any, index: number) => {
                       // Use the actual database ID for the item
                       const itemId = String(item.id || `${order.id}-${index}`);
-                      
+
                       return (
                         <div key={item.id || index} className="flex flex-col group bg-white/60 p-2.5 rounded-lg border border-slate-100">
                           <div className="flex justify-between items-center gap-3">

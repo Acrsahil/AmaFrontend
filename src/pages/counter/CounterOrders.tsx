@@ -775,7 +775,16 @@ export default function CounterOrders() {
                                                         {(() => {
                                                             const tableMatch = (order.description || order.invoice_description || "").match(/Table (\d+)/);
                                                             const tableNo = order.table_no || (tableMatch ? tableMatch[1] : null);
-                                                            return tableNo ? `Table ${tableNo}` : "Takeaway";
+                                                            return (
+                                                                <div className="flex items-center gap-2">
+                                                                    <span>{tableNo ? `Table ${tableNo}` : "Takeaway"}</span>
+                                                                    {order.floor_name && (
+                                                                        <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border border-primary/20">
+                                                                            {order.floor_name}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            );
                                                         })()}
                                                     </span>
                                                     <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{order.customer_name || 'Walk-in'}</span>
@@ -928,10 +937,19 @@ export default function CounterOrders() {
                                             {(() => {
                                                 const tableMatch = (selectedOrder?.description || selectedOrder?.invoice_description || "").match(/Table (\d+)/);
                                                 const tableNo = selectedOrder?.table_no || (tableMatch ? tableMatch[1] : null);
-                                                return tableNo && (
-                                                    <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 font-medium">
-                                                        Table {tableNo}
-                                                    </span>
+                                                return (
+                                                    <div className="flex items-center gap-2">
+                                                        {tableNo && (
+                                                            <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 font-medium">
+                                                                Table {tableNo}
+                                                            </span>
+                                                        )}
+                                                        {selectedOrder?.floor_name && (
+                                                            <span className="text-[10px] px-2 py-0.5 rounded-md bg-primary/10 text-primary font-bold uppercase border border-primary/20">
+                                                                {selectedOrder.floor_name}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 );
                                             })()}
                                         </div>

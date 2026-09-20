@@ -9,6 +9,7 @@ import {
     FileText
 } from "lucide-react";
 import { getCurrentUser } from "../../auth/auth";
+import { HandCoins } from "lucide-react";
 
 const navItems = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/counter/dashboard" },
@@ -16,6 +17,7 @@ const navItems = [
     { icon: Clock, label: "Order History", path: "/counter/orders" },
     { icon: BarChart3, label: "Daily Sales", path: "/counter/daily-sales" },
     { icon: FileText, label: "Reports", path: "/counter/reports" },
+    { icon: HandCoins, label: "Waiter Payments", path: "/counter/waiter-payments" },
 ];
 
 interface CounterSidebarProps {

@@ -852,3 +852,19 @@ export async function fetchDailySales(branchId, date, filter = "") {
   if (!res.ok) throw new Error(data?.message || "Failed to fetch daily sales");
   return data;
 }
+export async function fetchWaiterPayments() {
+  const res = await apiFetch("/api/waiter-payments/");
+  const data = await safeJson(res);
+  if (!res.ok) throw new Error(data?.message || "Failed to fetch waiter payments");
+  return data;
+}
+
+export async function createWaiterPayment(paymentData) {
+  const res = await apiFetch("/api/waiter-payments/", {
+    method: "POST",
+    body: JSON.stringify(paymentData),
+  });
+  const data = await safeJson(res);
+  if (!res.ok) throw new Error(data?.message || "Failed to create waiter payment");
+  return data;
+}

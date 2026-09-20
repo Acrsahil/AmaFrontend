@@ -20,6 +20,7 @@ import CounterPOS from "./pages/counter/CounterPOS";
 import CounterOrders from "./pages/counter/CounterOrders";
 import CounterDashboard from "./pages/counter/CounterDashboard";
 import CounterReports from "./pages/counter/CounterReports";
+import CounterWaiterPayments from "./pages/counter/CounterWaiterPayments";
 
 // Kitchen Pages
 import KitchenDisplay from "./pages/kitchen/KitchenDisplay";
@@ -220,6 +221,7 @@ const App = () => {
               />
               <Route path="/counter/daily-sales" element={<AdminDailyStats />} />
               <Route path="/counter/reports" element={<CounterReports />} />
+              <Route path="/counter/waiter-payments" element={<CounterWaiterPayments />} />
             </Route>
 
             {/* ✅ KITCHEN PROTECTED */}

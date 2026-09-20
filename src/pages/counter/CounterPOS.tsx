@@ -83,15 +83,65 @@ export default function CounterPOS() {
     const [selectedCategory, setSelectedCategory] = useState("All");
     const [showChangePassword, setShowChangePassword] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
-    const [cart, setCart] = useState<CartItemData[]>([]);
-    const [taxEnabled, setTaxEnabled] = useState(false);
-    const [taxRate, setTaxRate] = useState(5);
-    const [discountPercent, setDiscountPercent] = useState(0);
+    const [tabs, setTabs] = useState([{
+        id: "1",
+        cart: [] as CartItemData[],
+        customer: null as any,
+        selectedFloor: null as any,
+        tableNo: "",
+        taxEnabled: false,
+        taxRate: 5,
+        discountPercent: 0
+    }]);
+    const [activeTabId, setActiveTabId] = useState("1");
+
+    const activeTab = useMemo(() => tabs.find(t => t.id === activeTabId) || tabs[0], [tabs, activeTabId]);
+
+    const updateActiveTab = (updates: Partial<typeof activeTab>) => {
+        setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, ...updates } : t));
+    };
+
+    const cart = activeTab.cart;
+    const customer = activeTab.customer;
+    const selectedFloor = activeTab.selectedFloor;
+    const tableNo = activeTab.tableNo;
+    const taxEnabled = activeTab.taxEnabled;
+    const taxRate = activeTab.taxRate;
+    const discountPercent = activeTab.discountPercent;
+
+    const setCart = (valOrUpdater: any) => {
+        setTabs(prev => prev.map(t => {
+            if (t.id === activeTabId) {
+                const newCart = typeof valOrUpdater === 'function' ? valOrUpdater(t.cart) : valOrUpdater;
+                return { ...t, cart: newCart };
+            }
+            return t;
+        }));
+    };
+    const setCustomer = (val: any) => updateActiveTab({ customer: val });
+    const setSelectedFloor = (val: any) => updateActiveTab({ selectedFloor: val });
+    const setTableNo = (valOrUpdater: any) => {
+        setTabs(prev => prev.map(t => {
+            if (t.id === activeTabId) {
+                const newVal = typeof valOrUpdater === 'function' ? valOrUpdater(t.tableNo) : valOrUpdater;
+                return { ...t, tableNo: newVal };
+            }
+            return t;
+        }));
+    };
+    const setTaxEnabled = (val: any) => updateActiveTab({ taxEnabled: val });
+    const setTaxRate = (val: any) => updateActiveTab({ taxRate: val });
+    const setDiscountPercent = (valOrUpdater: any) => {
+        setTabs(prev => prev.map(t => {
+            if (t.id === activeTabId) {
+                const newVal = typeof valOrUpdater === 'function' ? valOrUpdater(t.discountPercent) : valOrUpdater;
+                return { ...t, discountPercent: newVal };
+            }
+            return t;
+        }));
+    };
 
     // Billing States
-    const [customer, setCustomer] = useState<any>(null);
-    const [selectedFloor, setSelectedFloor] = useState<any>(null);
-    const [tableNo, setTableNo] = useState<string>("");
     const [paymentMethod, setPaymentMethod] = useState<"cash" | "qr" | "online" | "card" | "credit" | null>(null);
     const [activeKeypadField, setActiveKeypadField] = useState<'cash' | 'discount' | 'customer' | 'productSearch' | 'table' | null>(null);
     const [showKeypad, setShowKeypad] = useState(false);
@@ -445,14 +495,10 @@ export default function CounterPOS() {
                 customer
             });
 
-            // Clear the cart immediately as requested
-            setCart([]);
-            setCustomer(null);
-            setSelectedFloor(null);
-            setTableNo("");
+            // Clear the completed tab
+            removeTab(activeTabId);
             setPaymentMethod(null);
             setCashReceived("");
-            setDiscountPercent(0);
 
             setIsProcessing(false);
             setShowCheckoutModal(false);
@@ -465,18 +511,52 @@ export default function CounterPOS() {
     };
 
     const resetOrder = () => {
-        setCart([]);
-        setCustomer(null);
-        setSelectedFloor(null);
-        setTableNo("");
+        removeTab(activeTabId);
         setPaymentMethod(null);
         setCashReceived("");
-        setDiscountPercent(0);
         setShowSuccessModal(false);
     };
 
     const handleLogout = () => {
         logout();
+    };
+
+    const addTab = () => {
+        const newTabId = Date.now().toString();
+        setTabs(prev => [...prev, {
+            id: newTabId,
+            cart: [],
+            customer: null,
+            selectedFloor: null,
+            tableNo: "",
+            taxEnabled: false,
+            taxRate: 5,
+            discountPercent: 0
+        }]);
+        setActiveTabId(newTabId);
+    };
+
+    const removeTab = (id: string, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        setTabs(prev => {
+            if (prev.length === 1) {
+                return [{
+                    id: Date.now().toString(),
+                    cart: [],
+                    customer: null,
+                    selectedFloor: null,
+                    tableNo: "",
+                    taxEnabled: false,
+                    taxRate: 5,
+                    discountPercent: 0
+                }];
+            }
+            const filtered = prev.filter(t => t.id !== id);
+            if (activeTabId === id) {
+                setActiveTabId(filtered[0].id);
+            }
+            return filtered;
+        });
     };
 
     const handlePrint = () => {
@@ -693,6 +773,42 @@ export default function CounterPOS() {
                 <section className="flex-1 flex flex-col overflow-hidden p-6 gap-6">
                     {/* Search & Categories */}
                     <div className="flex flex-col gap-4 shrink-0">
+                        {/* Tabs Row */}
+                        <div className="flex items-center gap-2 overflow-x-auto pb-1 shrink-0 custom-scrollbar">
+                            {tabs.map((tab, idx) => (
+                                <div
+                                    key={tab.id}
+                                    onClick={() => setActiveTabId(tab.id)}
+                                    className={cn(
+                                        "flex items-center gap-2 px-4 py-2 rounded-xl border-2 cursor-pointer whitespace-nowrap transition-all",
+                                        activeTabId === tab.id
+                                            ? "border-primary bg-primary/10 text-primary font-bold shadow-sm"
+                                            : "border-slate-200 bg-white text-slate-500 hover:border-primary/50"
+                                    )}
+                                >
+                                    <span className="text-sm">Order #{idx + 1}</span>
+                                    {tab.cart.length > 0 && (
+                                        <span className="bg-slate-900 text-white text-[10px] px-1.5 py-0.5 rounded-md font-black flex items-center justify-center">
+                                            {tab.cart.reduce((s, c) => s + c.quantity, 0)}
+                                        </span>
+                                    )}
+                                    <button
+                                        onClick={(e) => removeTab(tab.id, e)}
+                                        className="ml-1 hover:bg-red-100 hover:text-red-600 text-slate-400 rounded-full p-1 transition-colors"
+                                    >
+                                        <X className="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
+                            ))}
+                            <Button
+                                variant="outline"
+                                onClick={addTab}
+                                className="h-10 w-10 p-0 rounded-xl border-2 border-dashed border-slate-300 hover:border-primary hover:bg-primary/5 text-slate-400 hover:text-primary transition-all shrink-0 ml-1"
+                                title="New Order Section"
+                            >
+                                <Plus className="h-5 w-5" />
+                            </Button>
+                        </div>
                         <div className="flex gap-4 w-full">
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>

@@ -148,7 +148,7 @@ export default function PaymentCollection() {
 
   const handlePaymentClick = (order: any) => {
     setSelectedOrder(order);
-    const isPaid = order.payment_status === 'PAID' || order.payment_status === 'WAITER RECEIVED' || (order.payment_status === 'PARTIAL' && order.received_by_waiter);
+    const isPaid = (order.payment_status === 'PAID' || order.payment_status === 'WAITER RECEIVED' || (order.payment_status === 'PARTIAL' && order.received_by_waiter)) && Number(order.due_amount || 0) <= 0;
     if (isPaid) {
       setShowAlreadyPaidDialog(true);
     } else {
@@ -407,8 +407,8 @@ export default function PaymentCollection() {
     });
   };
 
-  const pendingOrdersList = orders.filter(o => !(o.payment_status === 'PAID' || o.payment_status === 'WAITER RECEIVED' || (o.payment_status === 'PARTIAL' && o.received_by_waiter)));
-  const completedOrdersList = orders.filter(o => o.payment_status === 'PAID' || o.payment_status === 'WAITER RECEIVED' || (o.payment_status === 'PARTIAL' && o.received_by_waiter));
+  const pendingOrdersList = orders.filter(o => !((o.payment_status === 'PAID' || o.payment_status === 'WAITER RECEIVED' || (o.payment_status === 'PARTIAL' && o.received_by_waiter)) && Number(o.due_amount || 0) <= 0));
+  const completedOrdersList = orders.filter(o => (o.payment_status === 'PAID' || o.payment_status === 'WAITER RECEIVED' || (o.payment_status === 'PARTIAL' && o.received_by_waiter)) && Number(o.due_amount || 0) <= 0);
 
   // Apply search filter
   const filteredPendingOrders = filterOrdersBySearch(pendingOrdersList);
@@ -442,7 +442,7 @@ export default function PaymentCollection() {
             </div>
             <StatusBadge
               status={
-                (order.payment_status === 'PAID' || order.payment_status === 'WAITER RECEIVED' || (order.payment_status === 'PARTIAL' && order.received_by_waiter))
+                ((order.payment_status === 'PAID' || order.payment_status === 'WAITER RECEIVED' || (order.payment_status === 'PARTIAL' && order.received_by_waiter)) && Number(order.due_amount || 0) <= 0)
                   ? 'paid'
                   : order.payment_status?.toLowerCase() || 'pending'
               }

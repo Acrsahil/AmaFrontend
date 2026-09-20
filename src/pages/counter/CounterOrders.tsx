@@ -1160,36 +1160,7 @@ export default function CounterOrders() {
                                                 <p className="text-lg font-black text-emerald-800 leading-tight">Fully Paid</p>
                                                 <p className="text-xs text-emerald-600 font-medium">This order is fully paid by the customer.</p>
 
-                                                {selectedOrder?.received_by_waiter && !selectedOrder?.received_by_counter && (
-                                                    <div className="mt-4 pt-4 border-t border-emerald-100 space-y-3">
-                                                        {(() => {
-                                                            const pMethods = selectedOrder?.payment_methods_list || selectedOrder?.payment_methods || [];
-                                                            const hasQR = pMethods.includes('QR');
-                                                            return (
-                                                                <>
-                                                                    {hasQR ? (
-                                                                        <p className="text-[11px] text-emerald-700 font-bold italic">Online payment (QR). Finalize receipt at counter.</p>
-                                                                    ) : (
-                                                                        <p className="text-[11px] text-emerald-700 font-bold italic">Waiter ({selectedOrder.received_by_waiter_name}) has cash. Confirm once received.</p>
-                                                                    )}
-                                                                    <Button
-                                                                        className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 font-bold rounded-xl shadow-lg"
-                                                                        onClick={() => {
-                                                                            const method = hasQR ? 'QR' : 'CASH';
-                                                                            setPaymentMethod(method as any);
-                                                                            setPaymentAmount("0");
-                                                                            // Small timeout to ensure state is updated
-                                                                            setTimeout(() => handlePaymentSubmit(), 50);
-                                                                        }}
-                                                                        disabled={isPaying}
-                                                                    >
-                                                                        {isPaying ? <Loader2 className="h-4 w-4 animate-spin" /> : (hasQR ? "Finalize Receipt" : "Confirm Handover")}
-                                                                    </Button>
-                                                                </>
-                                                            );
-                                                        })()}
-                                                    </div>
-                                                )}
+                                                {/* Waiter confirmation UI removed */}
                                             </div>
                                         </div>
                                     )}

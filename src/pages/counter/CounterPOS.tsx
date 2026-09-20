@@ -95,6 +95,8 @@ export default function CounterPOS() {
     }]);
     const [activeTabId, setActiveTabId] = useState("1");
 
+
+
     const activeTab = useMemo(() => tabs.find(t => t.id === activeTabId) || tabs[0], [tabs, activeTabId]);
 
     const updateActiveTab = (updates: Partial<typeof activeTab>) => {
@@ -538,25 +540,30 @@ export default function CounterPOS() {
 
     const removeTab = (id: string, e?: React.MouseEvent) => {
         if (e) e.stopPropagation();
-        setTabs(prev => {
-            if (prev.length === 1) {
-                return [{
-                    id: Date.now().toString(),
-                    cart: [],
-                    customer: null,
-                    selectedFloor: null,
-                    tableNo: "",
-                    taxEnabled: false,
-                    taxRate: 5,
-                    discountPercent: 0
-                }];
-            }
-            const filtered = prev.filter(t => t.id !== id);
-            if (activeTabId === id) {
-                setActiveTabId(filtered[0].id);
-            }
-            return filtered;
-        });
+
+        if (tabs.length === 1) {
+            const newId = Date.now().toString();
+            setActiveTabId(newId);
+            setTabs([{
+                id: newId,
+                cart: [],
+                customer: null,
+                selectedFloor: null,
+                tableNo: "",
+                taxEnabled: false,
+                taxRate: 5,
+                discountPercent: 0
+            }]);
+            return;
+        }
+
+        const filtered = tabs.filter(t => t.id !== id);
+        if (activeTabId === id) {
+            const idx = tabs.findIndex(t => t.id === id);
+            const nextIdx = idx >= filtered.length ? filtered.length - 1 : idx;
+            setActiveTabId(filtered[nextIdx].id);
+        }
+        setTabs(filtered);
     };
 
     const handlePrint = () => {

@@ -26,14 +26,21 @@ import {
     Plus,
     Minus,
     Trash2,
-    MoveRight
+    MoveRight,
+    LayoutGrid,
+    List,
+    Layers,
+    UtensilsCrossed,
+    CircleDot,
+    ChevronRight,
+    ArrowRight
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { format, parseISO } from "date-fns";
-import { fetchInvoices, addPayment, fetchProducts, fetchBranch, fetchInvoiceDetail, patchInvoice } from "@/api/index.js";
+import { fetchInvoices, addPayment, fetchProducts, fetchBranch, fetchInvoiceDetail, patchInvoice, fetchTables } from "@/api/index.js";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -56,6 +63,17 @@ export default function CounterOrders() {
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState<"ALL" | "PAID" | "UNPAID" | "PARTIAL" | "PENDING" | "WAITER RECEIVED">("ALL");
+
+    // View Mode: list or table-grid
+    const [viewMode, setViewMode] = useState<'list' | 'table'>('list');
+
+    // Table View state
+    const [floors, setFloors] = useState<any[]>([]);
+    const [selectedFloor, setSelectedFloor] = useState<any>(null);
+    const [floorsLoading, setFloorsLoading] = useState(false);
+    const [tableViewSelectedTable, setTableViewSelectedTable] = useState<number | null>(null);
+    const [showTableOrdersModal, setShowTableOrdersModal] = useState(false);
+    const [tableOrders, setTableOrders] = useState<any[]>([]);
 
     // Payment States
     const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -281,6 +299,22 @@ export default function CounterOrders() {
         }
     }, [dateFilter]);
 
+    const loadFloors = useCallback(async () => {
+        setFloorsLoading(true);
+        try {
+            const data = await fetchTables();
+            const floorList = data || [];
+            setFloors(floorList);
+            if (floorList.length > 0 && !selectedFloor) {
+                setSelectedFloor(floorList[0]);
+            }
+        } catch (err) {
+            console.error("Failed to fetch floors:", err);
+        } finally {
+            setFloorsLoading(false);
+        }
+    }, [selectedFloor]);
+
     useEffect(() => {
         const user = getCurrentUser();
         setCurrentUser(user);
@@ -296,6 +330,38 @@ export default function CounterOrders() {
         loadInvoices(1, true);
         loadProducts();
     }, [loadInvoices, loadProducts]);
+
+    // Load floors when table view is activated
+    useEffect(() => {
+        if (viewMode === 'table' && floors.length === 0) {
+            loadFloors();
+        }
+    }, [viewMode, floors.length, loadFloors]);
+
+    // Build a map: tableNo -> list of ACTIVE (unpaid) orders only for Table View
+    const tableOrdersMap = useMemo(() => {
+        const map = new Map<number, any[]>();
+        orders.forEach(o => {
+            const tNo = o.table_no ? Number(o.table_no) : null;
+            if (!tNo) return;
+            // Only include active orders: not fully paid by counter
+            const isFullyPaid = o.payment_status === 'PAID' && o.received_by_counter;
+            if (isFullyPaid) return;
+            // Exclude PAID orders where due_amount is 0 (settled)
+            const isPaidNoDue = o.payment_status === 'PAID' && parseFloat(o.due_amount || 0) <= 0;
+            if (isPaidNoDue) return;
+            if (!map.has(tNo)) map.set(tNo, []);
+            map.get(tNo)!.push(o);
+        });
+        return map;
+    }, [orders]);
+
+    const handleTableBoxClick = (tableNumber: number) => {
+        const tableInvoices = tableOrdersMap.get(tableNumber) || [];
+        setTableViewSelectedTable(tableNumber);
+        setTableOrders(tableInvoices);
+        setShowTableOrdersModal(true);
+    };
 
     const handleLoadMore = () => {
         if (!loadingMore && hasMore) {
@@ -670,6 +736,36 @@ export default function CounterOrders() {
 
             {/* Toolbar */}
             <div className="px-6 py-4 shrink-0 flex flex-col md:flex-row gap-4">
+                {/* View Mode Toggle */}
+                <div className="flex items-center bg-slate-100 rounded-xl p-1 gap-1 shrink-0">
+                    <button
+                        onClick={() => setViewMode('list')}
+                        className={cn(
+                            "flex items-center gap-1.5 px-3 h-8 rounded-lg text-sm font-semibold transition-all",
+                            viewMode === 'list'
+                                ? "bg-white text-slate-900 shadow-sm"
+                                : "text-slate-500 hover:text-slate-700"
+                        )}
+                    >
+                        <List className="h-3.5 w-3.5" />
+                        <span>List</span>
+                    </button>
+                    <button
+                        onClick={() => setViewMode('table')}
+                        className={cn(
+                            "flex items-center gap-1.5 px-3 h-8 rounded-lg text-sm font-semibold transition-all",
+                            viewMode === 'table'
+                                ? "bg-white text-slate-900 shadow-sm"
+                                : "text-slate-500 hover:text-slate-700"
+                        )}
+                    >
+                        <LayoutGrid className="h-3.5 w-3.5" />
+                        <span>Tables</span>
+                    </button>
+                </div>
+
+                {viewMode === 'list' && (
+                    <>
                 <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                     <Input
@@ -721,9 +817,149 @@ export default function CounterOrders() {
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
+                    </>
+                )}
             </div>
 
-            {/* Orders Table */}
+            {/* Table View */}
+            {viewMode === 'table' && (
+                <main className="flex-1 overflow-hidden flex px-6 pb-6 gap-4">
+                    {/* Floor Sidebar */}
+                    <div className="w-48 shrink-0 flex flex-col gap-2">
+                        <p className="text-[10px] uppercase tracking-widest font-black text-slate-400 px-1 mb-1">Floors</p>
+                        {floorsLoading ? (
+                            <div className="flex items-center justify-center py-8">
+                                <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+                            </div>
+                        ) : floors.length === 0 ? (
+                            <div className="text-center py-8 text-slate-400 text-xs">No floors found</div>
+                        ) : (
+                            floors.map(floor => {
+                                const floorTables = Array.from({ length: floor.table_count || 0 }, (_, i) => i + 1);
+                                const occupiedCount = floorTables.filter(t => tableOrdersMap.has(t)).length;
+                                return (
+                                    <button
+                                        key={floor.id}
+                                        onClick={() => setSelectedFloor(floor)}
+                                        className={cn(
+                                            "w-full text-left px-3 py-3 rounded-xl border transition-all",
+                                            selectedFloor?.id === floor.id
+                                                ? "bg-slate-900 text-white border-slate-900 shadow-md"
+                                                : "bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                                        )}
+                                    >
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <Layers className={cn("h-3.5 w-3.5 shrink-0", selectedFloor?.id === floor.id ? "text-white/70" : "text-slate-400")} />
+                                            <span className="font-semibold text-sm truncate">{floor.name}</span>
+                                        </div>
+                                        <div className={cn("text-[10px] font-medium", selectedFloor?.id === floor.id ? "text-white/60" : "text-slate-400")}>
+                                            {occupiedCount} occupied · {floor.table_count || 0} total
+                                        </div>
+                                    </button>
+                                );
+                            })
+                        )}
+                    </div>
+
+                    {/* Table Grid */}
+                    <div className="flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-auto p-6">
+                        {!selectedFloor ? (
+                            <div className="flex flex-col items-center justify-center h-full opacity-30 gap-3">
+                                <Layers className="h-12 w-12" />
+                                <p className="font-bold text-slate-600">Select a floor to view tables</p>
+                            </div>
+                        ) : (
+                            <>
+                                {/* Floor Header */}
+                                <div className="flex items-center justify-between mb-6">
+                                    <div>
+                                        <h2 className="text-xl font-bold text-slate-900">{selectedFloor.name}</h2>
+                                        <p className="text-sm text-slate-400 mt-0.5">Click a table to view orders & collect payment</p>
+                                    </div>
+                                    <div className="flex items-center gap-4 text-xs font-semibold">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="h-3 w-3 rounded-full bg-emerald-500"></span>
+                                            <span className="text-slate-500">Available</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="h-3 w-3 rounded-full bg-[#c68b07] animate-pulse"></span>
+                                            <span className="text-slate-500">Occupied</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Table Grid */}
+                                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+                                    {Array.from({ length: selectedFloor.table_count || 0 }, (_, i) => {
+                                        const tableNum = i + 1;
+                                        const tableInvs = tableOrdersMap.get(tableNum) || [];
+                                        const hasActive = tableInvs.length > 0;
+                                        const totalDue = tableInvs.reduce((sum: number, o: any) => sum + parseFloat(o.due_amount || o.total_amount || 0), 0);
+                                        const totalOrders = tableInvs.length;
+
+                                        // Green = available, Warm Gold (#c68b07) = occupied with active orders
+                                        const cardColor = !hasActive
+                                            ? 'bg-emerald-500 border-emerald-500 hover:bg-emerald-400 hover:border-emerald-400 text-white'
+                                            : 'bg-[#c68b07] border-[#b07b06] hover:bg-[#b88106] hover:border-[#a06f05] cursor-pointer shadow-md text-white';
+
+                                        const dotColor = !hasActive
+                                            ? 'bg-white/70'
+                                            : 'bg-white animate-pulse';
+
+                                        const statusLabel = !hasActive ? 'Available' : 'Occupied';
+                                        const statusTextColor = !hasActive ? 'text-emerald-100 font-semibold' : 'text-amber-100 font-bold';
+
+                                        return (
+                                            <button
+                                                key={tableNum}
+                                                onClick={() => hasActive && handleTableBoxClick(tableNum)}
+                                                className={cn(
+                                                    "relative flex flex-col p-3 rounded-2xl border-2 transition-all text-left group active:scale-95",
+                                                    cardColor,
+                                                    !hasActive && "cursor-default"
+                                                )}
+                                            >
+                                                {/* Status dot */}
+                                                <span className={cn("absolute top-2.5 right-2.5 h-2.5 w-2.5 rounded-full", dotColor)} />
+
+                                                {/* Table icon */}
+                                                <div className={cn(
+                                                    "h-10 w-10 rounded-xl flex items-center justify-center mb-2",
+                                                    !hasActive
+                                                        ? "bg-emerald-400/60 text-white"
+                                                        : "bg-white/20 text-white"
+                                                )}>
+                                                    <UtensilsCrossed className="h-4 w-4" />
+                                                </div>
+
+                                                <p className={cn("text-[10px] font-black uppercase tracking-wider", !hasActive ? "text-emerald-100" : "text-amber-100/90")}>TABLE</p>
+                                                <p className="text-lg font-black leading-tight text-white">
+                                                    {String(tableNum).padStart(2, '0')}
+                                                </p>
+                                                <p className={cn("text-[10px] font-bold mt-0.5", statusTextColor)}>{statusLabel}</p>
+
+                                                {hasActive && (
+                                                    <div className="mt-2 pt-2 border-t border-white/20 w-full">
+                                                        <p className="text-[10px] text-amber-100 font-semibold">{totalOrders} order{totalOrders > 1 ? 's' : ''}</p>
+                                                        <p className="text-[11px] font-black text-white">Rs.{totalDue.toFixed(0)} due</p>
+                                                    </div>
+                                                )}
+
+                                                {hasActive && (
+                                                    <div className="absolute inset-0 rounded-2xl ring-2 ring-white/30 group-hover:ring-white/50 transition-all pointer-events-none" />
+                                                )}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </main>
+            )}
+
+            {/* Orders Table (list view) */}
+            {viewMode === 'list' && (
             <main className="flex-1 overflow-hidden px-6 pb-6">
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 h-full flex flex-col overflow-hidden">
                     <div className="overflow-x-auto h-full custom-scrollbar">
@@ -909,6 +1145,120 @@ export default function CounterOrders() {
                     )}
                 </div>
             </main>
+            )}
+
+            {/* Table Orders Modal - shows all invoices for a specific table */}
+            <Dialog open={showTableOrdersModal} onOpenChange={setShowTableOrdersModal}>
+                <DialogContent className="max-w-2xl p-0 overflow-hidden border border-slate-200 shadow-2xl rounded-2xl">
+                    <div className="bg-white">
+                        {/* Modal Header */}
+                        <div className="px-6 pt-5 pb-4 border-b border-slate-100">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <DialogTitle className="text-lg font-bold text-slate-900">
+                                        Table {tableViewSelectedTable}
+                                        {selectedFloor?.name && (
+                                            <span className="ml-2 text-[11px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold">{selectedFloor.name}</span>
+                                        )}
+                                    </DialogTitle>
+                                    <p className="text-sm text-slate-400 mt-0.5">{tableOrders.length} order{tableOrders.length !== 1 ? 's' : ''} · Click an order to collect payment</p>
+                                </div>
+                                <button
+                                    onClick={() => setShowTableOrdersModal(false)}
+                                    className="h-8 w-8 rounded-lg hover:bg-slate-100 flex items-center justify-center transition-colors"
+                                >
+                                    <X className="h-4 w-4 text-slate-500" />
+                                </button>
+                            </div>
+
+                            {/* Summary chips */}
+                            {tableOrders.length > 0 && (() => {
+                                const totalRevenue = tableOrders.reduce((s, o) => s + parseFloat(o.total_amount || 0), 0);
+                                const totalDue = tableOrders.reduce((s, o) => s + parseFloat(o.due_amount || 0), 0);
+                                const paidCount = tableOrders.filter(o => o.payment_status === 'PAID').length;
+                                return (
+                                    <div className="flex items-center gap-3 mt-3">
+                                        <div className="flex-1 bg-slate-50 rounded-xl px-3 py-2 text-center">
+                                            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Total Revenue</p>
+                                            <p className="text-base font-black text-slate-900">Rs.{totalRevenue.toFixed(2)}</p>
+                                        </div>
+                                        <div className="flex-1 bg-amber-50 rounded-xl px-3 py-2 text-center">
+                                            <p className="text-[10px] text-amber-600 font-semibold uppercase tracking-wider">Due</p>
+                                            <p className="text-base font-black text-amber-700">Rs.{totalDue.toFixed(2)}</p>
+                                        </div>
+                                        <div className="flex-1 bg-emerald-50 rounded-xl px-3 py-2 text-center">
+                                            <p className="text-[10px] text-emerald-600 font-semibold uppercase tracking-wider">Paid</p>
+                                            <p className="text-base font-black text-emerald-700">{paidCount}/{tableOrders.length}</p>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+                        </div>
+
+                        {/* Order List */}
+                        <div className="max-h-[460px] overflow-auto">
+                            {tableOrders.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-16 gap-3 opacity-30">
+                                    <ShoppingBag className="h-10 w-10" />
+                                    <p className="font-bold text-slate-600">No orders for this table</p>
+                                </div>
+                            ) : (
+                                <div className="divide-y divide-slate-100">
+                                    {tableOrders.map((order: any, idx: number) => {
+                                        const isPaid = order.payment_status === 'PAID' || order.payment_status === 'WAITER RECEIVED';
+                                        const dueAmt = parseFloat(order.due_amount || 0);
+                                        const totalAmt = parseFloat(order.total_amount || 0);
+                                        const pMethods = order.payment_methods_list || order.payment_methods || (order.payment_method ? [order.payment_method] : []);
+                                        return (
+                                            <div
+                                                key={order.id}
+                                                className={cn(
+                                                    "px-6 py-4 flex items-center gap-4 transition-colors",
+                                                    !isPaid ? "hover:bg-amber-50/60 cursor-pointer" : "hover:bg-slate-50/60 cursor-pointer"
+                                                )}
+                                                onClick={() => {
+                                                    setShowTableOrdersModal(false);
+                                                    handleRowClick(order);
+                                                }}
+                                            >
+                                                <div className={cn(
+                                                    "h-10 w-10 rounded-xl flex items-center justify-center text-xs font-black shrink-0",
+                                                    isPaid ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                                                )}>
+                                                    #{idx + 1}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-sm font-bold text-slate-800 font-mono">#{order.invoice_number?.slice(-6) || order.id}</span>
+                                                        <StatusBadge status={getDisplayStatus(order)} className="text-[10px] px-2 py-0.5" />
+                                                    </div>
+                                                    <div className="flex items-center gap-2 mt-0.5">
+                                                        <span className="text-xs text-slate-400">
+                                                            {order.created_at ? format(parseISO(order.created_at), 'hh:mm a') : ''}
+                                                        </span>
+                                                        <span className="text-slate-300">·</span>
+                                                        <span className="text-xs text-slate-500 truncate">{order.customer_name || 'Walk-in'}</span>
+                                                        {pMethods.length > 0 && (
+                                                            <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-semibold">{pMethods[0]}</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div className="text-right shrink-0">
+                                                    <p className="text-base font-black text-slate-900">Rs.{totalAmt.toFixed(2)}</p>
+                                                    {!isPaid && dueAmt > 0 && (
+                                                        <p className="text-[11px] font-bold text-amber-600">Rs.{dueAmt.toFixed(2)} due</p>
+                                                    )}
+                                                </div>
+                                                <ArrowRight className="h-4 w-4 text-slate-300 shrink-0" />
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             {/* Order Details / Payment Dialog - Non-modal to allow external keyboard */}
             <Dialog open={showDetailModal} onOpenChange={setShowDetailModal} modal={false}>
@@ -939,9 +1289,13 @@ export default function CounterOrders() {
                                                 const tableNo = selectedOrder?.table_no || (tableMatch ? tableMatch[1] : null);
                                                 return (
                                                     <div className="flex items-center gap-2">
-                                                        {tableNo && (
+                                                        {tableNo ? (
                                                             <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 font-medium">
                                                                 Table {tableNo}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 font-bold uppercase border border-amber-200">
+                                                                Takeaway
                                                             </span>
                                                         )}
                                                         {selectedOrder?.floor_name && (

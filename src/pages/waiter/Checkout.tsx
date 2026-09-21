@@ -179,13 +179,6 @@ export default function Checkout() {
             return;
         }
 
-        if (paymentTiming === "later" && !customer) {
-            toast.error("Customer required for Pay Later", {
-                description: "Please select a customer first",
-            });
-            setIsCustomerSelectorOpen(true);
-            return;
-        }
 
         // Prepare preview data
         setReceiptData({
@@ -531,6 +524,9 @@ export default function Checkout() {
                             <User className="h-5 w-5 text-primary" />
                             Customer Information
                         </h3>
+                        <span className="text-xs bg-slate-100 text-slate-500 font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">
+                            Optional
+                        </span>
                     </div>
 
                     <div className="space-y-4">
@@ -776,10 +772,6 @@ export default function Checkout() {
                                 setPaymentTiming("later");
                                 setPaymentMethod(null);
                                 setShowPaymentConfirmation(false);
-                                if (!customer) {
-                                    setIsCustomerSelectorOpen(true);
-                                    toast.info("Please select a customer for Pay Later");
-                                }
                             }}
                             className={cn(
                                 "p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 hover:scale-105",

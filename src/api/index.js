@@ -265,6 +265,30 @@ async function safeJson(res) {
   }
 }
 
+export function formatApiErrorMessage(data, fallback = "Operation failed") {
+  if (!data) return fallback;
+  if (typeof data === "string") return data;
+  if (data.detail) return typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail);
+  if (data.message) return typeof data.message === "string" ? data.message : JSON.stringify(data.message);
+  if (data.error) return typeof data.error === "string" ? data.error : JSON.stringify(data.error);
+  if (data.errors) return typeof data.errors === "string" ? data.errors : JSON.stringify(data.errors);
+  if (typeof data === "object") {
+    const parts = [];
+    for (const [key, val] of Object.entries(data)) {
+      if (Array.isArray(val)) {
+        parts.push(`${key}: ${val.join(", ")}`);
+      } else if (typeof val === "object" && val !== null) {
+        parts.push(`${key}: ${JSON.stringify(val)}`);
+      } else {
+        parts.push(`${key}: ${val}`);
+      }
+    }
+    if (parts.length > 0) return parts.join(" | ");
+  }
+  return fallback;
+}
+
+
 // --- API METHODS ---
 
 export async function loginUsers(username, password) {
@@ -579,8 +603,11 @@ export async function createInvoice(invoiceData) {
     body: JSON.stringify(invoiceData),
   });
   const data = await safeJson(res);
-  if (!res.ok) throw new Error(data?.message || "Failed to create invoice");
-  return data.data;
+  if (!res.ok) {
+    console.error("❌ createInvoice failed:", res.status, data);
+    throw new Error(formatApiErrorMessage(data, "Failed to create invoice"));
+  }
+  return data.data || data;
 }
 
 export async function fetchInvoices(params = {}) {
@@ -867,4 +894,42 @@ export async function createWaiterPayment(paymentData) {
   const data = await safeJson(res);
   if (!res.ok) throw new Error(data?.message || "Failed to create waiter payment");
   return data;
+}
+
+export async function deleteWaiterPayment(id) {
+  const res = await apiFetch(`/api/waiter-payments/${id}/`, {
+    method: "DELETE",
+  });
+  if (!res.ok && res.status !== 204) {
+    const data = await safeJson(res);
+    throw new Error(data?.message || "Failed to revert waiter payment");
+  }
+  return true;
+}
+
+export async function revertWaiterPayment(payment) {
+  const paymentId = payment.id;
+  try {
+    const res = await apiFetch(`/api/waiter-payments/${paymentId}/`, {
+      method: "DELETE",
+    });
+    if (res.ok || res.status === 204) {
+      return { success: true, method: "deleted" };
+    }
+  } catch (err) {
+    console.warn("DELETE /api/waiter-payments/ failed, attempting reversal fallback:", err);
+  }
+
+  // Fallback: If DELETE returned an error, create an offsetting reversal payment
+  const res = await apiFetch("/api/waiter-payments/", {
+    method: "POST",
+    body: JSON.stringify({
+      paid_by: payment.paid_by,
+      amount: -Math.abs(parseFloat(payment.amount)),
+      notes: `Reversal of handover #${paymentId}`
+    }),
+  });
+  const data = await safeJson(res);
+  if (!res.ok) throw new Error(data?.message || "Failed to revert waiter payment");
+  return { success: true, method: "reversal_created", data };
 }

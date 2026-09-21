@@ -265,6 +265,30 @@ async function safeJson(res) {
   }
 }
 
+export function formatApiErrorMessage(data, fallback = "Operation failed") {
+  if (!data) return fallback;
+  if (typeof data === "string") return data;
+  if (data.detail) return typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail);
+  if (data.message) return typeof data.message === "string" ? data.message : JSON.stringify(data.message);
+  if (data.error) return typeof data.error === "string" ? data.error : JSON.stringify(data.error);
+  if (data.errors) return typeof data.errors === "string" ? data.errors : JSON.stringify(data.errors);
+  if (typeof data === "object") {
+    const parts = [];
+    for (const [key, val] of Object.entries(data)) {
+      if (Array.isArray(val)) {
+        parts.push(`${key}: ${val.join(", ")}`);
+      } else if (typeof val === "object" && val !== null) {
+        parts.push(`${key}: ${JSON.stringify(val)}`);
+      } else {
+        parts.push(`${key}: ${val}`);
+      }
+    }
+    if (parts.length > 0) return parts.join(" | ");
+  }
+  return fallback;
+}
+
+
 // --- API METHODS ---
 
 export async function loginUsers(username, password) {
@@ -579,8 +603,11 @@ export async function createInvoice(invoiceData) {
     body: JSON.stringify(invoiceData),
   });
   const data = await safeJson(res);
-  if (!res.ok) throw new Error(data?.message || "Failed to create invoice");
-  return data.data;
+  if (!res.ok) {
+    console.error("❌ createInvoice failed:", res.status, data);
+    throw new Error(formatApiErrorMessage(data, "Failed to create invoice"));
+  }
+  return data.data || data;
 }
 
 export async function fetchInvoices(params = {}) {

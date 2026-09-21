@@ -34,24 +34,31 @@ export function MobileHeader({ title, showBack = false }: MobileHeaderProps) {
   const branchName = user?.branch_name || "Ama Bakery";
 
   return (
-    <header className="sticky top-0 z-50 glass-panel border-b px-4 pr-14 py-3 shadow-sm">
+    <header className="sticky top-0 z-40 bg-white/85 backdrop-blur-xl border-b border-slate-200/60 px-3.5 pr-36 py-2 shadow-2xs">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
           {showBack && (
             <Button
               variant="ghost"
               size="icon"
               onClick={() => navigate(-1)}
-              className="h-10 w-10 text-slate-500 hover:bg-slate-100"
+              className="h-8 w-8 rounded-full text-slate-500 hover:bg-slate-100 shrink-0"
             >
-              <ArrowLeft className="h-5 w-5" />
+              <ArrowLeft className="h-4 w-4" />
             </Button>
           )}
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-full bg-white p-1.5 shadow-md border-2 border-primary/20 shrink-0 overflow-hidden flex items-center justify-center">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="h-8 w-8 rounded-xl bg-white p-1 shadow-2xs border border-slate-200/70 shrink-0 overflow-hidden flex items-center justify-center">
               <img src="/logos/logo1white.jfif" alt="AMA BAKERY" className="h-full w-full object-contain" />
             </div>
-            <h1 className="text-base lg:text-lg font-rockwell font-black text-slate-800 tracking-tight leading-none">AMA BAKERY</h1>
+            <div className="min-w-0 flex flex-col">
+              <h1 className="text-xs md:text-sm font-black text-slate-900 tracking-tight leading-tight truncate">
+                AMA BAKERY
+              </h1>
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider leading-none truncate">
+                {title}
+              </p>
+            </div>
           </div>
         </div>
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { MobileHeader } from "@/components/layout/MobileHeader";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -7,11 +7,33 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { WaiterBottomNav } from "@/components/waiter/WaiterBottomNav";
-import { CreditCard, Banknote, CheckCircle2, IndianRupee, Printer, Clock, X, Loader2, Wallet, QrCode, ChevronDown, ChevronUp, User, Receipt, Edit, Search, Bell } from "lucide-react";
+import { 
+  CreditCard, 
+  Banknote, 
+  CheckCircle2, 
+  IndianRupee, 
+  Printer, 
+  Clock, 
+  X, 
+  Loader2, 
+  Wallet, 
+  QrCode, 
+  ChevronDown, 
+  ChevronUp, 
+  User, 
+  Receipt, 
+  Edit, 
+  Search, 
+  Bell,
+  RefreshCw,
+  Coins,
+  ShieldCheck,
+  AlertCircle
+} from "lucide-react";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { fetchInvoices, addPayment, fetchInvoiceDetail, fetchBranch } from "@/api/index.js";
+import { fetchInvoices, addPayment, fetchInvoiceDetail, fetchBranch, fetchUsers, fetchWaiterPayments, fetchMe } from "@/api/index.js";
 import { getCurrentUser } from "@/auth/auth";
 import { useOrdersWebSocket } from "@/hooks/useOrdersWebSocket";
 
@@ -19,6 +41,8 @@ export default function PaymentCollection() {
   const navigate = useNavigate();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const wsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showCashDialog, setShowCashDialog] = useState(false);
@@ -34,12 +58,26 @@ export default function PaymentCollection() {
   const [showAlreadyPaidDialog, setShowAlreadyPaidDialog] = useState(false);
   const [activeNonCashMethod, setActiveNonCashMethod] = useState<'QR' | 'CARD' | 'ONLINE'>('QR');
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<'pending' | 'collected'>('pending');
+  const [waiterCashInHand, setWaiterCashInHand] = useState<number | null>(null);
+  const [waiterPaymentsHistory, setWaiterPaymentsHistory] = useState<any[]>([]);
 
-  const loadInvoices = useCallback(async () => {
-    setLoading(true);
+  const loadInvoices = useCallback(async (isInitial = false) => {
+    if (isInitial) setLoading(true);
+
     try {
-      const response = await fetchInvoices({ date: new Date().toISOString().split('T')[0] });
-      const data = response.results || response;
+      const todayStr = new Date().toISOString().split('T')[0];
+      const [invoiceRes, meRes, usersRes, waiterPaymentsRes] = await Promise.all([
+        fetchInvoices({ date: todayStr }).catch(err => {
+          console.error("fetchInvoices failed:", err);
+          return null;
+        }),
+        fetchMe().catch(() => null),
+        fetchUsers().catch(() => null),
+        fetchWaiterPayments().catch(() => null)
+      ]);
+
+      const data = invoiceRes?.results || (Array.isArray(invoiceRes) ? invoiceRes : []);
 
       const enrichedInvoices = await Promise.all(
         (data || []).map(async (inv: any) => {
@@ -52,20 +90,55 @@ export default function PaymentCollection() {
         })
       );
 
-      // Filter for orders that are NOT fully paid yet
-      const pendingPayments = enrichedInvoices.filter(
-        (o: any) => o.payment_status !== "PAID" && o.invoice_status !== "CANCELLED"
+      // Keep all active sale orders (both pending and collected today)
+      const validInvoices = enrichedInvoices.filter(
+        (o: any) => !o.is_deleted && o.invoice_status !== "CANCELLED" && o.invoice_type === "SALE"
       );
-      setOrders(pendingPayments);
+      setOrders(validInvoices);
+
+      // Extract current waiter cash in hand & handovers from server
+      const user = getCurrentUser();
+      let resolvedCashInHand: number | null = null;
+
+      // Priority 1: Direct /api/me/ response
+      if (meRes && meRes.cash_in_hand !== undefined && meRes.cash_in_hand !== null) {
+        resolvedCashInHand = parseFloat(meRes.cash_in_hand) || 0;
+      }
+
+      // Priority 2: User list
+      if (resolvedCashInHand === null && usersRes) {
+        const userList = Array.isArray(usersRes) ? usersRes : (usersRes?.users || usersRes?.results || usersRes?.data || []);
+        const myUser = userList.find((u: any) => String(u.id) === String(user?.id));
+        if (myUser && myUser.cash_in_hand !== undefined && myUser.cash_in_hand !== null) {
+          resolvedCashInHand = parseFloat(myUser.cash_in_hand) || 0;
+        }
+      }
+
+      if (resolvedCashInHand !== null) {
+        setWaiterCashInHand(resolvedCashInHand);
+      }
+
+      // Parse waiter payments history (handling both arrays and paginated DRF responses)
+      const rawPayments = Array.isArray(waiterPaymentsRes)
+        ? waiterPaymentsRes
+        : (waiterPaymentsRes?.results || waiterPaymentsRes?.data || []);
+
+      if (Array.isArray(rawPayments)) {
+        const myPayments = rawPayments
+          .filter((p: any) => String(p.paid_by) === String(user?.id))
+          .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        setWaiterPaymentsHistory(myPayments);
+      }
     } catch (err: any) {
       toast.error(err.message || "Failed to load pending payments");
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
   }, []);
 
   useEffect(() => {
-    loadInvoices();
+    loadInvoices(true);
   }, [loadInvoices]);
 
   useEffect(() => {
@@ -90,7 +163,7 @@ export default function PaymentCollection() {
   // Play notification sound
 
 
-  // WebSocket: auto-refresh when invoice created or status updated
+  // WebSocket: auto-refresh silently on ANY socket event (no manual reload/sync needed)
   const wsCurrentUser = getCurrentUser();
   useOrdersWebSocket(
     useCallback(
@@ -126,25 +199,38 @@ export default function PaymentCollection() {
                 }, 850);
 
                 toast.success(`Order for ${tableText} is ready for pickup!`, {
-                  icon: <Bell className="h-5 w-5 text-success animate-bounce" />,
+                  icon: <Bell className="h-5 w-5 text-emerald-500 animate-bounce" />,
                   duration: 6000,
                 });
               }
             })
             .catch((err) => {
               console.error("Failed to fetch order detail on WS notify:", err);
-            })
-            .finally(() => {
-              loadInvoices();
             });
-        } else if (data.type === "invoice_created" || data.type === "invoice_updated") {
-          loadInvoices();
         }
+
+        // Silent debounced auto-refresh on ANY socket event
+        if (wsDebounceRef.current) clearTimeout(wsDebounceRef.current);
+        wsDebounceRef.current = setTimeout(() => {
+          loadInvoices(false);
+        }, 350);
       },
       [loadInvoices, wsCurrentUser?.id]
     ),
     wsCurrentUser?.branch_id
   );
+
+  // Immediate cross-tab and cross-component sync listener
+  useEffect(() => {
+    const handleSync = () => {
+      loadInvoices(false);
+    };
+    window.addEventListener("waiter-payment-updated", handleSync);
+    return () => {
+      window.removeEventListener("waiter-payment-updated", handleSync);
+      if (wsDebounceRef.current) clearTimeout(wsDebounceRef.current);
+    };
+  }, [loadInvoices]);
 
   const handlePaymentClick = (order: any) => {
     setSelectedOrder(order);
@@ -190,8 +276,9 @@ export default function PaymentCollection() {
         icon: <CheckCircle2 className="h-5 w-5 text-success" />
       });
 
-      // Refresh list
-      await loadInvoices();
+      // Refresh list & broadcast to all tabs
+      window.dispatchEvent(new CustomEvent("waiter-payment-updated"));
+      await loadInvoices(false);
 
       setShowPaymentDialog(false);
       setShowCashDialog(false);
@@ -377,6 +464,8 @@ export default function PaymentCollection() {
     }
   };
 
+  const currentUser = getCurrentUser();
+
   // Search functionality
   const filterOrdersBySearch = (ordersList: any[]) => {
     if (!searchQuery.trim()) return ordersList;
@@ -407,222 +496,487 @@ export default function PaymentCollection() {
     });
   };
 
-  const pendingOrdersList = orders.filter(o => !((o.payment_status === 'PAID' || o.payment_status === 'WAITER RECEIVED' || (o.payment_status === 'PARTIAL' && o.received_by_waiter)) && Number(o.due_amount || 0) <= 0));
-  const completedOrdersList = orders.filter(o => (o.payment_status === 'PAID' || o.payment_status === 'WAITER RECEIVED' || (o.payment_status === 'PARTIAL' && o.received_by_waiter)) && Number(o.due_amount || 0) <= 0);
+  // Orders calculation
+  const pendingOrdersList = useMemo(() => {
+    return orders.filter(o => {
+      const isPaid = ((o.payment_status === 'PAID' || o.payment_status === 'WAITER RECEIVED' || (o.payment_status === 'PARTIAL' && o.received_by_waiter)) && Number(o.due_amount || 0) <= 0);
+      return !isPaid;
+    });
+  }, [orders]);
+
+  const completedOrdersList = useMemo(() => {
+    return orders.filter(o => {
+      const isPaid = ((o.payment_status === 'PAID' || o.payment_status === 'WAITER RECEIVED' || (o.payment_status === 'PARTIAL' && o.received_by_waiter)) && Number(o.due_amount || 0) <= 0);
+      return isPaid;
+    });
+  }, [orders]);
+
+  // Total payments/handovers made by this waiter today
+  const waiterPaymentsTodayTotal = useMemo(() => {
+    const todayStr = new Date().toDateString();
+    return waiterPaymentsHistory
+      .filter(p => {
+        try {
+          return new Date(p.created_at).toDateString() === todayStr;
+        } catch {
+          return false;
+        }
+      })
+      .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+  }, [waiterPaymentsHistory]);
+
+  // Set of order IDs that have been handed over to the counter
+  const handedOverOrderIds = useMemo(() => {
+    const set = new Set<string | number>();
+
+    // 1. Explicitly confirmed in database
+    completedOrdersList.forEach(o => {
+      if (o.received_by_counter) {
+        set.add(o.id);
+      }
+    });
+
+    // 2. Identify all completed cash orders by this waiter
+    const myCashOrders = completedOrdersList
+      .filter(o => {
+        const pMethods = o.payment_methods_list || o.payment_methods || (o.payment_method ? [o.payment_method] : []);
+        const isCash = pMethods.some((m: string) => m?.toUpperCase() === 'CASH') || o.payment_method?.toUpperCase() === 'CASH';
+        const isMine = !o.received_by_waiter || String(o.received_by_waiter) === String(currentUser?.id);
+        return isCash && isMine;
+      })
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+    // Case A: If current waiter cash in hand is 0 or less (or all cash is settled),
+    // then ALL of the waiter's completed cash orders are handed over!
+    if (waiterCashInHand !== null && waiterCashInHand <= 0 && myCashOrders.length > 0) {
+      myCashOrders.forEach(o => set.add(o.id));
+      return set;
+    }
+
+    // Case B: Match against waiter payments history (handover transfers made to counter)
+    if (waiterPaymentsHistory.length > 0) {
+      const latestHandoverTime = new Date(waiterPaymentsHistory[0].created_at).getTime();
+      let remainingHandedOver = waiterPaymentsTodayTotal;
+
+      for (const order of myCashOrders) {
+        const orderTime = new Date(order.created_at).getTime();
+        const orderAmount = parseFloat(order.paid_amount || order.total_amount || 0);
+
+        // If order was created before or around latest handover, or covered by cumulative handed over amount
+        if (orderTime <= latestHandoverTime + 60000 || remainingHandedOver >= orderAmount) {
+          set.add(order.id);
+          remainingHandedOver -= orderAmount;
+        }
+      }
+    }
+
+    return set;
+  }, [completedOrdersList, currentUser, waiterCashInHand, waiterPaymentsTodayTotal, waiterPaymentsHistory]);
+
+  // Fallback calculations for cash in hand and handed over today
+  const orderCalculatedCashInHand = useMemo(() => {
+    return completedOrdersList
+      .filter(o => {
+        const pMethods = o.payment_methods_list || o.payment_methods || (o.payment_method ? [o.payment_method] : []);
+        const isCash = pMethods.some((m: string) => m.toUpperCase() === 'CASH') || o.payment_method?.toUpperCase() === 'CASH';
+        const isMine = !o.received_by_waiter || String(o.received_by_waiter) === String(currentUser?.id);
+        const isHandedOver = Boolean(o.received_by_counter) || handedOverOrderIds.has(o.id);
+        return isCash && isMine && !isHandedOver;
+      })
+      .reduce((sum, o) => sum + (parseFloat(o.paid_amount || o.total_amount) || 0), 0);
+  }, [completedOrdersList, currentUser, handedOverOrderIds]);
+
+  const effectiveCashInHand = waiterCashInHand !== null ? waiterCashInHand : orderCalculatedCashInHand;
+
+  const effectiveHandedOverToday = useMemo(() => {
+    if (waiterPaymentsTodayTotal > 0) {
+      return waiterPaymentsTodayTotal;
+    }
+    // Fallback from orders where received_by_counter is true or settled
+    return completedOrdersList
+      .filter(o => {
+        const pMethods = o.payment_methods_list || o.payment_methods || (o.payment_method ? [o.payment_method] : []);
+        const isCash = pMethods.some((m: string) => m.toUpperCase() === 'CASH') || o.payment_method?.toUpperCase() === 'CASH';
+        const isMine = !o.received_by_waiter || String(o.received_by_waiter) === String(currentUser?.id);
+        const isHandedOver = Boolean(o.received_by_counter) || handedOverOrderIds.has(o.id);
+        return isCash && isMine && isHandedOver;
+      })
+      .reduce((sum, o) => sum + (parseFloat(o.paid_amount || o.total_amount) || 0), 0);
+  }, [waiterPaymentsTodayTotal, completedOrdersList, currentUser, handedOverOrderIds]);
 
   // Apply search filter
   const filteredPendingOrders = filterOrdersBySearch(pendingOrdersList);
   const filteredCompletedOrders = filterOrdersBySearch(completedOrdersList);
 
-  // Extracted Order Card Component for better state management
+  const getHandoverStatus = (order: any) => {
+    const isPaid = ((order.payment_status === 'PAID' || order.payment_status === 'WAITER RECEIVED' || (order.payment_status === 'PARTIAL' && order.received_by_waiter)) && Number(order.due_amount || 0) <= 0);
+    if (!isPaid) return null;
+
+    const pMethods = order.payment_methods_list || order.payment_methods || (order.payment_method ? [order.payment_method] : []);
+    const isCash = pMethods.some((m: string) => m?.toUpperCase() === 'CASH') || order.payment_method?.toUpperCase() === 'CASH';
+
+    if (!isCash && pMethods.length > 0) {
+      return {
+        type: 'online',
+        label: 'Digital / QR Payment',
+        sublabel: 'Directly in Counter account',
+        badgeColor: 'bg-indigo-50/90 text-indigo-700 border-indigo-200/80',
+        dotColor: 'bg-indigo-500'
+      };
+    }
+
+    const isHandedOver = Boolean(order.received_by_counter) || handedOverOrderIds.has(order.id);
+
+    if (isHandedOver) {
+      return {
+        type: 'confirmed',
+        label: 'Handed Over to Counter',
+        sublabel: order.received_by_counter_name ? `Confirmed by ${order.received_by_counter_name}` : 'Settled with Counter',
+        badgeColor: 'bg-emerald-50 text-emerald-800 border-emerald-200/80',
+        dotColor: 'bg-emerald-500'
+      };
+    }
+
+    return {
+      type: 'pending_handover',
+      label: 'In Your Hand (Pending Handover)',
+      sublabel: 'Cash collected • Awaiting Counter handover confirmation',
+      badgeColor: 'bg-amber-50 text-amber-800 border-amber-200/80',
+      dotColor: 'bg-amber-500 animate-pulse'
+    };
+  };
+
+  // Extracted Order Card Component for better state management (Apple-Inspired)
   const PaymentOrderCard = ({ order, onPaymentClick }: { order: any; onPaymentClick: (order: any) => void }) => {
     const [showItems, setShowItems] = useState(false);
+    const isPaid = ((order.payment_status === 'PAID' || order.payment_status === 'WAITER RECEIVED' || (order.payment_status === 'PARTIAL' && order.received_by_waiter)) && Number(order.due_amount || 0) <= 0);
+    const handover = getHandoverStatus(order);
+    const itemsCount = (order.items || []).length;
+    const dueAmount = Number(isPaid ? (order.paid_amount ?? order.total_amount) : (order.due_amount ?? order.total_amount));
 
     return (
-      <div
-        className="card-elevated w-full text-left overflow-hidden transition-all mb-4"
-      >
-        <button
-          className="w-full text-left focus:outline-none active:bg-slate-50 transition-colors"
-          onClick={() => onPaymentClick(order)}
+      <div className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs hover:shadow-xs transition-all overflow-hidden mb-3">
+        {/* Card Header: Order #, Table chip, Floor chip, Status */}
+        <div
+          className="bg-slate-50/60 px-3.5 py-2.5 flex items-center justify-between border-b border-slate-100 cursor-pointer"
+          onClick={() => !isPaid && onPaymentClick(order)}
         >
-          <div className="bg-slate-50/80 px-4 py-3 flex items-center justify-between border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-base">Order #{order.invoice_number?.slice(-4) || '??'}</span>
-              {(order.table_no || !order.floor_name) && (
-                <span className="text-[10px] bg-white border border-slate-200 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider text-slate-500">
-                  Table {order.table_no || '??'}
-                </span>
-              )}
-              {order.floor_name && (
-                <span className="text-[10px] bg-primary/5 text-primary border border-primary/20 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                  {order.floor_name}
-                </span>
-              )}
-            </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-semibold text-slate-900 text-xs md:text-sm">
+              #{order.invoice_number?.slice(-4) || '??'}
+            </span>
+            {(order.table_no || !order.floor_name) && (
+              <span className="text-[11px] bg-white border border-slate-200/80 px-2 py-0.5 rounded-md font-medium text-slate-700 shadow-2xs">
+                {order.table_no ? `Table ${order.table_no}` : "Takeaway"}
+              </span>
+            )}
+            {order.floor_name && (
+              <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium">
+                {order.floor_name}
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5">
             <StatusBadge
-              status={
-                ((order.payment_status === 'PAID' || order.payment_status === 'WAITER RECEIVED' || (order.payment_status === 'PARTIAL' && order.received_by_waiter)) && Number(order.due_amount || 0) <= 0)
-                  ? 'paid'
-                  : order.payment_status?.toLowerCase() || 'pending'
-              }
+              status={isPaid ? 'paid' : (order.payment_status?.toLowerCase() || 'pending')}
             />
           </div>
-        </button>
+        </div>
 
-        <div className="px-4 py-3">
+        {/* Handover Status Pill (Apple Inspired) */}
+        {handover && (
+          <div className={cn("mx-3.5 mt-2.5 px-3 py-1.5 rounded-xl border flex items-center justify-between gap-2 shadow-2xs text-xs", handover.badgeColor)}>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className={cn("h-2 w-2 rounded-full shrink-0", handover.dotColor)} />
+              <div className="min-w-0">
+                <p className="text-xs font-semibold leading-tight truncate">{handover.label}</p>
+                <p className="text-[10px] font-normal opacity-80 leading-tight truncate">{handover.sublabel}</p>
+              </div>
+            </div>
+            {handover.type === 'confirmed' ? (
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+            ) : handover.type === 'pending_handover' ? (
+              <Clock className="h-3.5 w-3.5 text-amber-600 shrink-0 animate-pulse" />
+            ) : (
+              <QrCode className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+            )}
+          </div>
+        )}
+
+        <div className="px-3.5 py-2.5">
           {/* Dropdown Items Header */}
           <button
             onClick={(e) => {
               e.stopPropagation();
               setShowItems(!showItems);
             }}
-            className="w-full flex justify-between items-center py-2 px-1 border-b border-slate-100/50 hover:bg-slate-50/80 transition-all group rounded-md mb-2"
+            className="w-full flex justify-between items-center py-1.5 px-2.5 bg-slate-50/70 hover:bg-slate-100/70 transition-colors rounded-lg mb-2 text-slate-600"
           >
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black uppercase text-slate-400 group-hover:text-primary transition-colors">
-                Items ({(order.items || []).length})
-              </span>
-            </div>
+            <span className="text-[11px] font-medium text-slate-500">
+              {itemsCount} {itemsCount === 1 ? "Item" : "Items"} in Order
+            </span>
             {showItems ? (
-              <ChevronUp className="h-4 w-4 text-slate-400 group-hover:text-primary transition-colors" />
+              <ChevronUp className="h-3.5 w-3.5 text-slate-400" />
             ) : (
-              <ChevronDown className="h-4 w-4 text-slate-400 group-hover:text-primary transition-colors" />
+              <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
             )}
           </button>
 
           {/* Expandable Items List */}
           {showItems && (
-            <div className="space-y-1 mb-4 animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className="space-y-1 mb-2.5 animate-in fade-in duration-150">
               {order.items?.map((item: any, idx: number) => {
                 const name = item?.product_name || item?.product?.name || item?.name || `Product #${item?.product || "?"}`;
                 const qty = item?.quantity ?? 1;
                 const price = item?.unit_price ?? item?.price ?? (item?.product?.selling_price) ?? 0;
 
                 return (
-                  <div key={idx} className="flex justify-between items-center text-sm bg-slate-50/50 p-1.5 rounded-lg border border-slate-100/50">
-                    <span className="text-slate-700 font-medium leading-tight inline-flex gap-1.5 items-center">
-                      <span className="text-primary font-bold bg-primary/10 px-1.5 py-0.5 rounded text-[11px]">{qty}×</span>
+                  <div key={idx} className="flex justify-between items-center text-xs bg-slate-50/50 px-2 py-1 rounded-md">
+                    <span className="text-slate-700 font-normal truncate flex items-center gap-1.5">
+                      <span className="text-slate-900 font-semibold text-[11px]">{qty}×</span>
                       {name}
                     </span>
-                    <span className="text-slate-500 text-[11px] tabular-nums font-bold">Rs.{(Number(price) * Number(qty)).toFixed(0)}</span>
+                    <span className="text-slate-600 font-medium tabular-nums shrink-0 ml-2">
+                      Rs. {(Number(price) * Number(qty)).toFixed(2)}
+                    </span>
                   </div>
                 );
               })}
             </div>
           )}
 
-          <div className="flex justify-between items-center pt-2">
-            <div className="flex items-center gap-1.5 text-slate-400 text-xs">
-              <User className="h-3.5 w-3.5" />
-              <span className="font-medium">{order.created_by_name || 'Waiter'}</span>
+          {/* Meta & Amount */}
+          <div className="flex justify-between items-baseline pt-0.5">
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-1 text-slate-500 text-xs">
+                <User className="h-3 w-3 text-slate-400" />
+                <span className="font-medium text-slate-700 text-xs">{order.customer_name || 'Walk-in Customer'}</span>
+              </div>
+              <p className="text-[10px] text-slate-400">
+                Created by {order.created_by_name || 'Waiter'}
+              </p>
             </div>
             <div className="text-right">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-0.5">Amount Due</p>
-              <p className="text-lg font-black text-primary leading-none">Rs.{Number(order.due_amount ?? order.total_amount).toFixed(2)}</p>
+              <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider block">
+                {isPaid ? "Total Paid" : "Amount Due"}
+              </span>
+              <span className="text-base md:text-lg font-bold text-slate-900 tabular-nums">
+                Rs. {dueAmount.toFixed(2)}
+              </span>
             </div>
           </div>
         </div>
 
-        <div className="flex border-t border-primary/10">
+        {/* Apple-Style Action Footer */}
+        <div className="px-3.5 pb-3 pt-1 flex items-center gap-2">
           <button
             onClick={(e) => {
               e.stopPropagation();
               handleViewBill(order);
             }}
-            className="flex-1 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 text-[10px] font-bold uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
+            className="h-9 px-3 rounded-xl bg-slate-100 hover:bg-slate-200/80 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-95"
           >
-            <Receipt className="h-3.5 w-3.5" />
-            View Bill
+            <Receipt className="h-3.5 w-3.5 text-slate-500" />
+            <span>View Bill</span>
           </button>
 
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/waiter/order/${order.table_no || "takeaway"}?invoiceId=${order.id}&floorId=${order.floor}`);
-            }}
-            className="flex-1 py-2.5 bg-slate-50 hover:bg-slate-100 text-amber-600 text-[10px] font-bold uppercase tracking-widest transition-colors border-l border-primary/10 flex items-center justify-center gap-1.5"
-          >
-            <Edit className="h-3.5 w-3.5" />
-            Edit
-          </button>
+          {!isPaid ? (
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/waiter/order/${order.table_no || "takeaway"}?invoiceId=${order.id}&floorId=${order.floor}`);
+                }}
+                className="h-9 px-3 rounded-xl bg-slate-100 hover:bg-slate-200/80 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-95"
+              >
+                <Edit className="h-3.5 w-3.5 text-slate-500" />
+                <span>Edit</span>
+              </button>
 
-          <button
-            onClick={() => onPaymentClick(order)}
-            className="flex-1 py-2.5 bg-primary/5 hover:bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest transition-colors border-l border-primary/10 flex items-center justify-center gap-2"
-          >
-            <Banknote className="h-3.5 w-3.5" />
-            Collect Payment
-          </button>
+              <button
+                onClick={() => onPaymentClick(order)}
+                className="flex-1 h-9 px-4 rounded-xl bg-[#1D1D1F] hover:bg-[#2C2C2E] text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-2xs"
+              >
+                <Banknote className="h-3.5 w-3.5" />
+                <span>Collect Payment</span>
+              </button>
+            </>
+          ) : (
+            <div className="flex-1 h-9 rounded-xl bg-emerald-50 border border-emerald-200/60 flex items-center justify-center gap-1.5 text-xs font-semibold text-emerald-800">
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+              <span>Collected</span>
+            </div>
+          )}
         </div>
       </div>
     );
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div className="min-h-screen bg-slate-50/50 pb-20">
       <MobileHeader title="Payments" showBack={false} />
 
-      <main className="p-4">
+      <main className="p-4 max-w-2xl mx-auto">
+        {/* Apple-Inspired Unified Balance & Handover Card */}
+        <div className="bg-white/95 backdrop-blur-xl rounded-2xl border border-slate-200/80 p-4 mb-3 shadow-2xs">
+          {/* Card Header: Status & Live indicator */}
+          <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className={cn("h-2 w-2 rounded-full shrink-0", effectiveCashInHand > 0 ? "bg-amber-500 animate-pulse" : "bg-emerald-500")} />
+              <span className={cn(
+                "text-[11px] font-semibold uppercase tracking-wider truncate",
+                effectiveCashInHand > 0 ? "text-amber-800" : "text-emerald-800"
+              )}>
+                {effectiveCashInHand > 0 ? "Awaiting Counter Handover" : "Cash Settled with Counter"}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200/60 text-emerald-700 text-[10px] font-medium shrink-0">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
+              <span>Live Socket</span>
+            </div>
+          </div>
+
+          {/* Primary Amount: Cash In Hand */}
+          <div className="pt-3 pb-2 flex items-baseline justify-between">
+            <div>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">
+                Cash in Hand
+              </span>
+              <div className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight mt-0.5 tabular-nums">
+                Rs. {effectiveCashInHand.toFixed(2)}
+              </div>
+            </div>
+
+            {effectiveCashInHand > 0 && (
+              <div className="text-right">
+                <span className="text-[10px] font-medium text-amber-800 bg-amber-50 border border-amber-200/60 px-2 py-1 rounded-xl inline-block">
+                  Hand over to cashier
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Sub-stats Row */}
+          <div className="grid grid-cols-2 gap-2 pt-2.5 border-t border-slate-100 text-xs">
+            <div className="bg-slate-50/70 p-2.5 rounded-xl border border-slate-100">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">
+                Settled Today
+              </span>
+              <span className="text-sm font-bold text-emerald-700 tabular-nums">
+                Rs. {effectiveHandedOverToday.toFixed(2)}
+              </span>
+            </div>
+
+            <div className="bg-slate-50/70 p-2.5 rounded-xl border border-slate-100">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">
+                Total Handled
+              </span>
+              <span className="text-sm font-bold text-slate-800 tabular-nums">
+                Rs. {(effectiveCashInHand + effectiveHandedOverToday).toFixed(2)}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Native Apple Segmented Control */}
+        <div className="flex p-1 bg-slate-200/60 backdrop-blur-md rounded-xl mb-3 border border-slate-200/40">
+          <button
+            onClick={() => setActiveTab('pending')}
+            className={cn(
+              "flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5 active:scale-98",
+              activeTab === 'pending'
+                ? "bg-white text-slate-900 shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
+                : "text-slate-500 hover:text-slate-800"
+            )}
+          >
+            <span>Pending Bills</span>
+            <span className={cn(
+              "px-1.5 py-0.2 rounded-full text-[10px] font-bold",
+              activeTab === 'pending' ? "bg-primary/10 text-primary" : "bg-slate-300/60 text-slate-600"
+            )}>
+              {filteredPendingOrders.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('collected')}
+            className={cn(
+              "flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5 active:scale-98",
+              activeTab === 'collected'
+                ? "bg-white text-slate-900 shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
+                : "text-slate-500 hover:text-slate-800"
+            )}
+          >
+            <span>Collected & Handovers</span>
+            <span className={cn(
+              "px-1.5 py-0.2 rounded-full text-[10px] font-bold",
+              activeTab === 'collected' ? "bg-emerald-100 text-emerald-700" : "bg-slate-300/60 text-slate-600"
+            )}>
+              {filteredCompletedOrders.length}
+            </span>
+          </button>
+        </div>
+
+        {/* Full-width Apple Search Field (No Reload Button) */}
+        <div className="relative mb-3.5">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Input
+            type="text"
+            placeholder="Search by invoice, customer, table..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9 pr-9 h-10 rounded-xl border border-slate-200/80 focus:border-slate-400 focus:ring-0 bg-white text-xs shadow-2xs placeholder:text-slate-400"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 flex items-center justify-center rounded-full bg-slate-200 hover:bg-slate-300 text-slate-600"
+            >
+              <X className="h-2.5 w-2.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Content List */}
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20">
             <Loader2 className="h-10 w-10 text-primary animate-spin mb-4" />
-            <p className="text-muted-foreground animate-pulse">Fetching pending bills...</p>
+            <p className="text-muted-foreground animate-pulse text-sm font-medium">Fetching orders and handover status...</p>
           </div>
-        ) : orders.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-            <div className="h-20 w-20 rounded-full bg-success/10 flex items-center justify-center mb-4">
-              <CheckCircle2 className="h-10 w-10 text-success" />
-            </div>
-            <h3 className="text-lg font-bold text-slate-900">All sets!</h3>
-            <p className="text-sm">No pending payments found today.</p>
-            <Button
-              variant="outline"
-              className="mt-6 rounded-xl"
-              onClick={loadInvoices}
-            >
-              Refresh List
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {/* Search Bar */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <Input
-                type="text"
-                placeholder="Search by invoice, customer, phone, product..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 h-11 rounded-xl border-2 border-slate-200 focus:border-primary bg-white"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 flex items-center justify-center rounded-full bg-slate-200 hover:bg-slate-300 text-slate-600"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              )}
-            </div>
-
-            {/* Pending Orders */}
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-black uppercase tracking-widest text-slate-400">
-                {filteredPendingOrders.length} Pending Bill{filteredPendingOrders.length !== 1 ? 's' : ''}
-                {searchQuery && ` (from ${pendingOrdersList.length})`}
-              </p>
-              <Button variant="ghost" size="sm" onClick={loadInvoices} className="h-7 text-[10px] font-bold">
-                REFRESH
-              </Button>
-            </div>
-
-            {filteredPendingOrders.length === 0 ? (
-              <div className="text-center py-12 text-slate-400">
-                <Search className="h-12 w-12 mx-auto mb-2 opacity-20" />
-                <p className="text-sm font-medium">No matching orders found</p>
+        ) : activeTab === 'pending' ? (
+          filteredPendingOrders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground bg-white rounded-3xl border border-dashed border-slate-200 p-6 text-center">
+              <div className="h-16 w-16 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3">
+                <CheckCircle2 className="h-8 w-8" />
               </div>
-            ) : (
-              filteredPendingOrders.map(order => (
+              <h3 className="text-base font-bold text-slate-800">No Pending Bills</h3>
+              <p className="text-xs text-slate-400 mt-1 max-w-[240px]">All dining and takeaway bills are settled or no unpaid orders found today.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredPendingOrders.map(order => (
                 <PaymentOrderCard key={order.id} order={order} onPaymentClick={handlePaymentClick} />
-              ))
-            )}
-
-            {/* Completed Orders */}
-            {filteredCompletedOrders.length > 0 && (
-              <div className="mt-8">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-black uppercase tracking-widest text-slate-400">
-                    {filteredCompletedOrders.length} Collected Today
-                    {searchQuery && ` (from ${completedOrdersList.length})`}
-                  </p>
-                </div>
-                {filteredCompletedOrders.map(order => (
-                  <PaymentOrderCard key={order.id} order={order} onPaymentClick={handlePaymentClick} />
-                ))}
+              ))}
+            </div>
+          )
+        ) : (
+          filteredCompletedOrders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground bg-white rounded-3xl border border-dashed border-slate-200 p-6 text-center">
+              <div className="h-16 w-16 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-3">
+                <Clock className="h-8 w-8" />
               </div>
-            )}
-          </div>
+              <h3 className="text-base font-bold text-slate-800">No Collected Bills Today</h3>
+              <p className="text-xs text-slate-400 mt-1 max-w-[240px]">Collected cash and digital payments will appear here with live counter handover tracking.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredCompletedOrders.map(order => (
+                <PaymentOrderCard key={order.id} order={order} onPaymentClick={handlePaymentClick} />
+              ))}
+            </div>
+          )
         )}
       </main>
 

@@ -99,8 +99,15 @@ export default function CounterPOS() {
 
     const activeTab = useMemo(() => tabs.find(t => t.id === activeTabId) || tabs[0], [tabs, activeTabId]);
 
+    // Stable ref so async handlers (checkout, etc.) always target the right tab
+    const activeTabIdRef = useRef(activeTabId);
+    useEffect(() => {
+        activeTabIdRef.current = activeTabId;
+    }, [activeTabId]);
+
     const updateActiveTab = (updates: Partial<typeof activeTab>) => {
-        setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, ...updates } : t));
+        const tid = activeTabIdRef.current;
+        setTabs(prev => prev.map(t => t.id === tid ? { ...t, ...updates } : t));
     };
 
     const cart = activeTab.cart;
@@ -112,8 +119,9 @@ export default function CounterPOS() {
     const discountPercent = activeTab.discountPercent;
 
     const setCart = (valOrUpdater: any) => {
+        const tid = activeTabIdRef.current;
         setTabs(prev => prev.map(t => {
-            if (t.id === activeTabId) {
+            if (t.id === tid) {
                 const newCart = typeof valOrUpdater === 'function' ? valOrUpdater(t.cart) : valOrUpdater;
                 return { ...t, cart: newCart };
             }
@@ -123,8 +131,9 @@ export default function CounterPOS() {
     const setCustomer = (val: any) => updateActiveTab({ customer: val });
     const setSelectedFloor = (val: any) => updateActiveTab({ selectedFloor: val });
     const setTableNo = (valOrUpdater: any) => {
+        const tid = activeTabIdRef.current;
         setTabs(prev => prev.map(t => {
-            if (t.id === activeTabId) {
+            if (t.id === tid) {
                 const newVal = typeof valOrUpdater === 'function' ? valOrUpdater(t.tableNo) : valOrUpdater;
                 return { ...t, tableNo: newVal };
             }
@@ -134,8 +143,9 @@ export default function CounterPOS() {
     const setTaxEnabled = (val: any) => updateActiveTab({ taxEnabled: val });
     const setTaxRate = (val: any) => updateActiveTab({ taxRate: val });
     const setDiscountPercent = (valOrUpdater: any) => {
+        const tid = activeTabIdRef.current;
         setTabs(prev => prev.map(t => {
-            if (t.id === activeTabId) {
+            if (t.id === tid) {
                 const newVal = typeof valOrUpdater === 'function' ? valOrUpdater(t.discountPercent) : valOrUpdater;
                 return { ...t, discountPercent: newVal };
             }
@@ -384,11 +394,6 @@ export default function CounterPOS() {
     const total = subtotal + taxAmount - discountAmount;
 
     const addToCart = (item: MenuItem) => {
-        if (!selectedFloor || !tableNo || tableNo.trim() === '') {
-            toast.error("Please select a Floor and enter Table No. first");
-            return;
-        }
-
         setCart(prev => {
             const existing = prev.find(c => c.item.id === item.id);
             if (existing) {
@@ -460,15 +465,17 @@ export default function CounterPOS() {
 
         setIsProcessing(true);
         const user = getCurrentUser();
+        const branchId = user?.branch_id || branchInfo?.id || (user as any)?.branch;
 
         try {
             const invoiceData = {
-                branch: user?.branch_id,
+                branch: branchId,
                 customer: customer?.id || null,
-                floor: selectedFloor?.id || null,
-                table_no: parseInt(tableNo) || 1,
+                floor: null,
+                table_no: 0,
                 invoice_type: "SALE",
-                description: "Counter Sale",
+                description: "Takeaway",
+                notes: "Takeaway",
                 tax_amount: taxAmount,
                 discount: discountAmount,
                 paid_amount: Math.min(total, parseFloat(cashReceived) || total),
@@ -478,11 +485,12 @@ export default function CounterPOS() {
                     product: parseInt(c.item.id),
                     quantity: c.quantity,
                     unit_price: c.item.price,
-                    discount_amount: 0
+                    discount_amount: 0,
+                    description: c.notes || ""
                 }))
             };
 
-            await createInvoice(invoiceData);
+            const createdInvoice = await createInvoice(invoiceData);
 
             setReceiptData({
                 cart: [...cart],
@@ -494,7 +502,8 @@ export default function CounterPOS() {
                 total,
                 cashReceived,
                 paymentMethod,
-                customer
+                customer,
+                orderId: createdInvoice?.id || createdInvoice?.invoice_number
             });
 
             // Clear the completed tab
@@ -542,10 +551,10 @@ export default function CounterPOS() {
         if (e) e.stopPropagation();
 
         if (tabs.length === 1) {
-            const newId = Date.now().toString();
-            setActiveTabId(newId);
-            setTabs([{
-                id: newId,
+            // Only one tab: reset it in-place instead of replacing the entire array.
+            // Replacing the array creates a new id, which breaks stale closures.
+            setTabs(prev => prev.map(t => t.id === id ? {
+                ...t,
                 cart: [],
                 customer: null,
                 selectedFloor: null,
@@ -553,7 +562,8 @@ export default function CounterPOS() {
                 taxEnabled: false,
                 taxRate: 5,
                 discountPercent: 0
-            }]);
+            } : t));
+            // Keep the same tab id active
             return;
         }
 
@@ -561,7 +571,9 @@ export default function CounterPOS() {
         if (activeTabId === id) {
             const idx = tabs.findIndex(t => t.id === id);
             const nextIdx = idx >= filtered.length ? filtered.length - 1 : idx;
-            setActiveTabId(filtered[nextIdx].id);
+            const nextId = filtered[nextIdx].id;
+            setActiveTabId(nextId);
+            activeTabIdRef.current = nextId;
         }
         setTabs(filtered);
     };
@@ -816,45 +828,7 @@ export default function CounterPOS() {
                                 <Plus className="h-5 w-5" />
                             </Button>
                         </div>
-                        <div className="flex gap-4 w-full">
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button variant="outline" className="flex-1 justify-start h-12 md:h-14 rounded-2xl bg-white focus:border-primary border-2 border-slate-200">
-                                        <Layers className="h-5 w-5 text-slate-400 mr-2" />
-                                        <span className={cn("font-bold text-sm md:text-base", !selectedFloor && "text-slate-400")}>
-                                            {selectedFloor ? selectedFloor.name : "Select Floor"}
-                                        </span>
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent className="w-[200px] rounded-xl z-[100]">
-                                    {floors.map(floor => (
-                                        <DropdownMenuItem key={floor.id} onClick={() => { setSelectedFloor(floor); setTableNo(""); }} className="cursor-pointer font-bold h-10">
-                                            {floor.name}
-                                        </DropdownMenuItem>
-                                    ))}
-                                </DropdownMenuContent>
-                            </DropdownMenu>
 
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild disabled={!selectedFloor}>
-                                    <Button variant="outline" className={cn("flex-1 justify-start h-12 md:h-14 rounded-2xl bg-white focus:border-primary border-2 border-slate-200", !selectedFloor && "opacity-50 cursor-not-allowed")}>
-                                        <Hash className="h-5 w-5 text-slate-400 mr-2" />
-                                        <span className={cn("font-bold text-sm md:text-base", !tableNo && "text-slate-400")}>
-                                            {tableNo ? `Table ${tableNo}` : "Select Table"}
-                                        </span>
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                {selectedFloor && (
-                                    <DropdownMenuContent className="w-[200px] rounded-xl z-[100] max-h-64 overflow-y-auto">
-                                        {Array.from({ length: selectedFloor.table_count || 0 }, (_, i) => i + 1).map(num => (
-                                            <DropdownMenuItem key={num} onClick={() => setTableNo(num.toString())} className="cursor-pointer font-bold h-10">
-                                                Table {num}
-                                            </DropdownMenuItem>
-                                        ))}
-                                    </DropdownMenuContent>
-                                )}
-                            </DropdownMenu>
-                        </div>
 
                         <div className="relative">
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />

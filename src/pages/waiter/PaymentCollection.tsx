@@ -496,20 +496,55 @@ export default function PaymentCollection() {
     });
   };
 
+  // Helper to determine if an order was collected or created by this waiter
+  const isMyOrder = useCallback((o: any) => {
+    if (!currentUser?.id) return false;
+    const myId = String(currentUser.id);
+    const waiterId = String(o.received_by_waiter?.id || o.received_by_waiter || '');
+    const creatorId = String(o.created_by?.id || o.created_by || '');
+
+    // 1. Explicitly collected by this waiter
+    if (waiterId && waiterId === myId) return true;
+
+    // 2. Marked as WAITER RECEIVED and created by this waiter
+    if (o.payment_status === 'WAITER RECEIVED' && creatorId === myId) return true;
+
+    // 3. For Takeaway orders: takeaway is handled at the counter unless created/collected by this waiter
+    const isTakeaway = !o.table_no;
+    if (isTakeaway) {
+      return creatorId === myId;
+    }
+
+    // 4. For Table orders: must be created by this waiter
+    return creatorId === myId;
+  }, [currentUser?.id]);
+
   // Orders calculation
   const pendingOrdersList = useMemo(() => {
     return orders.filter(o => {
       const isPaid = ((o.payment_status === 'PAID' || o.payment_status === 'WAITER RECEIVED' || (o.payment_status === 'PARTIAL' && o.received_by_waiter)) && Number(o.due_amount || 0) <= 0);
-      return !isPaid;
+      if (isPaid) return false;
+
+      // Takeaway orders not created by this waiter belong to the counter POS
+      const isTakeaway = !o.table_no;
+      if (isTakeaway) {
+        return currentUser?.id ? String(o.created_by?.id || o.created_by || '') === String(currentUser.id) : false;
+      }
+
+      // Dining table orders can be collected by any waiter serving the floors
+      return true;
     });
-  }, [orders]);
+  }, [orders, currentUser?.id]);
 
   const completedOrdersList = useMemo(() => {
     return orders.filter(o => {
       const isPaid = ((o.payment_status === 'PAID' || o.payment_status === 'WAITER RECEIVED' || (o.payment_status === 'PARTIAL' && o.received_by_waiter)) && Number(o.due_amount || 0) <= 0);
-      return isPaid;
+      if (!isPaid) return false;
+
+      // Only show orders specifically collected by or created by this waiter
+      return isMyOrder(o);
     });
-  }, [orders]);
+  }, [orders, isMyOrder]);
 
   // Total payments/handovers made by this waiter today
   const waiterPaymentsTodayTotal = useMemo(() => {
@@ -541,8 +576,7 @@ export default function PaymentCollection() {
       .filter(o => {
         const pMethods = o.payment_methods_list || o.payment_methods || (o.payment_method ? [o.payment_method] : []);
         const isCash = pMethods.some((m: string) => m?.toUpperCase() === 'CASH') || o.payment_method?.toUpperCase() === 'CASH';
-        const isMine = !o.received_by_waiter || String(o.received_by_waiter) === String(currentUser?.id);
-        return isCash && isMine;
+        return isCash;
       })
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
@@ -571,7 +605,7 @@ export default function PaymentCollection() {
     }
 
     return set;
-  }, [completedOrdersList, currentUser, waiterCashInHand, waiterPaymentsTodayTotal, waiterPaymentsHistory]);
+  }, [completedOrdersList, waiterCashInHand, waiterPaymentsTodayTotal, waiterPaymentsHistory]);
 
   // Fallback calculations for cash in hand and handed over today
   const orderCalculatedCashInHand = useMemo(() => {
@@ -579,12 +613,11 @@ export default function PaymentCollection() {
       .filter(o => {
         const pMethods = o.payment_methods_list || o.payment_methods || (o.payment_method ? [o.payment_method] : []);
         const isCash = pMethods.some((m: string) => m.toUpperCase() === 'CASH') || o.payment_method?.toUpperCase() === 'CASH';
-        const isMine = !o.received_by_waiter || String(o.received_by_waiter) === String(currentUser?.id);
         const isHandedOver = Boolean(o.received_by_counter) || handedOverOrderIds.has(o.id);
-        return isCash && isMine && !isHandedOver;
+        return isCash && !isHandedOver;
       })
       .reduce((sum, o) => sum + (parseFloat(o.paid_amount || o.total_amount) || 0), 0);
-  }, [completedOrdersList, currentUser, handedOverOrderIds]);
+  }, [completedOrdersList, handedOverOrderIds]);
 
   const effectiveCashInHand = waiterCashInHand !== null ? waiterCashInHand : orderCalculatedCashInHand;
 
@@ -597,12 +630,11 @@ export default function PaymentCollection() {
       .filter(o => {
         const pMethods = o.payment_methods_list || o.payment_methods || (o.payment_method ? [o.payment_method] : []);
         const isCash = pMethods.some((m: string) => m.toUpperCase() === 'CASH') || o.payment_method?.toUpperCase() === 'CASH';
-        const isMine = !o.received_by_waiter || String(o.received_by_waiter) === String(currentUser?.id);
         const isHandedOver = Boolean(o.received_by_counter) || handedOverOrderIds.has(o.id);
-        return isCash && isMine && isHandedOver;
+        return isCash && isHandedOver;
       })
       .reduce((sum, o) => sum + (parseFloat(o.paid_amount || o.total_amount) || 0), 0);
-  }, [waiterPaymentsTodayTotal, completedOrdersList, currentUser, handedOverOrderIds]);
+  }, [waiterPaymentsTodayTotal, completedOrdersList, handedOverOrderIds]);
 
   // Apply search filter
   const filteredPendingOrders = filterOrdersBySearch(pendingOrdersList);
@@ -618,9 +650,8 @@ export default function PaymentCollection() {
     if (!isCash && pMethods.length > 0) {
       return {
         type: 'online',
-        label: 'Digital / QR Payment',
-        sublabel: 'Directly in Counter account',
-        badgeColor: 'bg-indigo-50/90 text-indigo-700 border-indigo-200/80',
+        label: 'Digital / QR',
+        badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200/60',
         dotColor: 'bg-indigo-500'
       };
     }
@@ -630,182 +661,142 @@ export default function PaymentCollection() {
     if (isHandedOver) {
       return {
         type: 'confirmed',
-        label: 'Handed Over to Counter',
-        sublabel: order.received_by_counter_name ? `Confirmed by ${order.received_by_counter_name}` : 'Settled with Counter',
-        badgeColor: 'bg-emerald-50 text-emerald-800 border-emerald-200/80',
+        label: 'Handed Over',
+        badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200/60',
         dotColor: 'bg-emerald-500'
       };
     }
 
     return {
       type: 'pending_handover',
-      label: 'In Your Hand (Pending Handover)',
-      sublabel: 'Cash collected • Awaiting Counter handover confirmation',
-      badgeColor: 'bg-amber-50 text-amber-800 border-amber-200/80',
+      label: 'In Hand (Pending)',
+      badgeColor: 'bg-amber-50 text-amber-800 border-amber-200/60',
       dotColor: 'bg-amber-500 animate-pulse'
     };
   };
 
-  // Extracted Order Card Component for better state management (Apple-Inspired)
+  // Minimal, High-Density Order Card (Apple-Inspired)
   const PaymentOrderCard = ({ order, onPaymentClick }: { order: any; onPaymentClick: (order: any) => void }) => {
     const [showItems, setShowItems] = useState(false);
     const isPaid = ((order.payment_status === 'PAID' || order.payment_status === 'WAITER RECEIVED' || (order.payment_status === 'PARTIAL' && order.received_by_waiter)) && Number(order.due_amount || 0) <= 0);
     const handover = getHandoverStatus(order);
     const itemsCount = (order.items || []).length;
     const dueAmount = Number(isPaid ? (order.paid_amount ?? order.total_amount) : (order.due_amount ?? order.total_amount));
+    const tableLabel = order.table_no ? `Table ${order.table_no}` : "Takeaway";
+    const invNumber = order.invoice_number ? `#${order.invoice_number.slice(-4)}` : `#${order.id}`;
+    const hasCustomerName = order.customer_name && !['walk-in', 'walk-in customer'].includes(order.customer_name.trim().toLowerCase());
 
     return (
-      <div className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs hover:shadow-xs transition-all overflow-hidden mb-3">
-        {/* Card Header: Order #, Table chip, Floor chip, Status */}
-        <div
-          className="bg-slate-50/60 px-3.5 py-2.5 flex items-center justify-between border-b border-slate-100 cursor-pointer"
-          onClick={() => !isPaid && onPaymentClick(order)}
-        >
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-semibold text-slate-900 text-xs md:text-sm">
-              #{order.invoice_number?.slice(-4) || '??'}
-            </span>
-            {(order.table_no || !order.floor_name) && (
-              <span className="text-[11px] bg-white border border-slate-200/80 px-2 py-0.5 rounded-md font-medium text-slate-700 shadow-2xs">
-                {order.table_no ? `Table ${order.table_no}` : "Takeaway"}
-              </span>
-            )}
-            {order.floor_name && (
-              <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium">
-                {order.floor_name}
-              </span>
-            )}
-          </div>
+      <div className="bg-white rounded-xl border border-slate-200/80 shadow-2xs hover:border-slate-300 transition-all overflow-hidden mb-2">
+        <div className="p-3">
+          {/* Main Content Row */}
+          <div className="flex items-center justify-between gap-3">
+            {/* Left: Table, Order #, Status & Items */}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-bold text-slate-900 text-sm">{tableLabel}</span>
+                {order.floor_name && (
+                  <span className="text-[10px] text-slate-400 font-medium">{order.floor_name}</span>
+                )}
+                <span className="text-xs text-slate-400 font-mono">{invNumber}</span>
+                {hasCustomerName && (
+                  <span className="text-xs text-slate-500 font-medium truncate max-w-[120px]">
+                    · {order.customer_name}
+                  </span>
+                )}
+              </div>
 
-          <div className="flex items-center gap-1.5">
-            <StatusBadge
-              status={isPaid ? 'paid' : (order.payment_status?.toLowerCase() || 'pending')}
-            />
-          </div>
-        </div>
+              {/* Status pill & Expandable items toggle */}
+              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                {handover ? (
+                  <span className={cn(
+                    "inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border",
+                    handover.badgeColor
+                  )}>
+                    <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", handover.dotColor)} />
+                    <span>{handover.label}</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200/60">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                    <span>Payment Due</span>
+                  </span>
+                )}
 
-        {/* Handover Status Pill (Apple Inspired) */}
-        {handover && (
-          <div className={cn("mx-3.5 mt-2.5 px-3 py-1.5 rounded-xl border flex items-center justify-between gap-2 shadow-2xs text-xs", handover.badgeColor)}>
-            <div className="flex items-center gap-2 min-w-0">
-              <span className={cn("h-2 w-2 rounded-full shrink-0", handover.dotColor)} />
-              <div className="min-w-0">
-                <p className="text-xs font-semibold leading-tight truncate">{handover.label}</p>
-                <p className="text-[10px] font-normal opacity-80 leading-tight truncate">{handover.sublabel}</p>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowItems(!showItems);
+                  }}
+                  className="text-[11px] text-slate-500 hover:text-slate-800 font-medium inline-flex items-center gap-0.5 transition-colors"
+                >
+                  <span>{itemsCount} item{itemsCount !== 1 ? 's' : ''}</span>
+                  {showItems ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                </button>
               </div>
             </div>
-            {handover.type === 'confirmed' ? (
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-            ) : handover.type === 'pending_handover' ? (
-              <Clock className="h-3.5 w-3.5 text-amber-600 shrink-0 animate-pulse" />
-            ) : (
-              <QrCode className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
-            )}
+
+            {/* Right: Amount & Actions */}
+            <div className="flex items-center gap-2.5 shrink-0">
+              <div className="text-right">
+                <div className="text-sm md:text-base font-bold text-slate-900 tabular-nums">
+                  Rs. {dueAmount.toFixed(0)}
+                </div>
+                {!isPaid && (
+                  <span className="text-[9px] font-semibold text-rose-500 uppercase tracking-wider block">Due</span>
+                )}
+              </div>
+
+              {/* Actions */}
+              {isPaid ? (
+                <button
+                  onClick={() => handleViewBill(order)}
+                  className="h-8 px-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center gap-1 text-xs font-medium transition-colors active:scale-95"
+                  title="View Bill"
+                >
+                  <Receipt className="h-3.5 w-3.5 text-slate-500" />
+                  <span className="hidden sm:inline">Bill</span>
+                </button>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => handleViewBill(order)}
+                    className="h-8 w-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors active:scale-95"
+                    title="View Bill"
+                  >
+                    <Receipt className="h-3.5 w-3.5 text-slate-500" />
+                  </button>
+                  <button
+                    onClick={() => onPaymentClick(order)}
+                    className="h-8 px-3 rounded-lg bg-[#1D1D1F] hover:bg-[#2C2C2E] text-white text-xs font-semibold flex items-center gap-1 transition-all active:scale-95 shadow-2xs"
+                  >
+                    <Banknote className="h-3.5 w-3.5" />
+                    <span>Collect</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-        )}
 
-        <div className="px-3.5 py-2.5">
-          {/* Dropdown Items Header */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowItems(!showItems);
-            }}
-            className="w-full flex justify-between items-center py-1.5 px-2.5 bg-slate-50/70 hover:bg-slate-100/70 transition-colors rounded-lg mb-2 text-slate-600"
-          >
-            <span className="text-[11px] font-medium text-slate-500">
-              {itemsCount} {itemsCount === 1 ? "Item" : "Items"} in Order
-            </span>
-            {showItems ? (
-              <ChevronUp className="h-3.5 w-3.5 text-slate-400" />
-            ) : (
-              <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
-            )}
-          </button>
-
-          {/* Expandable Items List */}
+          {/* Expandable Items Breakdown */}
           {showItems && (
-            <div className="space-y-1 mb-2.5 animate-in fade-in duration-150">
+            <div className="mt-2.5 pt-2 border-t border-slate-100 space-y-1 animate-in fade-in duration-150">
               {order.items?.map((item: any, idx: number) => {
-                const name = item?.product_name || item?.product?.name || item?.name || `Product #${item?.product || "?"}`;
+                const name = item?.product_name || item?.product?.name || item?.name || `Item #${idx + 1}`;
                 const qty = item?.quantity ?? 1;
                 const price = item?.unit_price ?? item?.price ?? (item?.product?.selling_price) ?? 0;
-
                 return (
-                  <div key={idx} className="flex justify-between items-center text-xs bg-slate-50/50 px-2 py-1 rounded-md">
-                    <span className="text-slate-700 font-normal truncate flex items-center gap-1.5">
-                      <span className="text-slate-900 font-semibold text-[11px]">{qty}×</span>
+                  <div key={idx} className="flex justify-between items-center text-xs py-0.5 text-slate-600">
+                    <span className="truncate pr-2">
+                      <span className="font-semibold text-slate-800 mr-1.5">{qty}×</span>
                       {name}
                     </span>
-                    <span className="text-slate-600 font-medium tabular-nums shrink-0 ml-2">
+                    <span className="font-medium text-slate-700 tabular-nums shrink-0">
                       Rs. {(Number(price) * Number(qty)).toFixed(2)}
                     </span>
                   </div>
                 );
               })}
-            </div>
-          )}
-
-          {/* Meta & Amount */}
-          <div className="flex justify-between items-baseline pt-0.5">
-            <div className="space-y-0.5">
-              <div className="flex items-center gap-1 text-slate-500 text-xs">
-                <User className="h-3 w-3 text-slate-400" />
-                <span className="font-medium text-slate-700 text-xs">{order.customer_name || 'Walk-in Customer'}</span>
-              </div>
-              <p className="text-[10px] text-slate-400">
-                Created by {order.created_by_name || 'Waiter'}
-              </p>
-            </div>
-            <div className="text-right">
-              <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider block">
-                {isPaid ? "Total Paid" : "Amount Due"}
-              </span>
-              <span className="text-base md:text-lg font-bold text-slate-900 tabular-nums">
-                Rs. {dueAmount.toFixed(2)}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Apple-Style Action Footer */}
-        <div className="px-3.5 pb-3 pt-1 flex items-center gap-2">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleViewBill(order);
-            }}
-            className="h-9 px-3 rounded-xl bg-slate-100 hover:bg-slate-200/80 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-95"
-          >
-            <Receipt className="h-3.5 w-3.5 text-slate-500" />
-            <span>View Bill</span>
-          </button>
-
-          {!isPaid ? (
-            <>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigate(`/waiter/order/${order.table_no || "takeaway"}?invoiceId=${order.id}&floorId=${order.floor}`);
-                }}
-                className="h-9 px-3 rounded-xl bg-slate-100 hover:bg-slate-200/80 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-95"
-              >
-                <Edit className="h-3.5 w-3.5 text-slate-500" />
-                <span>Edit</span>
-              </button>
-
-              <button
-                onClick={() => onPaymentClick(order)}
-                className="flex-1 h-9 px-4 rounded-xl bg-[#1D1D1F] hover:bg-[#2C2C2E] text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-2xs"
-              >
-                <Banknote className="h-3.5 w-3.5" />
-                <span>Collect Payment</span>
-              </button>
-            </>
-          ) : (
-            <div className="flex-1 h-9 rounded-xl bg-emerald-50 border border-emerald-200/60 flex items-center justify-center gap-1.5 text-xs font-semibold text-emerald-800">
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-              <span>Collected</span>
             </div>
           )}
         </div>
@@ -817,67 +808,37 @@ export default function PaymentCollection() {
     <div className="min-h-screen bg-slate-50/50 pb-20">
       <MobileHeader title="Payments" showBack={false} />
 
-      <main className="p-4 max-w-2xl mx-auto">
-        {/* Apple-Inspired Unified Balance & Handover Card */}
-        <div className="bg-white/95 backdrop-blur-xl rounded-2xl border border-slate-200/80 p-4 mb-3 shadow-2xs">
-          {/* Card Header: Status & Live indicator */}
-          <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className={cn("h-2 w-2 rounded-full shrink-0", effectiveCashInHand > 0 ? "bg-amber-500 animate-pulse" : "bg-emerald-500")} />
-              <span className={cn(
-                "text-[11px] font-semibold uppercase tracking-wider truncate",
-                effectiveCashInHand > 0 ? "text-amber-800" : "text-emerald-800"
-              )}>
-                {effectiveCashInHand > 0 ? "Awaiting Counter Handover" : "Cash Settled with Counter"}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200/60 text-emerald-700 text-[10px] font-medium shrink-0">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
-              <span>Live Socket</span>
-            </div>
-          </div>
-
-          {/* Primary Amount: Cash In Hand */}
-          <div className="pt-3 pb-2 flex items-baseline justify-between">
+      <main className="p-3 max-w-2xl mx-auto">
+        {/* Sleek Minimal Balance Header */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 mb-3 shadow-2xs">
+          <div className="flex items-center justify-between">
             <div>
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">
-                Cash in Hand
-              </span>
-              <div className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight mt-0.5 tabular-nums">
+              <div className="flex items-center gap-1.5">
+                <span className={cn("h-2 w-2 rounded-full", effectiveCashInHand > 0 ? "bg-amber-500 animate-pulse" : "bg-emerald-500")} />
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Cash in Hand</span>
+              </div>
+              <div className="text-2xl font-black text-slate-900 tracking-tight mt-0.5 tabular-nums">
                 Rs. {effectiveCashInHand.toFixed(2)}
               </div>
             </div>
 
-            {effectiveCashInHand > 0 && (
-              <div className="text-right">
-                <span className="text-[10px] font-medium text-amber-800 bg-amber-50 border border-amber-200/60 px-2 py-1 rounded-xl inline-block">
-                  Hand over to cashier
-                </span>
+            <div className="text-right space-y-1">
+              <div className="flex items-center justify-end gap-1.5 text-xs text-slate-500">
+                <span className="text-slate-400">Settled:</span>
+                <span className="font-bold text-emerald-700 tabular-nums">Rs. {effectiveHandedOverToday.toFixed(0)}</span>
               </div>
-            )}
-          </div>
-
-          {/* Sub-stats Row */}
-          <div className="grid grid-cols-2 gap-2 pt-2.5 border-t border-slate-100 text-xs">
-            <div className="bg-slate-50/70 p-2.5 rounded-xl border border-slate-100">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">
-                Settled Today
-              </span>
-              <span className="text-sm font-bold text-emerald-700 tabular-nums">
-                Rs. {effectiveHandedOverToday.toFixed(2)}
-              </span>
-            </div>
-
-            <div className="bg-slate-50/70 p-2.5 rounded-xl border border-slate-100">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">
-                Total Handled
-              </span>
-              <span className="text-sm font-bold text-slate-800 tabular-nums">
-                Rs. {(effectiveCashInHand + effectiveHandedOverToday).toFixed(2)}
-              </span>
+              <div className="flex items-center justify-end gap-1.5 text-xs text-slate-500">
+                <span className="text-slate-400">Total:</span>
+                <span className="font-bold text-slate-800 tabular-nums">Rs. {(effectiveCashInHand + effectiveHandedOverToday).toFixed(0)}</span>
+              </div>
             </div>
           </div>
+          {effectiveCashInHand > 0 && (
+            <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-amber-700 bg-amber-50/60 -mx-3.5 -mb-3.5 px-3.5 py-1.5 rounded-b-2xl font-medium">
+              <span>Awaiting handover to counter</span>
+              <span className="font-bold">Rs. {effectiveCashInHand.toFixed(2)}</span>
+            </div>
+          )}
         </div>
 
         {/* Native Apple Segmented Control */}

@@ -882,8 +882,8 @@ export default function CounterOrders() {
                                             <span className="text-slate-500">Available</span>
                                         </div>
                                         <div className="flex items-center gap-1.5">
-                                            <span className="h-3 w-3 rounded-full bg-rose-500 animate-pulse"></span>
-                                            <span className="text-slate-500">Occupied (Unpaid)</span>
+                                            <span className="h-3 w-3 rounded-full bg-[#c68b07] animate-pulse"></span>
+                                            <span className="text-slate-500">Occupied</span>
                                         </div>
                                     </div>
                                 </div>
@@ -897,17 +897,17 @@ export default function CounterOrders() {
                                         const totalDue = tableInvs.reduce((sum: number, o: any) => sum + parseFloat(o.due_amount || o.total_amount || 0), 0);
                                         const totalOrders = tableInvs.length;
 
-                                        // Green = available, Red = occupied with unpaid orders
+                                        // Green = available, Warm Gold (#c68b07) = occupied with active orders
                                         const cardColor = !hasActive
-                                            ? 'bg-emerald-500 border-emerald-500 hover:bg-emerald-400 hover:border-emerald-400'
-                                            : 'bg-rose-50 border-rose-300 hover:border-rose-500 cursor-pointer shadow-md';
+                                            ? 'bg-emerald-500 border-emerald-500 hover:bg-emerald-400 hover:border-emerald-400 text-white'
+                                            : 'bg-[#c68b07] border-[#b07b06] hover:bg-[#b88106] hover:border-[#a06f05] cursor-pointer shadow-md text-white';
 
                                         const dotColor = !hasActive
                                             ? 'bg-white/70'
-                                            : 'bg-rose-500 animate-pulse';
+                                            : 'bg-white animate-pulse';
 
                                         const statusLabel = !hasActive ? 'Available' : 'Occupied';
-                                        const statusTextColor = !hasActive ? 'text-emerald-100 font-semibold' : 'text-rose-600 font-black';
+                                        const statusTextColor = !hasActive ? 'text-emerald-100 font-semibold' : 'text-amber-100 font-bold';
 
                                         return (
                                             <button
@@ -927,26 +927,26 @@ export default function CounterOrders() {
                                                     "h-10 w-10 rounded-xl flex items-center justify-center mb-2",
                                                     !hasActive
                                                         ? "bg-emerald-400/60 text-white"
-                                                        : "bg-rose-200/70 text-rose-700"
+                                                        : "bg-white/20 text-white"
                                                 )}>
                                                     <UtensilsCrossed className="h-4 w-4" />
                                                 </div>
 
-                                                <p className={cn("text-[10px] font-black uppercase tracking-wider", !hasActive ? "text-emerald-100" : "text-slate-400")}>TABLE</p>
-                                                <p className={cn("text-lg font-black leading-tight", hasActive ? "text-rose-900" : "text-white")}>
+                                                <p className={cn("text-[10px] font-black uppercase tracking-wider", !hasActive ? "text-emerald-100" : "text-amber-100/90")}>TABLE</p>
+                                                <p className="text-lg font-black leading-tight text-white">
                                                     {String(tableNum).padStart(2, '0')}
                                                 </p>
                                                 <p className={cn("text-[10px] font-bold mt-0.5", statusTextColor)}>{statusLabel}</p>
 
                                                 {hasActive && (
-                                                    <div className="mt-2 pt-2 border-t border-rose-200 w-full">
-                                                        <p className="text-[10px] text-rose-500 font-semibold">{totalOrders} order{totalOrders > 1 ? 's' : ''}</p>
-                                                        <p className="text-[11px] font-black text-rose-700">Rs.{totalDue.toFixed(0)} due</p>
+                                                    <div className="mt-2 pt-2 border-t border-white/20 w-full">
+                                                        <p className="text-[10px] text-amber-100 font-semibold">{totalOrders} order{totalOrders > 1 ? 's' : ''}</p>
+                                                        <p className="text-[11px] font-black text-white">Rs.{totalDue.toFixed(0)} due</p>
                                                     </div>
                                                 )}
 
                                                 {hasActive && (
-                                                    <div className="absolute inset-0 rounded-2xl ring-2 ring-rose-300/50 group-hover:ring-rose-400 transition-all pointer-events-none" />
+                                                    <div className="absolute inset-0 rounded-2xl ring-2 ring-white/30 group-hover:ring-white/50 transition-all pointer-events-none" />
                                                 )}
                                             </button>
                                         );

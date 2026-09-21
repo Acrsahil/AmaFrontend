@@ -895,3 +895,41 @@ export async function createWaiterPayment(paymentData) {
   if (!res.ok) throw new Error(data?.message || "Failed to create waiter payment");
   return data;
 }
+
+export async function deleteWaiterPayment(id) {
+  const res = await apiFetch(`/api/waiter-payments/${id}/`, {
+    method: "DELETE",
+  });
+  if (!res.ok && res.status !== 204) {
+    const data = await safeJson(res);
+    throw new Error(data?.message || "Failed to revert waiter payment");
+  }
+  return true;
+}
+
+export async function revertWaiterPayment(payment) {
+  const paymentId = payment.id;
+  try {
+    const res = await apiFetch(`/api/waiter-payments/${paymentId}/`, {
+      method: "DELETE",
+    });
+    if (res.ok || res.status === 204) {
+      return { success: true, method: "deleted" };
+    }
+  } catch (err) {
+    console.warn("DELETE /api/waiter-payments/ failed, attempting reversal fallback:", err);
+  }
+
+  // Fallback: If DELETE returned an error, create an offsetting reversal payment
+  const res = await apiFetch("/api/waiter-payments/", {
+    method: "POST",
+    body: JSON.stringify({
+      paid_by: payment.paid_by,
+      amount: -Math.abs(parseFloat(payment.amount)),
+      notes: `Reversal of handover #${paymentId}`
+    }),
+  });
+  const data = await safeJson(res);
+  if (!res.ok) throw new Error(data?.message || "Failed to revert waiter payment");
+  return { success: true, method: "reversal_created", data };
+}

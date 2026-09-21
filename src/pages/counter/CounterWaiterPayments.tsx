@@ -12,13 +12,15 @@ import {
     X, 
     Coins, 
     ShieldCheck,
-    Keyboard
+    Keyboard,
+    RotateCcw,
+    Loader2
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
-import { fetchUsers, fetchWaiterPayments, createWaiterPayment, fetchInvoices, addPayment } from "@/api/index.js";
+import { fetchUsers, fetchWaiterPayments, createWaiterPayment, revertWaiterPayment, fetchInvoices, addPayment } from "@/api/index.js";
 import { getCurrentUser } from "@/auth/auth";
 import { useOrdersWebSocket } from "@/hooks/useOrdersWebSocket";
 
@@ -100,6 +102,11 @@ export default function CounterWaiterPayments() {
     // History Log Modal
     const [showHistoryModal, setShowHistoryModal] = useState(false);
     const [historySearch, setHistorySearch] = useState("");
+
+    // Revert Handover States
+    const [revertingPayment, setRevertingPayment] = useState<any | null>(null);
+    const [isReverting, setIsReverting] = useState(false);
+    const [lastHandover, setLastHandover] = useState<any | null>(null);
 
     const wsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -266,7 +273,17 @@ export default function CounterWaiterPayments() {
                 amount: amountNum
             });
 
-            toast.success(`Received ${formatCurrency(amountNum)} from ${formatStaffName(selectedWaiter.full_name, selectedWaiter.username)}`);
+            // Store recent handover for mistake undo
+            setLastHandover(res);
+            toast.success(`Received ${formatCurrency(amountNum)} from ${formatStaffName(selectedWaiter.full_name, selectedWaiter.username)}`, {
+                action: {
+                    label: "Undo Mistake",
+                    onClick: () => {
+                        setRevertingPayment(res);
+                    }
+                },
+                duration: 12000
+            });
             setPayments(prev => [res, ...prev]);
 
             // Also mark the waiter's cash invoices in backend database so received_by_counter is set
@@ -307,6 +324,48 @@ export default function CounterWaiterPayments() {
             setIsSubmitting(false);
         }
     };
+
+    // Revert Handover Action
+    const handleConfirmRevert = async () => {
+        if (!revertingPayment) return;
+        setIsReverting(true);
+        try {
+            await revertWaiterPayment(revertingPayment);
+
+            toast.success(`Handover of ${formatCurrency(revertingPayment.amount)} has been reverted`);
+
+            // Remove from local list
+            setPayments(prev => prev.filter(p => p.id !== revertingPayment.id));
+            if (lastHandover?.id === revertingPayment.id) {
+                setLastHandover(null);
+            }
+            setRevertingPayment(null);
+
+            // Re-sync local and cross-tab/socket data
+            window.dispatchEvent(new CustomEvent("waiter-payment-updated"));
+            await loadData(false);
+        } catch (err: any) {
+            toast.error(err.message || "Failed to revert handover payment");
+        } finally {
+            setIsReverting(false);
+        }
+    };
+
+    // Filter today's handovers for the currently selected waiter
+    const todayHandoversForWaiter = useMemo(() => {
+        if (!selectedWaiter) return [];
+        const todayStr = new Date().toDateString();
+        return payments.filter(p => {
+            const isSameWaiter = String(p.paid_by) === String(selectedWaiter.id);
+            let isToday = false;
+            try {
+                isToday = new Date(p.created_at).toDateString() === todayStr;
+            } catch {
+                isToday = false;
+            }
+            return isSameWaiter && isToday;
+        });
+    }, [payments, selectedWaiter]);
 
     // Listen for physical keyboard input when register modal is open
     useEffect(() => {
@@ -402,6 +461,36 @@ export default function CounterWaiterPayments() {
                     </div>
                 </div>
             </header>
+
+            {/* Quick Revert Banner if a mistake was made in handover */}
+            {lastHandover && (
+                <div className="shrink-0 bg-amber-50/95 border border-amber-200/90 rounded-2xl px-4 py-2.5 mb-2.5 flex items-center justify-between shadow-2xs animate-in fade-in duration-200">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                        <span className="text-xs text-amber-900 font-medium truncate">
+                            Just received <strong className="font-bold">{formatCurrency(lastHandover.amount)}</strong> from <strong className="font-bold">{formatStaffName(lastHandover.paid_by_name, `Staff #${lastHandover.paid_by}`)}</strong>. Added extra 0 or made a mistake?
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                        <button
+                            type="button"
+                            onClick={() => setRevertingPayment(lastHandover)}
+                            className="h-7 px-3 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold flex items-center gap-1 transition-all active:scale-95 shadow-xs"
+                        >
+                            <RotateCcw className="h-3 w-3" />
+                            <span>Revert Handover</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setLastHandover(null)}
+                            className="p-1 text-amber-600 hover:text-amber-900 rounded-md"
+                            title="Dismiss"
+                        >
+                            <X className="h-3.5 w-3.5" />
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Apple Inset Segmented Filter & Search Toolbar */}
             <div className="shrink-0 bg-white/90 backdrop-blur-xl rounded-2xl border border-black/[0.06] p-2.5 mb-2.5 shadow-[0_1px_3px_rgba(0,0,0,0.03)] flex flex-col sm:flex-row items-center justify-between gap-2.5">
@@ -689,6 +778,36 @@ export default function CounterWaiterPayments() {
                                 )}
                             </div>
 
+                            {/* Today's Handovers for this Waiter with Quick Revert */}
+                            {todayHandoversForWaiter.length > 0 && (
+                                <div className="p-3 bg-[#F5F5F7] border border-black/[0.04] rounded-2xl space-y-1.5">
+                                    <div className="flex items-center justify-between px-1">
+                                        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                                            Today's Handovers ({todayHandoversForWaiter.length})
+                                        </span>
+                                        <span className="text-[10px] text-slate-400 font-normal">Mistake? Click Revert</span>
+                                    </div>
+                                    <div className="space-y-1.5 max-h-24 overflow-y-auto">
+                                        {todayHandoversForWaiter.map((hp: any) => (
+                                            <div key={hp.id} className="flex items-center justify-between text-xs bg-white px-3 py-1.5 rounded-xl border border-black/[0.04] shadow-2xs">
+                                                <div>
+                                                    <span className="font-bold text-slate-900 tabular-nums">{formatCurrency(hp.amount)}</span>
+                                                    <span className="text-[10px] text-slate-400 ml-2">{formatDateTime(hp.created_at)}</span>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setRevertingPayment(hp)}
+                                                    className="h-6 px-2 text-[11px] font-semibold text-rose-600 hover:bg-rose-50 rounded-lg flex items-center gap-1 border border-rose-200 active:scale-95 transition-all"
+                                                >
+                                                    <RotateCcw className="h-3 w-3" />
+                                                    <span>Revert</span>
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Apple Calculator Touch Numpad */}
                             <div className="grid grid-cols-3 gap-2 pt-1">
                                 {NUMPAD_KEYS.map((key) => {
@@ -785,7 +904,7 @@ export default function CounterWaiterPayments() {
                                 </div>
                             ) : (
                                 filteredPayments.map((p, idx) => (
-                                    <div key={p.id || idx} className="py-3 px-1 flex items-center justify-between hover:bg-[#F5F5F7] rounded-xl transition-colors">
+                                    <div key={p.id || idx} className="py-3 px-2 flex items-center justify-between hover:bg-[#F5F5F7] rounded-xl transition-colors group">
                                         <div className="min-w-0 pr-3">
                                             <p className="font-semibold text-slate-900 text-sm truncate leading-snug">
                                                 {formatStaffName(p.paid_by_name, `Waiter #${p.paid_by}`)}
@@ -794,15 +913,86 @@ export default function CounterWaiterPayments() {
                                                 {formatDateTime(p.created_at)}
                                             </p>
                                         </div>
-                                        <div className="text-right shrink-0">
-                                            <span className="font-semibold text-emerald-600 text-sm md:text-base tabular-nums">
-                                                + {formatCurrency(p.amount)}
+                                        <div className="flex items-center gap-2.5 shrink-0">
+                                            <span className={cn("font-semibold text-sm md:text-base tabular-nums", parseFloat(p.amount) < 0 ? "text-rose-600" : "text-emerald-600")}>
+                                                {parseFloat(p.amount) < 0 ? `- ${formatCurrency(Math.abs(p.amount))}` : `+ ${formatCurrency(p.amount)}`}
                                             </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setRevertingPayment(p)}
+                                                className="h-7 px-2.5 text-[11px] font-semibold text-rose-600 hover:bg-rose-50 border border-rose-200/80 rounded-lg flex items-center gap-1 transition-all active:scale-95 shadow-2xs"
+                                                title="Revert this handover"
+                                            >
+                                                <RotateCcw className="h-3 w-3 text-rose-600" />
+                                                <span>Revert</span>
+                                            </button>
                                         </div>
                                     </div>
                                 ))
                             )}
                         </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Revert Confirmation Dialog */}
+            <Dialog open={!!revertingPayment} onOpenChange={(open) => !open && setRevertingPayment(null)}>
+                <DialogContent className="max-w-md bg-white rounded-3xl p-6 border border-black/[0.08] shadow-2xl">
+                    <div className="flex items-center gap-3 mb-3">
+                        <div className="h-10 w-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                            <RotateCcw className="h-5 w-5" />
+                        </div>
+                        <div>
+                            <DialogTitle className="text-base font-bold text-slate-900">Revert Cash Handover</DialogTitle>
+                            <DialogDescription className="text-xs text-slate-400 mt-0.5">
+                                Undo this collection and restore staff cash in hand
+                            </DialogDescription>
+                        </div>
+                    </div>
+
+                    {revertingPayment && (
+                        <div className="bg-[#F5F5F7] rounded-2xl p-4 my-2 space-y-2 border border-black/[0.04]">
+                            <div className="flex justify-between text-xs">
+                                <span className="text-slate-500">Staff Member:</span>
+                                <span className="font-semibold text-slate-900">{formatStaffName(revertingPayment.paid_by_name, `Waiter #${revertingPayment.paid_by}`)}</span>
+                            </div>
+                            <div className="flex justify-between text-xs">
+                                <span className="text-slate-500">Handover Amount:</span>
+                                <span className="font-bold text-slate-900 text-sm">{formatCurrency(revertingPayment.amount)}</span>
+                            </div>
+                            <div className="flex justify-between text-xs">
+                                <span className="text-slate-500">Recorded At:</span>
+                                <span className="text-slate-600">{formatDateTime(revertingPayment.created_at)}</span>
+                            </div>
+                        </div>
+                    )}
+
+                    <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200/60 p-2.5 rounded-xl mt-2 leading-relaxed">
+                        This will cancel this handover record. The waiter's cash in hand will be credited back by {formatCurrency(revertingPayment?.amount)}.
+                    </p>
+
+                    <div className="flex items-center justify-end gap-2.5 mt-5">
+                        <button
+                            type="button"
+                            onClick={() => setRevertingPayment(null)}
+                            disabled={isReverting}
+                            className="h-10 px-4 rounded-xl bg-[#F5F5F7] hover:bg-[#E5E5EA] text-slate-700 text-xs font-semibold transition-all active:scale-95"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleConfirmRevert}
+                            disabled={isReverting}
+                            className="h-10 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 shadow-md disabled:opacity-50"
+                        >
+                            {isReverting ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                                <RotateCcw className="h-3.5 w-3.5" />
+                            )}
+                            <span>Confirm Revert</span>
+                        </button>
                     </div>
                 </DialogContent>
             </Dialog>

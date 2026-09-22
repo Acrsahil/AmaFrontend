@@ -749,10 +749,10 @@ export default function Checkout() {
                                 setShowPaymentConfirmation(false);
                             }}
                             className={cn(
-                                "p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 hover:scale-105",
+                                "p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 active:scale-95",
                                 paymentTiming === "now"
                                     ? "border-primary bg-primary/10 shadow-lg"
-                                    : "border-border hover:border-primary/50"
+                                    : "border-border"
                             )}
                         >
                             <Banknote className={cn(
@@ -774,10 +774,10 @@ export default function Checkout() {
                                 setShowPaymentConfirmation(false);
                             }}
                             className={cn(
-                                "p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 hover:scale-105",
+                                "p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 active:scale-95",
                                 paymentTiming === "later"
                                     ? "border-warning bg-warning/10 shadow-lg"
-                                    : "border-border hover:border-warning/50"
+                                    : "border-border"
                             )}
                         >
                             <CheckCircle2 className={cn(
@@ -806,10 +806,10 @@ export default function Checkout() {
                             <button
                                 onClick={() => setPaymentMethod("cod")}
                                 className={cn(
-                                    "p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 hover:scale-105",
+                                    "p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 active:scale-95",
                                     paymentMethod === "cod"
                                         ? "border-success bg-success/10 shadow-lg"
-                                        : "border-border hover:border-success/50"
+                                        : "border-border"
                                 )}
                             >
                                 <Banknote className={cn(
@@ -827,10 +827,10 @@ export default function Checkout() {
                             <button
                                 onClick={() => setPaymentMethod("qr")}
                                 className={cn(
-                                    "p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 hover:scale-105",
+                                    "p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 active:scale-95",
                                     paymentMethod === "qr"
                                         ? "border-primary bg-primary/10 shadow-lg"
-                                        : "border-border hover:border-primary/50"
+                                        : "border-border"
                                 )}
                             >
                                 <QrCode className={cn(
@@ -848,10 +848,10 @@ export default function Checkout() {
                             <button
                                 onClick={() => setPaymentMethod("card")}
                                 className={cn(
-                                    "p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 hover:scale-105",
+                                    "p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 active:scale-95",
                                     paymentMethod === "card"
                                         ? "border-primary bg-primary/10 shadow-lg"
-                                        : "border-border hover:border-primary/50"
+                                        : "border-border"
                                 )}
                             >
                                 <CreditCard className={cn(
@@ -869,10 +869,10 @@ export default function Checkout() {
                             <button
                                 onClick={() => setPaymentMethod("credit")}
                                 className={cn(
-                                    "p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 hover:scale-105",
+                                    "p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 active:scale-95",
                                     paymentMethod === "credit"
                                         ? "border-primary bg-primary/10 shadow-lg"
-                                        : "border-border hover:border-primary/50"
+                                        : "border-border"
                                 )}
                             >
                                 <IndianRupee className={cn(
@@ -1095,27 +1095,27 @@ export default function Checkout() {
                                 </div>
 
                                 <div className="space-y-2">
-                                     <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Card Payment Amount</Label>
-                                     <div className="relative">
-                                         <div className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-muted-foreground text-xl">Rs.</div>
-                                         <Input
-                                             type="text"
-                                             inputMode="decimal"
-                                             placeholder="0.00"
-                                             value={cashReceived}
-                                             onChange={(e) => {
-                                                 let value = e.target.value;
-                                                 value = value.replace(/[^0-9.]/g, "");
-                                                 const parts = value.split(".");
-                                                 if (parts.length > 2) {
-                                                     value = parts[0] + "." + parts.slice(1).join("");
-                                                 }
-                                                 setCashReceived(value);
-                                             }}
-                                             className="text-center text-3xl h-16 font-black border-2 border-primary/20 focus:border-primary pl-8 rounded-xl shadow-inner bg-slate-50"
-                                             autoFocus
-                                         />
-                                     </div>
+                                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Card Payment Amount</Label>
+                                    <div className="relative">
+                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-muted-foreground text-xl">Rs.</div>
+                                        <Input
+                                            type="text"
+                                            inputMode="decimal"
+                                            placeholder="0.00"
+                                            value={cashReceived}
+                                            onChange={(e) => {
+                                                let value = e.target.value;
+                                                value = value.replace(/[^0-9.]/g, "");
+                                                const parts = value.split(".");
+                                                if (parts.length > 2) {
+                                                    value = parts[0] + "." + parts.slice(1).join("");
+                                                }
+                                                setCashReceived(value);
+                                            }}
+                                            className="text-center text-3xl h-16 font-black border-2 border-primary/20 focus:border-primary pl-8 rounded-xl shadow-inner bg-slate-50"
+                                            autoFocus
+                                        />
+                                    </div>
                                 </div>
                             </div>
 
@@ -1166,27 +1166,27 @@ export default function Checkout() {
                                 </div>
 
                                 <div className="space-y-2">
-                                     <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Amount to Credit</Label>
-                                     <div className="relative">
-                                         <div className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-muted-foreground text-xl">Rs.</div>
-                                         <Input
-                                             type="text"
-                                             inputMode="decimal"
-                                             placeholder="0.00"
-                                             value={cashReceived}
-                                             onChange={(e) => {
-                                                 let value = e.target.value;
-                                                 value = value.replace(/[^0-9.]/g, "");
-                                                 const parts = value.split(".");
-                                                 if (parts.length > 2) {
-                                                     value = parts[0] + "." + parts.slice(1).join("");
-                                                 }
-                                                 setCashReceived(value);
-                                             }}
-                                             className="text-center text-3xl h-16 font-black border-2 border-primary/20 focus:border-primary pl-8 rounded-xl shadow-inner bg-slate-50"
-                                             autoFocus
-                                         />
-                                     </div>
+                                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Amount to Credit</Label>
+                                    <div className="relative">
+                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-muted-foreground text-xl">Rs.</div>
+                                        <Input
+                                            type="text"
+                                            inputMode="decimal"
+                                            placeholder="0.00"
+                                            value={cashReceived}
+                                            onChange={(e) => {
+                                                let value = e.target.value;
+                                                value = value.replace(/[^0-9.]/g, "");
+                                                const parts = value.split(".");
+                                                if (parts.length > 2) {
+                                                    value = parts[0] + "." + parts.slice(1).join("");
+                                                }
+                                                setCashReceived(value);
+                                            }}
+                                            className="text-center text-3xl h-16 font-black border-2 border-primary/20 focus:border-primary pl-8 rounded-xl shadow-inner bg-slate-50"
+                                            autoFocus
+                                        />
+                                    </div>
                                 </div>
                             </div>
 

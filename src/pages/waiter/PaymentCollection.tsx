@@ -7,23 +7,23 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { WaiterBottomNav } from "@/components/waiter/WaiterBottomNav";
-import { 
-  CreditCard, 
-  Banknote, 
-  CheckCircle2, 
-  IndianRupee, 
-  Printer, 
-  Clock, 
-  X, 
-  Loader2, 
-  Wallet, 
-  QrCode, 
-  ChevronDown, 
-  ChevronUp, 
-  User, 
-  Receipt, 
-  Edit, 
-  Search, 
+import {
+  CreditCard,
+  Banknote,
+  CheckCircle2,
+  IndianRupee,
+  Printer,
+  Clock,
+  X,
+  Loader2,
+  Wallet,
+  QrCode,
+  ChevronDown,
+  ChevronUp,
+  User,
+  Receipt,
+  Edit,
+  Search,
   Bell,
   RefreshCw,
   Coins,
@@ -251,7 +251,7 @@ export default function PaymentCollection() {
       setActiveNonCashMethod(method);
       setShowPaymentDialog(false);
       setShowOnlineDialog(true);
-      setOnlineReceived(""); // Don't pre-fill - allow partial payments
+      setOnlineReceived(String(selectedOrder.due_amount || selectedOrder.total_amount || 0));
     }
   };
 
@@ -607,16 +607,29 @@ export default function PaymentCollection() {
     return set;
   }, [completedOrdersList, waiterCashInHand, waiterPaymentsTodayTotal, waiterPaymentsHistory]);
 
+  const getOrderCashAmount = (o: any) => {
+    if (o.payments && Array.isArray(o.payments)) {
+      const cashPayments = o.payments.filter((p: any) => p.payment_method?.toUpperCase() === 'CASH');
+      if (cashPayments.length > 0) {
+        return cashPayments.reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
+      }
+    }
+    const pMethods = o.payment_methods_list || o.payment_methods || (o.payment_method ? [o.payment_method] : []);
+    const hasCash = pMethods.some((m: string) => m.toUpperCase() === 'CASH') || o.payment_method?.toUpperCase() === 'CASH';
+    if (hasCash) {
+      return parseFloat(o.paid_amount || o.total_amount) || 0;
+    }
+    return 0;
+  };
+
   // Fallback calculations for cash in hand and handed over today
   const orderCalculatedCashInHand = useMemo(() => {
     return completedOrdersList
       .filter(o => {
-        const pMethods = o.payment_methods_list || o.payment_methods || (o.payment_method ? [o.payment_method] : []);
-        const isCash = pMethods.some((m: string) => m.toUpperCase() === 'CASH') || o.payment_method?.toUpperCase() === 'CASH';
         const isHandedOver = Boolean(o.received_by_counter) || handedOverOrderIds.has(o.id);
-        return isCash && !isHandedOver;
+        return !isHandedOver;
       })
-      .reduce((sum, o) => sum + (parseFloat(o.paid_amount || o.total_amount) || 0), 0);
+      .reduce((sum, o) => sum + getOrderCashAmount(o), 0);
   }, [completedOrdersList, handedOverOrderIds]);
 
   const effectiveCashInHand = waiterCashInHand !== null ? waiterCashInHand : orderCalculatedCashInHand;
@@ -628,12 +641,10 @@ export default function PaymentCollection() {
     // Fallback from orders where received_by_counter is true or settled
     return completedOrdersList
       .filter(o => {
-        const pMethods = o.payment_methods_list || o.payment_methods || (o.payment_method ? [o.payment_method] : []);
-        const isCash = pMethods.some((m: string) => m.toUpperCase() === 'CASH') || o.payment_method?.toUpperCase() === 'CASH';
         const isHandedOver = Boolean(o.received_by_counter) || handedOverOrderIds.has(o.id);
-        return isCash && isHandedOver;
+        return isHandedOver;
       })
-      .reduce((sum, o) => sum + (parseFloat(o.paid_amount || o.total_amount) || 0), 0);
+      .reduce((sum, o) => sum + getOrderCashAmount(o), 0);
   }, [waiterPaymentsTodayTotal, completedOrdersList, handedOverOrderIds]);
 
   // Apply search filter
@@ -1155,8 +1166,12 @@ export default function PaymentCollection() {
           </div>
 
           <div className="p-4 space-y-3 flex flex-col items-center">
+            <div className="w-full flex justify-between items-center px-2 mb-2">
+              <span className="text-slate-500 font-medium text-sm">Amount Due</span>
+              <span className="text-xl font-black text-slate-900 tabular-nums">Rs.{Number(selectedOrder?.due_amount || selectedOrder?.total_amount || 0).toFixed(2)}</span>
+            </div>
             <div className="text-center w-full">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1">Payable Amount</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1">Payment Amount</p>
 
               <div className="relative max-w-[200px] mx-auto mb-2">
                 <div className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-300 text-xl">Rs.</div>

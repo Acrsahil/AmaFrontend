@@ -1,16 +1,16 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { 
-    Banknote, 
-    ArrowDownRight, 
-    Clock, 
-    Search, 
-    CheckCircle2, 
-    Receipt, 
-    Menu, 
-    History, 
-    Check, 
-    X, 
-    Coins, 
+import {
+    Banknote,
+    ArrowDownRight,
+    Clock,
+    Search,
+    CheckCircle2,
+    Receipt,
+    Menu,
+    History,
+    Check,
+    X,
+    Coins,
     ShieldCheck,
     Keyboard,
     RotateCcw,
@@ -97,6 +97,7 @@ export default function CounterWaiterPayments() {
     const [selectedWaiter, setSelectedWaiter] = useState<any | null>(null);
     const [isRegisterOpen, setIsRegisterOpen] = useState(false);
     const [transferAmount, setTransferAmount] = useState<string>("");
+    const [actionType, setActionType] = useState<"collect" | "return">("collect");
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // History Log Modal
@@ -196,17 +197,17 @@ export default function CounterWaiterPayments() {
     const filteredWaiters = useMemo(() => {
         return waiters.filter(w => {
             const q = searchQuery.toLowerCase().trim();
-            const matchesSearch = 
-                !q || 
+            const matchesSearch =
+                !q ||
                 (w.full_name && w.full_name.toLowerCase().includes(q)) ||
                 (w.username && w.username.toLowerCase().includes(q)) ||
                 (w.id && w.id.toString().includes(q));
 
             const cash = parseFloat(w.cash_in_hand || 0);
-            const matchesStatus = 
+            const matchesStatus =
                 filterStatus === "all" ? true :
-                filterStatus === "pending" ? cash > 0 :
-                cash <= 0;
+                    filterStatus === "pending" ? cash > 0 :
+                        cash <= 0;
 
             return matchesSearch && matchesStatus;
         });
@@ -216,7 +217,7 @@ export default function CounterWaiterPayments() {
     const filteredPayments = useMemo(() => {
         if (!historySearch.trim()) return payments;
         const q = historySearch.toLowerCase().trim();
-        return payments.filter(p => 
+        return payments.filter(p =>
             (p.paid_by_name && p.paid_by_name.toLowerCase().includes(q)) ||
             (p.amount && p.amount.toString().includes(q))
         );
@@ -226,7 +227,8 @@ export default function CounterWaiterPayments() {
     const handleOpenRegister = (waiter: any) => {
         setSelectedWaiter(waiter);
         const pending = parseFloat(waiter.cash_in_hand || 0);
-        setTransferAmount(pending > 0 ? pending.toString() : "");
+        setActionType(pending < 0 ? "return" : "collect");
+        setTransferAmount(pending !== 0 ? Math.abs(pending).toString() : "");
         setIsRegisterOpen(true);
     };
 
@@ -260,10 +262,14 @@ export default function CounterWaiterPayments() {
         if (e) e.preventDefault();
         if (!selectedWaiter) return;
 
-        const amountNum = parseFloat(transferAmount);
+        let amountNum = parseFloat(transferAmount);
         if (!transferAmount || isNaN(amountNum) || amountNum <= 0) {
             toast.error("Please enter a valid amount greater than 0");
             return;
+        }
+
+        if (actionType === "return") {
+            amountNum = -amountNum;
         }
 
         setIsSubmitting(true);
@@ -275,7 +281,12 @@ export default function CounterWaiterPayments() {
 
             // Store recent handover for mistake undo
             setLastHandover(res);
-            toast.success(`Received ${formatCurrency(amountNum)} from ${formatStaffName(selectedWaiter.full_name, selectedWaiter.username)}`, {
+
+            const message = actionType === "return"
+                ? `Returned ${formatCurrency(Math.abs(amountNum))} to ${formatStaffName(selectedWaiter.full_name, selectedWaiter.username)}`
+                : `Received ${formatCurrency(amountNum)} from ${formatStaffName(selectedWaiter.full_name, selectedWaiter.username)}`;
+
+            toast.success(message, {
                 action: {
                     label: "Undo Mistake",
                     onClick: () => {
@@ -287,28 +298,7 @@ export default function CounterWaiterPayments() {
             setPayments(prev => [res, ...prev]);
 
             // Also mark the waiter's cash invoices in backend database so received_by_counter is set
-            try {
-                const todayStr = new Date().toISOString().split('T')[0];
-                const invoicesRes = await fetchInvoices({ date: todayStr });
-                const allInvoices = invoicesRes?.results || (Array.isArray(invoicesRes) ? invoicesRes : []);
-                const waiterOrdersToSettle = allInvoices.filter((inv: any) => {
-                    const isWaiterOrder = String(inv.created_by) === String(selectedWaiter.id) || String(inv.received_by_waiter) === String(selectedWaiter.id);
-                    const isPaidOrWaiter = (inv.payment_status === 'PAID' || inv.payment_status === 'WAITER RECEIVED' || inv.received_by_waiter);
-                    return isWaiterOrder && isPaidOrWaiter && !inv.received_by_counter;
-                });
-
-                await Promise.allSettled(
-                    waiterOrdersToSettle.map((inv: any) =>
-                        addPayment(inv.id, {
-                            amount: 0,
-                            payment_method: "CASH",
-                            notes: `Cash handover settled by counter for Staff #${selectedWaiter.id}`
-                        })
-                    )
-                );
-            } catch (invErr) {
-                console.warn("Auto-settling individual invoices for waiter handover:", invErr);
-            }
+            // Invoice settlement logic is fully handled properly by the backend `waiter_paid.py` POST trigger now.
 
             // Close dialog
             setIsRegisterOpen(false);
@@ -395,7 +385,7 @@ export default function CounterWaiterPayments() {
 
     const selectedPendingAmount = parseFloat(selectedWaiter?.cash_in_hand || 0);
     const parsedTransferAmount = parseFloat(transferAmount) || 0;
-    const remainingBalance = selectedPendingAmount - parsedTransferAmount;
+    const remainingBalance = selectedPendingAmount - (actionType === "collect" ? parsedTransferAmount : -parsedTransferAmount);
 
     return (
         <div className="h-[100dvh] flex flex-col p-3 md:p-4 bg-[#F5F5F7] overflow-hidden text-[#1D1D1F] select-none font-sans">
@@ -507,7 +497,7 @@ export default function CounterWaiterPayments() {
                     />
                     <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
                         {searchQuery && (
-                            <button 
+                            <button
                                 type="button"
                                 onClick={() => setSearchQuery("")}
                                 className="p-1 text-slate-400 hover:text-slate-700"
@@ -518,11 +508,10 @@ export default function CounterWaiterPayments() {
                         <button
                             type="button"
                             onClick={() => setShowVirtualKeyboard(prev => !prev)}
-                            className={`p-1.5 rounded-lg border transition-all active:scale-95 ${
-                                showVirtualKeyboard 
-                                    ? "bg-[#1D1D1F] text-white border-transparent shadow-xs" 
-                                    : "bg-white text-slate-600 hover:bg-slate-100 border-black/[0.06]"
-                            }`}
+                            className={`p-1.5 rounded-lg border transition-all active:scale-95 ${showVirtualKeyboard
+                                ? "bg-[#1D1D1F] text-white border-transparent shadow-xs"
+                                : "bg-white text-slate-600 hover:bg-slate-100 border-black/[0.06]"
+                                }`}
                             title="Touch Keyboard"
                         >
                             <Keyboard className="h-3.5 w-3.5" />
@@ -601,8 +590,8 @@ export default function CounterWaiterPayments() {
                                     onClick={() => handleOpenRegister(waiter)}
                                     className={cn(
                                         "min-h-[115px] p-3.5 rounded-2xl border transition-all duration-200 cursor-pointer flex flex-col justify-between select-none active:scale-[0.98] shadow-[0_1px_4px_rgba(0,0,0,0.03)] hover:shadow-[0_6px_16px_rgba(0,0,0,0.06)] hover:-translate-y-0.5",
-                                        hasCash 
-                                            ? "border-amber-300/80 bg-gradient-to-b from-amber-50/40 to-white" 
+                                        hasCash
+                                            ? "border-amber-300/80 bg-gradient-to-b from-amber-50/40 to-white"
                                             : isCredit
                                                 ? "border-blue-200/80 bg-gradient-to-b from-blue-50/30 to-white"
                                                 : "border-black/[0.06] bg-white hover:bg-slate-50/50"
@@ -627,8 +616,8 @@ export default function CounterWaiterPayments() {
                                             "font-semibold text-base md:text-lg tabular-nums tracking-tight mt-0.5",
                                             hasCash ? "text-slate-900" : isCredit ? "text-blue-900" : "text-slate-400"
                                         )}>
-                                            {isCredit 
-                                                ? `${formatCurrency(Math.abs(pendingAmount))} Cr` 
+                                            {isCredit
+                                                ? `${formatCurrency(Math.abs(pendingAmount))} Cr`
                                                 : formatCurrency(pendingAmount)}
                                         </p>
                                     </div>
@@ -656,8 +645,8 @@ export default function CounterWaiterPayments() {
                                             type="button"
                                             className={cn(
                                                 "px-3 py-1 rounded-xl text-xs font-medium transition-all active:scale-95 shadow-xs",
-                                                hasCash 
-                                                    ? "bg-[#1D1D1F] hover:bg-[#2C2C2E] text-white" 
+                                                hasCash
+                                                    ? "bg-[#1D1D1F] hover:bg-[#2C2C2E] text-white"
                                                     : "bg-[#F5F5F7] hover:bg-[#E5E5EA] text-slate-700 border border-black/[0.04]"
                                             )}
                                         >
@@ -676,7 +665,7 @@ export default function CounterWaiterPayments() {
                 <DialogContent className="max-w-md bg-white/95 backdrop-blur-2xl rounded-3xl border border-black/[0.08] p-5 md:p-6 shadow-[0_20px_50px_rgba(0,0,0,0.15)]">
                     <DialogHeader className="text-left pb-3 border-b border-black/[0.04]">
                         <DialogTitle className="text-base font-semibold text-slate-900 tracking-tight flex items-center justify-between">
-                            <span>Collect Cash Handover</span>
+                            <span>{actionType === "collect" ? "Collect Cash Handover" : "Return Cash to Waiter"}</span>
                             {selectedWaiter && (
                                 <span className="text-xs font-normal px-2.5 py-1 bg-[#F5F5F7] text-slate-600 rounded-full border border-black/[0.04]">
                                     Staff #{selectedWaiter.id}
@@ -690,6 +679,34 @@ export default function CounterWaiterPayments() {
 
                     {selectedWaiter && (
                         <div className="space-y-3.5 pt-1">
+                            {/* Collection/Return Toggle */}
+                            <div className="bg-[#F5F5F7] p-1 rounded-xl flex gap-1">
+                                <button
+                                    type="button"
+                                    onClick={() => setActionType("collect")}
+                                    className={cn(
+                                        "flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5",
+                                        actionType === "collect"
+                                            ? "bg-white text-slate-900 shadow-sm border border-black/[0.04]"
+                                            : "text-slate-500 hover:text-slate-700 hover:bg-black/[0.02]"
+                                    )}
+                                >
+                                    📥 Collect
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setActionType("return")}
+                                    className={cn(
+                                        "flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5",
+                                        actionType === "return"
+                                            ? "bg-white text-slate-900 shadow-sm border border-black/[0.04]"
+                                            : "text-slate-500 hover:text-slate-700 hover:bg-black/[0.02]"
+                                    )}
+                                >
+                                    📤 Return
+                                </button>
+                            </div>
+
                             {/* Server Info Card */}
                             <div className="p-3.5 rounded-2xl bg-[#F5F5F7] border border-black/[0.04] flex items-center justify-between">
                                 <div>
@@ -717,7 +734,7 @@ export default function CounterWaiterPayments() {
                             <div className="p-4 rounded-2xl bg-[#F5F5F7] border border-black/[0.04] flex items-center justify-between">
                                 <div>
                                     <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
-                                        Collection Amount
+                                        {actionType === "collect" ? "Collection Amount" : "Return Amount"}
                                     </p>
                                     <p className="text-3xl font-bold text-slate-900 tabular-nums tracking-tight mt-0.5">
                                         Rs. {transferAmount || "0"}
@@ -821,10 +838,10 @@ export default function CounterWaiterPayments() {
                                             onClick={() => handleNumpadPress(key)}
                                             className={cn(
                                                 "h-12 md:h-13 text-xl md:text-2xl font-medium rounded-2xl active:scale-95 transition-all flex items-center justify-center select-none shadow-[0_1px_2px_rgba(0,0,0,0.04)]",
-                                                isClear 
-                                                    ? "bg-rose-50 text-rose-600 hover:bg-rose-100 active:bg-rose-200" 
-                                                    : isBackspace 
-                                                        ? "bg-[#E5E5EA] text-slate-800 hover:bg-[#D1D1D6]" 
+                                                isClear
+                                                    ? "bg-rose-50 text-rose-600 hover:bg-rose-100 active:bg-rose-200"
+                                                    : isBackspace
+                                                        ? "bg-[#E5E5EA] text-slate-800 hover:bg-[#D1D1D6]"
                                                         : "bg-[#F5F5F7] hover:bg-[#E5E5EA] active:bg-[#D1D1D6] text-slate-900"
                                             )}
                                         >
@@ -855,7 +872,7 @@ export default function CounterWaiterPayments() {
                                         <>
                                             <Check className="h-4 w-4" />
                                             <span>
-                                                Confirm Handover {parsedTransferAmount > 0 ? `(${formatCurrency(parsedTransferAmount)})` : ""}
+                                                {actionType === "collect" ? "Confirm Handover" : "Confirm Return"} {parsedTransferAmount > 0 ? `(${formatCurrency(parsedTransferAmount)})` : ""}
                                             </span>
                                         </>
                                     )}
@@ -1001,7 +1018,7 @@ export default function CounterWaiterPayments() {
             {showVirtualKeyboard && (
                 <>
                     {/* Backdrop */}
-                    <div 
+                    <div
                         className="fixed inset-0 z-[998] bg-black/15 backdrop-blur-[2px]"
                         onClick={() => setShowVirtualKeyboard(false)}
                     />

@@ -636,7 +636,8 @@ export default function CounterOrders() {
     };
 
     const getDisplayStatus = (order: any) => {
-        if ((order.payment_status === 'PAID' || order.payment_status === 'WAITER RECEIVED') && order.received_by_waiter && !order.received_by_counter) {
+        if (order.payment_status === 'PAID') return 'paid';
+        if (order.payment_status === 'WAITER RECEIVED' && order.received_by_waiter && !order.received_by_counter) {
             return 'waiter-paid'; // maps to 'Waiter Received' label in StatusBadge
         }
         return order.payment_status?.toLowerCase() || 'unpaid';
@@ -766,57 +767,57 @@ export default function CounterOrders() {
 
                 {viewMode === 'list' && (
                     <>
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <Input
-                        placeholder="Search ID, Table, Customer or Mode..."
-                        className="pl-10 h-10 rounded-lg border-slate-200 bg-white shadow-sm focus-visible:ring-1"
-                        value={searchQuery}
-                        onFocus={() => {
-                            setActiveKeypadField('search');
-                            setShowKeypad(true);
-                        }}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                </div>
-                <Input
-                    type="date"
-                    className="h-10 w-[160px] rounded-lg border-slate-200 bg-white shadow-sm"
-                    value={dateFilter}
-                    onChange={(e) => setDateFilter(e.target.value)}
-                />
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="outline" className={cn(
-                            "h-10 px-4 rounded-lg font-medium border-slate-200 hover:bg-slate-50 gap-2 shadow-sm",
-                            statusFilter !== "ALL" && "border-primary text-primary bg-primary/5"
-                        )}>
-                            <Filter className="h-4 w-4" />
-                            {statusFilter === "ALL" ? "Filters" : statusFilter.charAt(0) + statusFilter.slice(1).toLowerCase()}
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48 rounded-xl p-2 font-bold z-[100]">
-                        <DropdownMenuItem className="h-10 rounded-lg" onClick={() => setStatusFilter("ALL")}>
-                            All Orders
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="h-10 rounded-lg text-emerald-600" onClick={() => setStatusFilter("PAID")}>
-                            Paid
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="h-10 rounded-lg text-blue-600" onClick={() => setStatusFilter("PENDING")}>
-                            Pending
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="h-10 rounded-lg text-amber-600" onClick={() => setStatusFilter("PARTIAL")}>
-                            Partial
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="h-10 rounded-lg text-indigo-600" onClick={() => setStatusFilter("WAITER RECEIVED")}>
-                            Waiter Received
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="h-10 rounded-lg text-red-600" onClick={() => setStatusFilter("UNPAID")}>
-                            Unpaid
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
+                        <div className="relative flex-1">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                            <Input
+                                placeholder="Search ID, Table, Customer or Mode..."
+                                className="pl-10 h-10 rounded-lg border-slate-200 bg-white shadow-sm focus-visible:ring-1"
+                                value={searchQuery}
+                                onFocus={() => {
+                                    setActiveKeypadField('search');
+                                    setShowKeypad(true);
+                                }}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                        </div>
+                        <Input
+                            type="date"
+                            className="h-10 w-[160px] rounded-lg border-slate-200 bg-white shadow-sm"
+                            value={dateFilter}
+                            onChange={(e) => setDateFilter(e.target.value)}
+                        />
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" className={cn(
+                                    "h-10 px-4 rounded-lg font-medium border-slate-200 hover:bg-slate-50 gap-2 shadow-sm",
+                                    statusFilter !== "ALL" && "border-primary text-primary bg-primary/5"
+                                )}>
+                                    <Filter className="h-4 w-4" />
+                                    {statusFilter === "ALL" ? "Filters" : statusFilter.charAt(0) + statusFilter.slice(1).toLowerCase()}
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48 rounded-xl p-2 font-bold z-[100]">
+                                <DropdownMenuItem className="h-10 rounded-lg" onClick={() => setStatusFilter("ALL")}>
+                                    All Orders
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="h-10 rounded-lg text-emerald-600" onClick={() => setStatusFilter("PAID")}>
+                                    Paid
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="h-10 rounded-lg text-blue-600" onClick={() => setStatusFilter("PENDING")}>
+                                    Pending
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="h-10 rounded-lg text-amber-600" onClick={() => setStatusFilter("PARTIAL")}>
+                                    Partial
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="h-10 rounded-lg text-indigo-600" onClick={() => setStatusFilter("WAITER RECEIVED")}>
+                                    Waiter Received
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="h-10 rounded-lg text-red-600" onClick={() => setStatusFilter("UNPAID")}>
+                                    Unpaid
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </>
                 )}
             </div>
@@ -960,191 +961,191 @@ export default function CounterOrders() {
 
             {/* Orders Table (list view) */}
             {viewMode === 'list' && (
-            <main className="flex-1 overflow-hidden px-6 pb-6">
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 h-full flex flex-col overflow-hidden">
-                    <div className="overflow-x-auto h-full custom-scrollbar">
-                        <table className="w-full text-left border-collapse">
-                            <thead className="sticky top-0 bg-slate-50/80 backdrop-blur-sm z-10 border-b">
-                                <tr>
-                                    <th className="px-6 py-4 text-base font-bold text-slate-700">Order ID</th>
-                                    <th className="px-6 py-4 text-base font-bold text-slate-700">Table / Mode</th>
-                                    <th className="px-6 py-4 text-base font-bold text-slate-700">Time</th>
-                                    <th className="px-6 py-4 text-base font-bold text-slate-700">Method</th>
-                                    <th className="px-6 py-4 text-base font-bold text-slate-700">Created By</th>
-                                    <th className="px-6 py-4 text-base font-bold text-slate-700">Total</th>
-                                    <th className="px-6 py-4 text-base font-bold text-slate-700">Status</th>
-                                    <th className="px-6 py-4 text-base font-bold text-slate-700">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {loading ? (
+                <main className="flex-1 overflow-hidden px-6 pb-6">
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 h-full flex flex-col overflow-hidden">
+                        <div className="overflow-x-auto h-full custom-scrollbar">
+                            <table className="w-full text-left border-collapse">
+                                <thead className="sticky top-0 bg-slate-50/80 backdrop-blur-sm z-10 border-b">
                                     <tr>
-                                        <td colSpan={9} className="px-6 py-20 text-center">
-                                            <div className="flex flex-col items-center gap-4">
-                                                <Loader2 className="h-10 w-10 text-primary animate-spin" />
-                                                <p className="text-xl font-bold text-slate-500">Loading orders...</p>
-                                            </div>
-                                        </td>
+                                        <th className="px-6 py-4 text-base font-bold text-slate-700">Order ID</th>
+                                        <th className="px-6 py-4 text-base font-bold text-slate-700">Table / Mode</th>
+                                        <th className="px-6 py-4 text-base font-bold text-slate-700">Time</th>
+                                        <th className="px-6 py-4 text-base font-bold text-slate-700">Method</th>
+                                        <th className="px-6 py-4 text-base font-bold text-slate-700">Created By</th>
+                                        <th className="px-6 py-4 text-base font-bold text-slate-700">Total</th>
+                                        <th className="px-6 py-4 text-base font-bold text-slate-700">Status</th>
+                                        <th className="px-6 py-4 text-base font-bold text-slate-700">Action</th>
                                     </tr>
-                                ) : filteredOrders.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={9} className="px-6 py-20 text-center">
-                                            <div className="flex flex-col items-center gap-4 opacity-30">
-                                                <ShoppingBag className="h-16 w-16" />
-                                                <p className="text-xl font-bold">No orders found</p>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    filteredOrders.map(order => (
-                                        <tr
-                                            key={order.id}
-                                            className="hover:bg-slate-50 transition-colors group cursor-pointer"
-                                            onClick={() => handleRowClick(order)}
-                                        >
-                                            <td className="px-6 py-5">
-                                                <span className="font-mono text-[15px] font-semibold text-slate-600">#{order.invoice_number}</span>
-                                            </td>
-                                            <td className="px-6 py-5">
-                                                <div className="flex flex-col">
-                                                    <span className="text-base font-bold text-slate-800">
-                                                        {(() => {
-                                                            const tableMatch = (order.description || order.invoice_description || "").match(/Table (\d+)/);
-                                                            const tableNo = order.table_no || (tableMatch ? tableMatch[1] : null);
-                                                            return (
-                                                                <div className="flex items-center gap-2">
-                                                                    <span>{tableNo ? `Table ${tableNo}` : "Takeaway"}</span>
-                                                                    {order.floor_name && (
-                                                                        <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border border-primary/20">
-                                                                            {order.floor_name}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            );
-                                                        })()}
-                                                    </span>
-                                                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{order.customer_name || 'Walk-in'}</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-5">
-                                                <span className="text-[15px] font-medium text-slate-500">
-                                                    {order.created_at ? format(parseISO(order.created_at), 'hh:mm a') : 'N/A'}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-5">
-                                                <div className="flex flex-wrap gap-1.5">
-                                                    {(() => {
-                                                        const pMethods = order.payment_methods_list || order.payment_methods || [];
-                                                        if (pMethods.length > 0) {
-                                                            // If waiter ever handled it, prioritize QR then first method for single view
-                                                            if (order.received_by_waiter) {
-                                                                const hasQR = pMethods.some((m: string) => m.toUpperCase() === 'QR');
-                                                                const displayMethod = hasQR ? 'QR' : pMethods[0];
-                                                                return (
-                                                                    <span className="text-[11px] font-black px-2 py-0.5 rounded bg-indigo-50 text-indigo-600 uppercase tracking-tight border border-indigo-100">
-                                                                        {displayMethod}
-                                                                    </span>
-                                                                );
-                                                            }
-                                                            return pMethods.map((m: string, i: number) => (
-                                                                <span key={i} className="text-[11px] font-black px-2 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-tight">
-                                                                    {m}
-                                                                </span>
-                                                            ));
-                                                        } else if (order.payment_status === 'PAID' || order.payment_status === 'PARTIAL') {
-                                                            return (
-                                                                <span className="text-[11px] font-black px-2 py-0.5 rounded bg-amber-50 text-amber-600 uppercase tracking-tight">
-                                                                    {order.payment_status}
-                                                                </span>
-                                                            );
-                                                        } else {
-                                                            return (
-                                                                <span className="text-[11px] font-bold text-slate-300 italic">UNPAID</span>
-                                                            );
-                                                        }
-                                                    })()}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-5">
-                                                <div className="flex items-center gap-1.5">
-                                                    <User className="h-4 w-4 text-slate-400" />
-                                                    <span className="text-sm font-semibold text-slate-600 truncate max-w-[120px]">
-                                                        {order.created_by_name || 'Waiter'}
-                                                    </span>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-5">
-                                                <span className="text-lg font-black text-slate-900">Rs.{parseFloat(order.total_amount).toFixed(2)}</span>
-                                            </td>
-                                            <td className="px-6 py-5">
-                                                <div className="flex items-center gap-2">
-                                                    <StatusBadge
-                                                        status={getDisplayStatus(order)}
-                                                        className="text-[11px] px-2.5 py-1"
-                                                        label={getDisplayStatus(order) === 'waiter-paid' ? `Received by ${order.received_by_waiter_name || 'Waiter'}` : undefined}
-                                                    />
-                                                    {order.payment_status === 'PAID' && (
-                                                        <div className="h-5 w-5 rounded-full bg-success/20 flex items-center justify-center">
-                                                            <Check className="h-3 w-3 text-success font-bold" />
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-5">
-                                                <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-9 w-9 rounded-lg hover:bg-white hover:shadow-sm border border-transparent hover:border-slate-100"
-                                                        onClick={(e) => handleRowPrint(e, order)}
-                                                    >
-                                                        <Printer className="h-4 w-4 text-slate-500" />
-                                                    </Button>
-                                                    {(order.payment_status === 'UNPAID' || order.payment_status === 'PARTIAL') && (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-9 w-9 rounded-lg hover:bg-success/5 hover:border-success/20 text-success"
-                                                            onClick={(e) => { e.stopPropagation(); handlePayOpen(order); }}
-                                                        >
-                                                            <CheckCircle2 className="h-4 w-4" />
-                                                        </Button>
-                                                    )}
-                                                    <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:text-white">
-                                                        <MoreHorizontal className="h-4 w-4 text-slate-400 hover:text-white" />
-                                                    </Button>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {loading ? (
+                                        <tr>
+                                            <td colSpan={9} className="px-6 py-20 text-center">
+                                                <div className="flex flex-col items-center gap-4">
+                                                    <Loader2 className="h-10 w-10 text-primary animate-spin" />
+                                                    <p className="text-xl font-bold text-slate-500">Loading orders...</p>
                                                 </div>
                                             </td>
                                         </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                    {hasMore && (
-                        <div className="p-4 border-t flex justify-center bg-slate-50/50">
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={handleLoadMore}
-                                disabled={loadingMore}
-                                className="gap-2 font-black text-slate-500 hover:text-primary transition-all"
-                            >
-                                {loadingMore ? (
-                                    <>
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                        Loading more...
-                                    </>
-                                ) : (
-                                    <>
-                                        Load More Orders
-                                    </>
-                                )}
-                            </Button>
+                                    ) : filteredOrders.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={9} className="px-6 py-20 text-center">
+                                                <div className="flex flex-col items-center gap-4 opacity-30">
+                                                    <ShoppingBag className="h-16 w-16" />
+                                                    <p className="text-xl font-bold">No orders found</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        filteredOrders.map(order => (
+                                            <tr
+                                                key={order.id}
+                                                className="hover:bg-slate-50 transition-colors group cursor-pointer"
+                                                onClick={() => handleRowClick(order)}
+                                            >
+                                                <td className="px-6 py-5">
+                                                    <span className="font-mono text-[15px] font-semibold text-slate-600">#{order.invoice_number}</span>
+                                                </td>
+                                                <td className="px-6 py-5">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-base font-bold text-slate-800">
+                                                            {(() => {
+                                                                const tableMatch = (order.description || order.invoice_description || "").match(/Table (\d+)/);
+                                                                const tableNo = order.table_no || (tableMatch ? tableMatch[1] : null);
+                                                                return (
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span>{tableNo ? `Table ${tableNo}` : "Takeaway"}</span>
+                                                                        {order.floor_name && (
+                                                                            <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border border-primary/20">
+                                                                                {order.floor_name}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })()}
+                                                        </span>
+                                                        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{order.customer_name || 'Walk-in'}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-5">
+                                                    <span className="text-[15px] font-medium text-slate-500">
+                                                        {order.created_at ? format(parseISO(order.created_at), 'hh:mm a') : 'N/A'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-5">
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {(() => {
+                                                            const pMethods = order.payment_methods_list || order.payment_methods || [];
+                                                            if (pMethods.length > 0) {
+                                                                // If waiter ever handled it, prioritize QR then first method for single view
+                                                                if (order.received_by_waiter) {
+                                                                    const hasQR = pMethods.some((m: string) => m.toUpperCase() === 'QR');
+                                                                    const displayMethod = hasQR ? 'QR' : pMethods[0];
+                                                                    return (
+                                                                        <span className="text-[11px] font-black px-2 py-0.5 rounded bg-indigo-50 text-indigo-600 uppercase tracking-tight border border-indigo-100">
+                                                                            {displayMethod}
+                                                                        </span>
+                                                                    );
+                                                                }
+                                                                return pMethods.map((m: string, i: number) => (
+                                                                    <span key={i} className="text-[11px] font-black px-2 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-tight">
+                                                                        {m}
+                                                                    </span>
+                                                                ));
+                                                            } else if (order.payment_status === 'PAID' || order.payment_status === 'PARTIAL') {
+                                                                return (
+                                                                    <span className="text-[11px] font-black px-2 py-0.5 rounded bg-amber-50 text-amber-600 uppercase tracking-tight">
+                                                                        {order.payment_status}
+                                                                    </span>
+                                                                );
+                                                            } else {
+                                                                return (
+                                                                    <span className="text-[11px] font-bold text-slate-300 italic">UNPAID</span>
+                                                                );
+                                                            }
+                                                        })()}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-5">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <User className="h-4 w-4 text-slate-400" />
+                                                        <span className="text-sm font-semibold text-slate-600 truncate max-w-[120px]">
+                                                            {order.created_by_name || 'Waiter'}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-5">
+                                                    <span className="text-lg font-black text-slate-900">Rs.{parseFloat(order.total_amount).toFixed(2)}</span>
+                                                </td>
+                                                <td className="px-6 py-5">
+                                                    <div className="flex items-center gap-2">
+                                                        <StatusBadge
+                                                            status={getDisplayStatus(order)}
+                                                            className="text-[11px] px-2.5 py-1"
+                                                            label={getDisplayStatus(order) === 'waiter-paid' ? `Received by ${order.received_by_waiter_name || 'Waiter'}` : undefined}
+                                                        />
+                                                        {order.payment_status === 'PAID' && (
+                                                            <div className="h-5 w-5 rounded-full bg-success/20 flex items-center justify-center">
+                                                                <Check className="h-3 w-3 text-success font-bold" />
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-5">
+                                                    <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-9 w-9 rounded-lg hover:bg-white hover:shadow-sm border border-transparent hover:border-slate-100"
+                                                            onClick={(e) => handleRowPrint(e, order)}
+                                                        >
+                                                            <Printer className="h-4 w-4 text-slate-500" />
+                                                        </Button>
+                                                        {(order.payment_status === 'UNPAID' || order.payment_status === 'PARTIAL') && (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-9 w-9 rounded-lg hover:bg-success/5 hover:border-success/20 text-success"
+                                                                onClick={(e) => { e.stopPropagation(); handlePayOpen(order); }}
+                                                            >
+                                                                <CheckCircle2 className="h-4 w-4" />
+                                                            </Button>
+                                                        )}
+                                                        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:text-white">
+                                                            <MoreHorizontal className="h-4 w-4 text-slate-400 hover:text-white" />
+                                                        </Button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
                         </div>
-                    )}
-                </div>
-            </main>
+                        {hasMore && (
+                            <div className="p-4 border-t flex justify-center bg-slate-50/50">
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={handleLoadMore}
+                                    disabled={loadingMore}
+                                    className="gap-2 font-black text-slate-500 hover:text-primary transition-all"
+                                >
+                                    {loadingMore ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            Loading more...
+                                        </>
+                                    ) : (
+                                        <>
+                                            Load More Orders
+                                        </>
+                                    )}
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+                </main>
             )}
 
             {/* Table Orders Modal - shows all invoices for a specific table */}

@@ -9,7 +9,7 @@ import {
     FileText
 } from "lucide-react";
 import { getCurrentUser } from "../../auth/auth";
-import { HandCoins } from "lucide-react";
+import { HandCoins, Menu } from "lucide-react";
 
 const navItems = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/counter/dashboard" },
@@ -23,26 +23,48 @@ const navItems = [
 interface CounterSidebarProps {
     className?: string;
     onNavigate?: () => void;
+    isCollapsed?: boolean;
+    onToggle?: () => void;
 }
 
-export function CounterSidebar({ className, onNavigate }: CounterSidebarProps) {
+export function CounterSidebar({ className, onNavigate, isCollapsed, onToggle }: CounterSidebarProps) {
     const location = useLocation();
     const user = getCurrentUser();
     const branchName = user?.branch_name || "Counter Terminal";
 
     return (
-        <div className={cn("flex h-full flex-col gradient-espresso text-sidebar-foreground", className)}>
-            {/* Logo */}
-            <div className="flex items-center gap-3 border-b border-sidebar-border px-6 py-5">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full overflow-hidden border border-white/20">
-                    <img src="/logos/logo2brown.jpeg" alt="AMA BAKERY" className="h-full w-full object-cover" />
+        <div className={cn("flex h-full flex-col gradient-espresso text-sidebar-foreground relative", className)}>
+            {/* Header / Logo & Toggle */}
+            <div className={cn(
+                "flex border-b border-sidebar-border py-4 transition-all duration-300",
+                isCollapsed ? "flex-col items-center gap-4 px-2" : "items-center justify-between px-4"
+            )}>
+                <div className={cn("flex items-center", isCollapsed ? "justify-center" : "gap-3")}>
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full overflow-hidden border border-white/20 shrink-0">
+                        <img src="/logos/logo2brown.jpeg" alt="AMA BAKERY" className="h-full w-full object-cover" />
+                    </div>
+                    {!isCollapsed && (
+                        <div className="overflow-hidden">
+                            <h1 className="font-rockwell font-bold text-base leading-none mb-1 text-white truncate">AMA BAKERY</h1>
+                            <p className="text-[9px] text-white/70 font-black uppercase tracking-widest bg-white/10 px-1.5 py-0.5 rounded-sm inline-block truncate max-w-[120px]">
+                                {branchName}
+                            </p>
+                        </div>
+                    )}
                 </div>
-                <div>
-                    <h1 className="font-rockwell font-bold text-lg leading-none mb-1 text-white">AMA BAKERY</h1>
-                    <p className="text-[10px] text-white/70 font-black uppercase tracking-widest bg-white/10 px-2 py-0.5 rounded-sm inline-block">
-                        {branchName}
-                    </p>
-                </div>
+
+                {onToggle && (
+                    <button
+                        onClick={onToggle}
+                        className={cn(
+                            "flex h-8 w-8 items-center justify-center rounded-lg hover:bg-white/10 text-white/70 hover:text-white transition-colors shrink-0",
+                            isCollapsed && "mx-auto"
+                        )}
+                        title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                    >
+                        <Menu className="h-4 w-4" />
+                    </button>
+                )}
             </div>
 
             {/* Navigation */}
@@ -56,14 +78,16 @@ export function CounterSidebar({ className, onNavigate }: CounterSidebarProps) {
                             to={item.path}
                             onClick={onNavigate}
                             className={cn(
-                                "flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-all text-left",
+                                "flex items-center rounded-lg text-sm font-medium transition-all",
+                                isCollapsed ? "justify-center h-10 w-10 mx-auto" : "gap-3 px-4 py-3 text-left",
                                 isActive
                                     ? "bg-sidebar-primary text-sidebar-primary-foreground"
                                     : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                             )}
+                            title={isCollapsed ? item.label : undefined}
                         >
-                            <item.icon className="h-5 w-5" />
-                            {item.label}
+                            <item.icon className="h-5 w-5 shrink-0" />
+                            {!isCollapsed && <span className="truncate">{item.label}</span>}
                         </NavLink>
                     );
                 })}
@@ -74,10 +98,14 @@ export function CounterSidebar({ className, onNavigate }: CounterSidebarProps) {
                 {(user?.role === "ADMIN" || user?.role === "BRANCH_MANAGER" || user?.role === "SUPER_ADMIN") && (
                     <NavLink
                         to="/admin/dashboard"
-                        className="w-full flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium text-white hover:bg-primary transition-all mb-2 border border-white/40 hover:border-primary"
+                        title={isCollapsed ? "Back to Admin Dashboard" : undefined}
+                        className={cn(
+                            "flex items-center rounded-lg text-sm font-medium text-white hover:bg-primary transition-all mb-2 border border-white/40 hover:border-primary",
+                            isCollapsed ? "justify-center h-10 w-10 mx-auto p-0" : "gap-3 px-4 py-3 w-full"
+                        )}
                     >
-                        <Shield className="h-5 w-5" />
-                        Back to Admin Dashboard
+                        <Shield className="h-5 w-5 shrink-0" />
+                        {!isCollapsed && <span className="truncate">Back to Admin Dashboard</span>}
                     </NavLink>
                 )}
             </div>

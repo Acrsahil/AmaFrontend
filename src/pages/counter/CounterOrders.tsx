@@ -74,6 +74,7 @@ export default function CounterOrders() {
     const [tableViewSelectedTable, setTableViewSelectedTable] = useState<number | null>(null);
     const [showTableOrdersModal, setShowTableOrdersModal] = useState(false);
     const [tableOrders, setTableOrders] = useState<any[]>([]);
+    const [showFloorSidebar, setShowFloorSidebar] = useState(true);
 
     // Payment States
     const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -826,39 +827,55 @@ export default function CounterOrders() {
             {viewMode === 'table' && (
                 <main className="flex-1 overflow-hidden flex px-6 pb-6 gap-4">
                     {/* Floor Sidebar */}
-                    <div className="w-48 shrink-0 flex flex-col gap-2">
-                        <p className="text-[10px] uppercase tracking-widest font-black text-slate-400 px-1 mb-1">Floors</p>
-                        {floorsLoading ? (
-                            <div className="flex items-center justify-center py-8">
-                                <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
-                            </div>
-                        ) : floors.length === 0 ? (
-                            <div className="text-center py-8 text-slate-400 text-xs">No floors found</div>
-                        ) : (
-                            floors.map(floor => {
-                                const floorTables = Array.from({ length: floor.table_count || 0 }, (_, i) => i + 1);
-                                const occupiedCount = floorTables.filter(t => tableOrdersMap.has(t)).length;
-                                return (
-                                    <button
-                                        key={floor.id}
-                                        onClick={() => setSelectedFloor(floor)}
-                                        className={cn(
-                                            "w-full text-left px-3 py-3 rounded-xl border transition-all",
-                                            selectedFloor?.id === floor.id
-                                                ? "bg-slate-900 text-white border-slate-900 shadow-md"
-                                                : "bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-                                        )}
-                                    >
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <Layers className={cn("h-3.5 w-3.5 shrink-0", selectedFloor?.id === floor.id ? "text-white/70" : "text-slate-400")} />
-                                            <span className="font-semibold text-sm truncate">{floor.name}</span>
-                                        </div>
-                                        <div className={cn("text-[10px] font-medium", selectedFloor?.id === floor.id ? "text-white/60" : "text-slate-400")}>
-                                            {occupiedCount} occupied · {floor.table_count || 0} total
-                                        </div>
-                                    </button>
-                                );
-                            })
+                    <div className={cn(
+                        "shrink-0 flex flex-col gap-2 transition-all duration-300 overflow-hidden",
+                        showFloorSidebar ? "w-48" : "w-9"
+                    )}>
+                        {/* Toggle button */}
+                        <button
+                            onClick={() => setShowFloorSidebar(v => !v)}
+                            className="self-start h-9 w-9 rounded-xl bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all flex items-center justify-center shadow-sm shrink-0"
+                            title={showFloorSidebar ? "Hide floors" : "Show floors"}
+                        >
+                            {showFloorSidebar ? <ChevronLeft className="h-4 w-4 text-slate-500" /> : <ChevronRight className="h-4 w-4 text-slate-500" />}
+                        </button>
+
+                        {showFloorSidebar && (
+                            <>
+                                <p className="text-[10px] uppercase tracking-widest font-black text-slate-400 px-1 mb-1">Floors</p>
+                                {floorsLoading ? (
+                                    <div className="flex items-center justify-center py-8">
+                                        <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+                                    </div>
+                                ) : floors.length === 0 ? (
+                                    <div className="text-center py-8 text-slate-400 text-xs">No floors found</div>
+                                ) : (
+                                    floors.map(floor => {
+                                        const floorTables = Array.from({ length: floor.table_count || 0 }, (_, i) => i + 1);
+                                        const occupiedCount = floorTables.filter(t => tableOrdersMap.has(t)).length;
+                                        return (
+                                            <button
+                                                key={floor.id}
+                                                onClick={() => setSelectedFloor(floor)}
+                                                className={cn(
+                                                    "w-full text-left px-3 py-3 rounded-xl border transition-all",
+                                                    selectedFloor?.id === floor.id
+                                                        ? "bg-slate-900 text-white border-slate-900 shadow-md"
+                                                        : "bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                                                )}
+                                            >
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <Layers className={cn("h-3.5 w-3.5 shrink-0", selectedFloor?.id === floor.id ? "text-white/70" : "text-slate-400")} />
+                                                    <span className="font-semibold text-sm truncate">{floor.name}</span>
+                                                </div>
+                                                <div className={cn("text-[10px] font-medium", selectedFloor?.id === floor.id ? "text-white/60" : "text-slate-400")}>
+                                                    {occupiedCount} occupied · {floor.table_count || 0} total
+                                                </div>
+                                            </button>
+                                        );
+                                    })
+                                )}
+                            </>
                         )}
                     </div>
 
@@ -886,6 +903,10 @@ export default function CounterOrders() {
                                             <span className="h-3 w-3 rounded-full bg-[#c68b07] animate-pulse"></span>
                                             <span className="text-slate-500">Occupied</span>
                                         </div>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="h-3 w-3 rounded-full bg-emerald-400 animate-pulse"></span>
+                                            <span className="text-slate-500">Collected</span>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -898,17 +919,30 @@ export default function CounterOrders() {
                                         const totalDue = tableInvs.reduce((sum: number, o: any) => sum + parseFloat(o.due_amount || o.total_amount || 0), 0);
                                         const totalOrders = tableInvs.length;
 
-                                        // Green = available, Warm Gold (#c68b07) = occupied with active orders
+                                        // Check if all active orders have been collected by the waiter
+                                        const allWaiterReceived = hasActive && tableInvs.every(
+                                            (o: any) => o.payment_status === 'WAITER RECEIVED' || o.payment_status === 'PAID'
+                                        );
+
+                                        // Green = available, Emerald = waiter collected, Warm Gold = still unpaid
                                         const cardColor = !hasActive
                                             ? 'bg-emerald-500 border-emerald-500 hover:bg-emerald-400 hover:border-emerald-400 text-white'
-                                            : 'bg-[#c68b07] border-[#b07b06] hover:bg-[#b88106] hover:border-[#a06f05] cursor-pointer shadow-md text-white';
+                                            : allWaiterReceived
+                                                ? 'bg-emerald-600 border-emerald-700 hover:bg-emerald-500 hover:border-emerald-600 cursor-pointer shadow-md text-white'
+                                                : 'bg-[#c68b07] border-[#b07b06] hover:bg-[#b88106] hover:border-[#a06f05] cursor-pointer shadow-md text-white';
 
                                         const dotColor = !hasActive
                                             ? 'bg-white/70'
-                                            : 'bg-white animate-pulse';
+                                            : allWaiterReceived
+                                                ? 'bg-white/90 animate-pulse'
+                                                : 'bg-white animate-pulse';
 
-                                        const statusLabel = !hasActive ? 'Available' : 'Occupied';
-                                        const statusTextColor = !hasActive ? 'text-emerald-100 font-semibold' : 'text-amber-100 font-bold';
+                                        const statusLabel = !hasActive ? 'Available' : allWaiterReceived ? 'Collected' : 'Occupied';
+                                        const statusTextColor = !hasActive
+                                            ? 'text-emerald-100 font-semibold'
+                                            : allWaiterReceived
+                                                ? 'text-emerald-100 font-bold'
+                                                : 'text-amber-100 font-bold';
 
                                         return (
                                             <button
@@ -933,7 +967,9 @@ export default function CounterOrders() {
                                                     <UtensilsCrossed className="h-4 w-4" />
                                                 </div>
 
-                                                <p className={cn("text-[10px] font-black uppercase tracking-wider", !hasActive ? "text-emerald-100" : "text-amber-100/90")}>TABLE</p>
+                                                <p className={cn("text-[10px] font-black uppercase tracking-wider", !hasActive ? "text-emerald-100" : allWaiterReceived ? "text-emerald-100/90" : "text-amber-100/90")}>
+                                                    TABLE
+                                                </p>
                                                 <p className="text-lg font-black leading-tight text-white">
                                                     {String(tableNum).padStart(2, '0')}
                                                 </p>
@@ -941,8 +977,8 @@ export default function CounterOrders() {
 
                                                 {hasActive && (
                                                     <div className="mt-2 pt-2 border-t border-white/20 w-full">
-                                                        <p className="text-[10px] text-amber-100 font-semibold">{totalOrders} order{totalOrders > 1 ? 's' : ''}</p>
-                                                        <p className="text-[11px] font-black text-white">Rs.{totalDue.toFixed(0)} due</p>
+                                                        <p className={cn("text-[10px] font-semibold", allWaiterReceived ? "text-emerald-100" : "text-amber-100")}>{totalOrders} order{totalOrders > 1 ? 's' : ''}</p>
+                                                        <p className="text-[11px] font-black text-white">{allWaiterReceived ? 'Collected ✓' : `Rs.${totalDue.toFixed(0)} due`}</p>
                                                     </div>
                                                 )}
 
@@ -1172,28 +1208,6 @@ export default function CounterOrders() {
                                 </button>
                             </div>
 
-                            {/* Summary chips */}
-                            {tableOrders.length > 0 && (() => {
-                                const totalRevenue = tableOrders.reduce((s, o) => s + parseFloat(o.total_amount || 0), 0);
-                                const totalDue = tableOrders.reduce((s, o) => s + parseFloat(o.due_amount || 0), 0);
-                                const paidCount = tableOrders.filter(o => o.payment_status === 'PAID').length;
-                                return (
-                                    <div className="flex items-center gap-3 mt-3">
-                                        <div className="flex-1 bg-slate-50 rounded-xl px-3 py-2 text-center">
-                                            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Total Revenue</p>
-                                            <p className="text-base font-black text-slate-900">Rs.{totalRevenue.toFixed(2)}</p>
-                                        </div>
-                                        <div className="flex-1 bg-amber-50 rounded-xl px-3 py-2 text-center">
-                                            <p className="text-[10px] text-amber-600 font-semibold uppercase tracking-wider">Due</p>
-                                            <p className="text-base font-black text-amber-700">Rs.{totalDue.toFixed(2)}</p>
-                                        </div>
-                                        <div className="flex-1 bg-emerald-50 rounded-xl px-3 py-2 text-center">
-                                            <p className="text-[10px] text-emerald-600 font-semibold uppercase tracking-wider">Paid</p>
-                                            <p className="text-base font-black text-emerald-700">{paidCount}/{tableOrders.length}</p>
-                                        </div>
-                                    </div>
-                                );
-                            })()}
                         </div>
 
                         {/* Order List */}

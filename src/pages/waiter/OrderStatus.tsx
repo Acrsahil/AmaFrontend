@@ -57,6 +57,10 @@ export default function OrderStatus() {
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [modalOrder, setModalOrder] = useState<any>(null);
 
+  // Table orders modal (when a table has multiple orders)
+  const [showTableOrdersModal, setShowTableOrdersModal] = useState(false);
+  const [modalTableOrders, setModalTableOrders] = useState<any[]>([]);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -185,18 +189,18 @@ export default function OrderStatus() {
     return acc;
   }, []);
 
-  // Build per-table order map (table_no → order) for the current floor
-  const tableOrderMap: Record<number, any> = {};
+  // Build per-table order map (table_no → order[]) for the current floor
+  const tableOrderMap: Record<number, any[]> = {};
   activeOrders.forEach(o => {
     const floorId = o.floor || o.floor_id;
     if (selectedFloor && String(floorId) !== String(selectedFloor.id)) return;
     const tableMatch = (o?.description || o?.invoice_description || "").match(/Table (\d+)/);
     const tableNo = o?.table_no ? Number(o.table_no) : (tableMatch ? parseInt(tableMatch[1]) : null);
     if (tableNo) {
-      // Prefer READY orders over PENDING if same table
-      if (!tableOrderMap[tableNo] || o.invoice_status === "READY") {
-        tableOrderMap[tableNo] = o;
+      if (!tableOrderMap[tableNo]) {
+        tableOrderMap[tableNo] = [];
       }
+      tableOrderMap[tableNo].push(o);
     }
   });
 
@@ -206,10 +210,15 @@ export default function OrderStatus() {
   };
 
   const handleTableTap = (tableNum: number) => {
-    const order = tableOrderMap[tableNum];
-    if (order) {
-      setModalOrder(order);
-      setShowOrderModal(true);
+    const orders = tableOrderMap[tableNum];
+    if (orders && orders.length > 0) {
+      if (orders.length === 1) {
+        setModalOrder(orders[0]);
+        setShowOrderModal(true);
+      } else {
+        setModalTableOrders(orders);
+        setShowTableOrdersModal(true);
+      }
     } else {
       // Start fresh order on this table
       if (selectedFloor) navigate(`/waiter/order/${tableNum}?floorId=${selectedFloor.id}`);
@@ -375,9 +384,10 @@ export default function OrderStatus() {
             ) : (
               <div className="grid grid-cols-3 gap-2">
                 {allTableDefs.map(table => {
-                  const order = tableOrderMap[table.number];
-                  const isReady = order?.invoice_status === "READY";
-                  const hasOrder = !!order;
+                  const orders = tableOrderMap[table.number] || [];
+                  const hasOrder = orders.length > 0;
+                  const isReady = orders.some((o: any) => o.invoice_status === "READY");
+                  const totalAmount = orders.reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
 
                   return (
                     <button
@@ -414,7 +424,8 @@ export default function OrderStatus() {
                           "mt-1.5 text-[11px] font-semibold tabular-nums",
                           isReady ? "text-white/70" : "text-[#78570A]/80"
                         )}>
-                          Rs.{Number(order?.total_amount || 0).toFixed(0)}
+                          Rs.{totalAmount.toFixed(0)}
+                          {orders.length > 1 && <span className="ml-1 px-1 bg-black/10 rounded font-bold">({orders.length})</span>}
                         </span>
                       )}
                     </button>
@@ -653,6 +664,52 @@ export default function OrderStatus() {
             <Button className="w-full h-12 rounded-xl font-bold bg-primary text-white"
               onClick={submitTransferTable} disabled={isTransferringTable}>
               {isTransferringTable ? <Loader2 className="h-5 w-5 animate-spin" /> : "Transfer"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Multiple Orders on Table Dialog */}
+      <Dialog open={showTableOrdersModal} onOpenChange={setShowTableOrdersModal}>
+        <DialogContent className="max-w-[400px] rounded-3xl p-6 z-[110]">
+          <DialogHeader><DialogTitle className="text-lg font-bold">Select Order</DialogTitle></DialogHeader>
+          <div className="space-y-3 mt-2 max-h-[60vh] overflow-y-auto">
+            {modalTableOrders.map((order) => {
+              const isReady = order.invoice_status === "READY";
+              const isMine = String(order.created_by) === String(currentUser?.id);
+              return (
+                <Button key={order.id} variant="outline" className={cn("w-full h-auto py-3 justify-between flex-col items-start gap-1.5", isReady && "border-[#30D158] bg-[#30D158]/10")}
+                  onClick={() => {
+                    setShowTableOrdersModal(false);
+                    setModalOrder(order);
+                    setShowOrderModal(true);
+                  }}>
+                  <div className="flex w-full items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-base text-[#1D1D1F]">Order #{String(order.invoice_number || "").slice(-4)}</span>
+                      {isReady && <span className="text-[10px] bg-[#30D158] text-white px-2 py-0.5 rounded-full font-bold">READY</span>}
+                    </div>
+                    <span className="font-bold text-[#1D1D1F]">Rs.{Number(order.total_amount || 0).toFixed(0)}</span>
+                  </div>
+                  <div className="flex w-full items-center justify-between text-xs text-muted-foreground">
+                    <span>{isMine ? "Your Order" : "Other Waiter"}</span>
+                    <span>{(order.items || []).length} items</span>
+                  </div>
+                </Button>
+              );
+            })}
+            <Button
+              variant="outline"
+              className="w-full h-12 border-dashed border-[#D1D1D6] hover:bg-[#F9F9F9] text-[#1D1D1F] mt-2 font-semibold"
+              onClick={() => {
+                setShowTableOrdersModal(false);
+                if (selectedFloor) {
+                  const tableNo = modalTableOrders[0]?.table_no || modalTableOrders[0]?.description?.match(/Table (\d+)/)?.[1] || "";
+                  navigate(`/waiter/order/${tableNo}?floorId=${selectedFloor.id}`);
+                }
+              }}
+            >
+              Start New Order
             </Button>
           </div>
         </DialogContent>

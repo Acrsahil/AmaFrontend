@@ -38,7 +38,8 @@ import { toast } from "sonner";
 import {
     fetchProducts, createProduct, updateProduct, deleteProduct,
     fetchCategories, createCategory, deleteCategory, updateCategory,
-    fetchKitchenTypes, createKitchenType, deleteKitchenType, updateKitchenType
+    fetchKitchenTypes, createKitchenType, deleteKitchenType, updateKitchenType,
+    fetchSuperCategories, createSuperCategory, updateSuperCategory, deleteSuperCategory
 } from "../../api/index.js";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -74,6 +75,14 @@ interface BackendCategory {
     kitchentype: number;
     kitchentype_name: string;
     is_kitchen_item: boolean;
+    supercategory?: number | null;
+    supercategory_name?: string | null;
+}
+
+interface BackendSuperCategory {
+    id: number;
+    name: string;
+    branch: number;
 }
 
 
@@ -110,6 +119,17 @@ export default function AdminMenu() {
     const [editingKitchenSearchValue, setEditingKitchenSearchValue] = useState("");
     const [editingSelectedKitchenId, setEditingSelectedKitchenId] = useState<number | null>(null);
     const [isEditingKitchenDropdownOpen, setIsEditingKitchenDropdownOpen] = useState(false);
+    const [superCategories, setSuperCategories] = useState<BackendSuperCategory[]>([]);
+    const [newSuperCategoryInput, setNewSuperCategoryInput] = useState("");
+    const [editingSuperCategoryId, setEditingSuperCategoryId] = useState<number | null>(null);
+    const [editingSuperCategoryName, setEditingSuperCategoryName] = useState("");
+    const [selectedSuperCategoryId, setSelectedSuperCategoryId] = useState<number | null>(null);
+    const [superCategorySearchValue, setSuperCategorySearchValue] = useState("");
+    const [isSuperCategoryDropdownOpen, setIsSuperCategoryDropdownOpen] = useState(false);
+    const [editingSelectedSuperCategoryId, setEditingSelectedSuperCategoryId] = useState<number | null>(null);
+    const [editingSuperCategorySearchValue, setEditingSuperCategorySearchValue] = useState("");
+    const [isEditingSuperCategoryDropdownOpen, setIsEditingSuperCategoryDropdownOpen] = useState(false);
+
     const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
     const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
     const [importFile, setImportFile] = useState<File | null>(null);
@@ -140,9 +160,10 @@ export default function AdminMenu() {
 
     const loadMetadata = async () => {
         try {
-            const [categoriesData, kitchensData] = await Promise.all([
+            const [categoriesData, kitchensData, superCategoriesData] = await Promise.all([
                 fetchCategories(),
-                fetchKitchenTypes()
+                fetchKitchenTypes(),
+                fetchSuperCategories().catch(() => [])
             ]);
 
             const scopedCategories = branchId != null
@@ -153,8 +174,13 @@ export default function AdminMenu() {
                 ? (kitchensData || []).filter((k: KitchenType) => k.branch === branchId)
                 : kitchensData || []).sort((a: any, b: any) => b.id - a.id);
 
+            const scopedSuperCategories = (branchId != null
+                ? (superCategoriesData || []).filter((s: BackendSuperCategory) => s.branch === branchId)
+                : superCategoriesData || []).sort((a: any, b: any) => a.name.localeCompare(b.name));
+
             setCategories(scopedCategories);
             setKitchenTypes(scopedKitchens);
+            setSuperCategories(scopedSuperCategories);
         } catch (err: any) {
             console.error("Failed to load metadata", err);
         }
@@ -326,6 +352,9 @@ export default function AdminMenu() {
                     is_kitchen_item: newCategoryIsKitchenItem,
                     kitchentype: selectedKitchenId
                 };
+                if (selectedSuperCategoryId) {
+                    categoryPayload.supercategory = selectedSuperCategoryId;
+                }
                 if (branchId) {
                     categoryPayload.branch = branchId;
                 }
@@ -335,6 +364,8 @@ export default function AdminMenu() {
                 setNewCategoryIsKitchenItem(true);
                 setSelectedKitchenId(null);
                 setKitchenSearchValue("");
+                setSelectedSuperCategoryId(null);
+                setSuperCategorySearchValue("");
                 toast.success(response.message || "Category added");
             } catch (err: any) {
                 toast.error(err.message || "Failed to add category");
@@ -352,7 +383,8 @@ export default function AdminMenu() {
             const payload: any = {
                 name: editingCategoryName.trim(),
                 kitchentype: editingSelectedKitchenId,
-                is_kitchen_item: editingCategoryIsKitchenItem
+                is_kitchen_item: editingCategoryIsKitchenItem,
+                supercategory: editingSelectedSuperCategoryId || null
             };
 
             const response = await updateCategory(id, payload);
@@ -369,8 +401,11 @@ export default function AdminMenu() {
         setEditingCategoryName(cat.name);
         setEditingSelectedKitchenId(cat.kitchentype ?? null);
         setEditingKitchenSearchValue(cat.kitchentype_name || "");
+        setEditingSelectedSuperCategoryId(cat.supercategory ?? null);
+        setEditingSuperCategorySearchValue(cat.supercategory_name || "");
         setEditingCategoryIsKitchenItem(cat.is_kitchen_item ?? true);
         setIsEditingKitchenDropdownOpen(false);
+        setIsEditingSuperCategoryDropdownOpen(false);
     };
 
     const cancelEditingCategory = () => {
@@ -378,8 +413,11 @@ export default function AdminMenu() {
         setEditingCategoryName("");
         setEditingSelectedKitchenId(null);
         setEditingKitchenSearchValue("");
+        setEditingSelectedSuperCategoryId(null);
+        setEditingSuperCategorySearchValue("");
         setEditingCategoryIsKitchenItem(true);
         setIsEditingKitchenDropdownOpen(false);
+        setIsEditingSuperCategoryDropdownOpen(false);
     };
 
     const handleDeleteCategory = async (catId: number, catName: string) => {
@@ -448,6 +486,57 @@ export default function AdminMenu() {
             toast.success("Kitchen deleted");
         } catch (err: any) {
             toast.error(err.message || "Failed to delete kitchen");
+        }
+    };
+
+    const handleAddSuperCategory = async (overrideName?: string) => {
+        const nameToUse = overrideName || newSuperCategoryInput.trim();
+        if (!nameToUse) {
+            toast.error("Please enter a super category name");
+            return;
+        }
+        try {
+            const payload: any = { name: nameToUse };
+            if (branchId) payload.branch = branchId;
+            const response = await createSuperCategory(payload);
+            const newSC = response; // depending on your API structure (maybe response.data)
+            const scObj = newSC.data || newSC; // fallback if encapsulated
+            setSuperCategories(prev => [...prev, scObj].sort((a, b) => a.name.localeCompare(b.name)));
+            setNewSuperCategoryInput("");
+            toast.success(`Super Category "${scObj.name}" added`);
+            return scObj;
+        } catch (err: any) {
+            toast.error(err.message || "Failed to add super category");
+            return null;
+        }
+    };
+
+    const handleUpdateSuperCategory = async (id: number) => {
+        if (!editingSuperCategoryName.trim()) return;
+        try {
+            const response = await updateSuperCategory(id, { name: editingSuperCategoryName.trim() });
+            const updatedSC = response.data || response;
+            setSuperCategories(prev => prev.map(s => s.id === id ? updatedSC : s).sort((a, b) => a.name.localeCompare(b.name)));
+            setEditingSuperCategoryId(null);
+            toast.success("Super Category updated");
+        } catch (err: any) {
+            toast.error(err.message || "Failed to update super category");
+        }
+    };
+
+    const handleDeleteSuperCategory = async (id: number, name: string) => {
+        const isInUse = categories.some(cat => cat.supercategory === id);
+        if (isInUse) {
+            toast.error("Cannot delete super category with attached categories");
+            return;
+        }
+        if (!confirm(`Delete super category "${name}"?`)) return;
+        try {
+            await deleteSuperCategory(id);
+            setSuperCategories(prev => prev.filter(s => s.id !== id));
+            toast.success("Super Category deleted");
+        } catch (err: any) {
+            toast.error(err.message || "Failed to delete super category");
         }
     };
 
@@ -933,9 +1022,10 @@ export default function AdminMenu() {
 
             <Tabs defaultValue="items" className="w-full">
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-4">
-                    <TabsList className="grid w-full grid-cols-3 max-w-full sm:max-w-[450px] p-1.5 bg-slate-200/50 rounded-2xl h-auto">
+                    <TabsList className="grid w-full grid-cols-4 max-w-full sm:max-w-[600px] p-1.5 bg-slate-200/50 rounded-2xl h-auto">
                         <TabsTrigger value="items" className="rounded-xl font-bold py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm">Menu Items</TabsTrigger>
                         <TabsTrigger value="categories" className="rounded-xl font-bold py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm">Categories</TabsTrigger>
+                        <TabsTrigger value="supercategories" className="rounded-xl font-bold py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm">Menu Groups</TabsTrigger>
                         <TabsTrigger value="kitchens" className="rounded-xl font-bold py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm">Kitchens</TabsTrigger>
                     </TabsList>
                 </div>
@@ -1098,29 +1188,92 @@ export default function AdminMenu() {
                         <div className="bg-slate-50/50 p-6 rounded-[2rem] border border-slate-100 mb-10 shadow-inner">
                             <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3 ml-1 block">Create New Category</Label>
                             <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-                                <div className="md:col-span-5 space-y-1.5">
+                                <div className="md:col-span-3 space-y-1.5">
                                     <Input
-                                        placeholder="Category Name (e.g. Burgers, Drinks)"
+                                        placeholder="Category Name"
                                         value={newCategoryInput}
                                         onChange={(e) => setNewCategoryInput(e.target.value)}
                                         className="h-11 sm:h-14 text-base sm:text-lg shadow-sm border-slate-200 focus:border-primary focus:ring-primary rounded-2xl bg-white px-5 font-bold"
                                     />
                                 </div>
-                                <div className="md:col-span-4 space-y-1.5 relative">
+                                <div className="md:col-span-3 space-y-1.5 relative">
                                     <div className="relative">
                                         <Input
-                                        placeholder="Select Kitchen (required)..."
-                                        value={kitchenSearchValue}
-                                        onChange={(e) => {
-                                            setKitchenSearchValue(e.target.value);
-                                            setIsKitchenDropdownOpen(true);
-                                            const match = kitchenTypes.find(k => k.name.toLowerCase() === e.target.value.toLowerCase());
-                                            if (match) setSelectedKitchenId(match.id);
-                                            else setSelectedKitchenId(null);
-                                        }}
-                                        onFocus={() => setIsKitchenDropdownOpen(true)}
-                                        className="h-11 sm:h-14 rounded-2xl bg-white border border-slate-200 focus:ring-2 focus:ring-primary/20 pr-12 font-bold text-slate-700"
-                                    />
+                                            placeholder="Select Group (Optional)..."
+                                            value={superCategorySearchValue}
+                                            onChange={(e) => {
+                                                setSuperCategorySearchValue(e.target.value);
+                                                setIsSuperCategoryDropdownOpen(true);
+                                                const match = superCategories.find(s => s.name.toLowerCase() === e.target.value.toLowerCase());
+                                                if (match) setSelectedSuperCategoryId(match.id);
+                                                else setSelectedSuperCategoryId(null);
+                                            }}
+                                            onFocus={() => setIsSuperCategoryDropdownOpen(true)}
+                                            className="h-11 sm:h-14 rounded-2xl bg-white border border-slate-200 focus:ring-2 focus:ring-primary/20 pr-12 font-bold text-slate-700"
+                                        />
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 text-primary/40 pointer-events-none">
+                                            <Layers className="h-6 w-6" />
+                                        </div>
+
+                                        {isSuperCategoryDropdownOpen && (
+                                            <>
+                                                <div className="fixed inset-0 z-[50]" onClick={() => setIsSuperCategoryDropdownOpen(false)} />
+                                                <Card className="absolute top-full left-0 right-0 mt-2 z-[60] rounded-2xl border border-slate-100 shadow-xl overflow-hidden max-h-[220px] overflow-y-auto p-2 animate-in fade-in slide-in-from-top-2">
+                                                    {superCategories
+                                                        .filter(s => s.name.toLowerCase().includes(superCategorySearchValue.toLowerCase()))
+                                                        .map(s => (
+                                                            <button
+                                                                key={s.id}
+                                                                type="button"
+                                                                className="w-full text-left px-4 py-3 text-sm font-bold hover:bg-primary/5 hover:text-primary transition-all flex items-center justify-between rounded-xl"
+                                                                onClick={() => {
+                                                                    setSelectedSuperCategoryId(s.id);
+                                                                    setSuperCategorySearchValue(s.name);
+                                                                    setIsSuperCategoryDropdownOpen(false);
+                                                                }}
+                                                            >
+                                                                {s.name}
+                                                                {selectedSuperCategoryId === s.id && <Check className="h-4 w-4 text-primary" />}
+                                                            </button>
+                                                        ))}
+
+                                                    {superCategorySearchValue.trim() && !superCategories.some(s => s.name.toLowerCase() === superCategorySearchValue.toLowerCase()) && (
+                                                        <button
+                                                            type="button"
+                                                            className="w-full text-left px-4 py-3 text-sm font-black text-primary bg-primary/5 hover:bg-primary/10 transition-all flex items-center gap-2 border-t border-slate-50"
+                                                            onClick={async () => {
+                                                                const newS = await handleAddSuperCategory(superCategorySearchValue.trim());
+                                                                if (newS) {
+                                                                    setSelectedSuperCategoryId(newS.id);
+                                                                    setSuperCategorySearchValue(newS.name);
+                                                                }
+                                                                setIsSuperCategoryDropdownOpen(false);
+                                                            }}
+                                                        >
+                                                            <Plus className="h-3 w-3" />
+                                                            Add Group "{superCategorySearchValue}"
+                                                        </button>
+                                                    )}
+                                                </Card>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="md:col-span-3 space-y-1.5 relative">
+                                    <div className="relative">
+                                        <Input
+                                            placeholder="Select Kitchen (required)..."
+                                            value={kitchenSearchValue}
+                                            onChange={(e) => {
+                                                setKitchenSearchValue(e.target.value);
+                                                setIsKitchenDropdownOpen(true);
+                                                const match = kitchenTypes.find(k => k.name.toLowerCase() === e.target.value.toLowerCase());
+                                                if (match) setSelectedKitchenId(match.id);
+                                                else setSelectedKitchenId(null);
+                                            }}
+                                            onFocus={() => setIsKitchenDropdownOpen(true)}
+                                            className="h-11 sm:h-14 rounded-2xl bg-white border border-slate-200 focus:ring-2 focus:ring-primary/20 pr-12 font-bold text-slate-700"
+                                        />
                                         <div className="absolute right-4 top-1/2 -translate-y-1/2 text-primary/40 pointer-events-none">
                                             <CookingPot className="h-6 w-6" />
                                         </div>
@@ -1231,7 +1384,7 @@ export default function AdminMenu() {
                                                         </Button>
                                                     </div>
 
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                                         <div className="space-y-2">
                                                             <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">Category Name</Label>
                                                             <Input
@@ -1241,6 +1394,81 @@ export default function AdminMenu() {
                                                                 className="h-12 rounded-xl bg-white border-2 border-slate-100 focus:border-primary font-bold"
                                                                 autoFocus
                                                             />
+                                                        </div>
+
+                                                        <div className="space-y-2 relative">
+                                                            <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">Group (Optional)</Label>
+                                                            <div className="relative">
+                                                                <Input
+                                                                    placeholder="Select group..."
+                                                                    value={editingSuperCategorySearchValue}
+                                                                    onChange={(e) => {
+                                                                        setEditingSuperCategorySearchValue(e.target.value);
+                                                                        setIsEditingSuperCategoryDropdownOpen(true);
+                                                                        const match = superCategories.find(s => s.name.toLowerCase() === e.target.value.toLowerCase());
+                                                                        if (match) setEditingSelectedSuperCategoryId(match.id);
+                                                                        else setEditingSelectedSuperCategoryId(null);
+                                                                    }}
+                                                                    onFocus={() => setIsEditingSuperCategoryDropdownOpen(true)}
+                                                                    className={cn(
+                                                                        "h-12 rounded-xl bg-white border-2 pr-12 font-bold transition-all",
+                                                                        editingSelectedSuperCategoryId
+                                                                            ? "border-primary/30 focus:border-primary"
+                                                                            : "border-slate-200 focus:border-slate-400"
+                                                                    )}
+                                                                />
+                                                                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-primary/40 pointer-events-none">
+                                                                    <Layers className="h-5 w-5" />
+                                                                </div>
+
+                                                                {isEditingSuperCategoryDropdownOpen && (
+                                                                    <>
+                                                                        <div className="fixed inset-0 z-[50]" onClick={() => setIsEditingSuperCategoryDropdownOpen(false)} />
+                                                                        <Card className="absolute top-full left-0 right-0 mt-2 z-[60] rounded-2xl border border-slate-100 shadow-xl overflow-hidden max-h-[220px] overflow-y-auto p-2 animate-in fade-in slide-in-from-top-2">
+                                                                            {superCategories
+                                                                                .filter(s => s.name.toLowerCase().includes(editingSuperCategorySearchValue.toLowerCase()))
+                                                                                .map(s => (
+                                                                                    <button
+                                                                                        key={s.id}
+                                                                                        type="button"
+                                                                                        className={cn(
+                                                                                            "w-full text-left px-4 py-3 text-sm font-bold transition-all flex items-center justify-between rounded-xl",
+                                                                                            editingSelectedSuperCategoryId === s.id
+                                                                                                ? "bg-primary/10 text-primary"
+                                                                                                : "hover:bg-primary/5 hover:text-primary"
+                                                                                        )}
+                                                                                        onClick={() => {
+                                                                                            setEditingSelectedSuperCategoryId(s.id);
+                                                                                            setEditingSuperCategorySearchValue(s.name);
+                                                                                            setIsEditingSuperCategoryDropdownOpen(false);
+                                                                                        }}
+                                                                                    >
+                                                                                        {s.name}
+                                                                                        {editingSelectedSuperCategoryId === s.id && <Check className="h-4 w-4 text-primary" />}
+                                                                                    </button>
+                                                                                ))}
+
+                                                                            {editingSuperCategorySearchValue.trim() && !superCategories.some(s => s.name.toLowerCase() === editingSuperCategorySearchValue.toLowerCase()) && (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    className="w-full text-left px-4 py-3 text-sm font-black text-primary bg-primary/5 hover:bg-primary/10 transition-all flex items-center gap-2 border-t border-slate-50"
+                                                                                    onClick={async () => {
+                                                                                        const newS = await handleAddSuperCategory(editingSuperCategorySearchValue.trim());
+                                                                                        if (newS) {
+                                                                                            setEditingSelectedSuperCategoryId(newS.id);
+                                                                                            setEditingSuperCategorySearchValue(newS.name);
+                                                                                        }
+                                                                                        setIsEditingSuperCategoryDropdownOpen(false);
+                                                                                    }}
+                                                                                >
+                                                                                    <Plus className="h-3 w-3" />
+                                                                                    Add Group "{editingSuperCategorySearchValue}"
+                                                                                </button>
+                                                                            )}
+                                                                        </Card>
+                                                                    </>
+                                                                )}
+                                                            </div>
                                                         </div>
 
                                                         <div className="space-y-2 relative">
@@ -1408,6 +1636,98 @@ export default function AdminMenu() {
                                     </div>
                                 ))}
                             </div>
+                        </div>
+                    </div>
+                </TabsContent>
+
+                <TabsContent value="supercategories" className="space-y-6 mt-6">
+                    <div className="card-elevated p-8 max-w-2xl mx-auto shadow-2xl rounded-[2.5rem] border-4 border-white">
+                        <div className="flex items-center justify-between mb-8">
+                            <div>
+                                <h2 className="text-3xl font-black flex items-center gap-3 uppercase tracking-tighter text-slate-800">
+                                    <Layers className="h-8 w-8 text-primary" />
+                                    Menu Groups (Super Categories)
+                                </h2>
+                                <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mt-1 ml-1">Group your categories</p>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-50/50 p-6 rounded-[2rem] border border-slate-100 mb-8 shadow-inner">
+                            <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3 ml-1 block">Add New Group</Label>
+                            <div className="flex gap-4">
+                                <Input
+                                    placeholder="Group Name (e.g. Food, Beverages)"
+                                    value={newSuperCategoryInput}
+                                    onChange={(e) => setNewSuperCategoryInput(e.target.value)}
+                                    className="h-14 text-lg shadow-sm border-slate-200 focus:border-primary focus:ring-primary rounded-2xl bg-white px-5 font-bold"
+                                />
+                                <Button
+                                    onClick={() => handleAddSuperCategory()}
+                                    className="h-14 px-8 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-primary/20 active:scale-95 transition-all"
+                                >
+                                    <Plus className="h-5 w-5 mr-2" />
+                                    Create
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div className="space-y-3">
+                            <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2 ml-1 block">Active Groups</Label>
+                            {superCategories.map((sc) => (
+                                <div key={sc.id} className="group">
+                                    <div className="p-4 bg-white border-2 border-slate-100 hover:border-primary/20 rounded-2xl flex items-center justify-between transition-all hover:scale-[1.01] shadow-sm">
+                                        <div className="flex items-center gap-4">
+                                            <div className="h-12 w-12 rounded-xl bg-primary/5 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">
+                                                <Layers className="h-6 w-6" />
+                                            </div>
+                                            {editingSuperCategoryId === sc.id ? (
+                                                <div className="flex items-center gap-2">
+                                                    <Input
+                                                        value={editingSuperCategoryName}
+                                                        onChange={(e) => setEditingSuperCategoryName(e.target.value)}
+                                                        className="h-10 w-48 text-base font-bold"
+                                                        autoFocus
+                                                    />
+                                                    <Button onClick={() => handleUpdateSuperCategory(sc.id)} size="sm">
+                                                        <Check className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            ) : (
+                                                <div>
+                                                    <h4 className="font-bold text-slate-800 text-lg uppercase tracking-tight">{sc.name}</h4>
+                                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Main Group</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="flex gap-1">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="text-slate-300 hover:text-primary hover:bg-primary/5 rounded-xl transition-all"
+                                                onClick={() => {
+                                                    setEditingSuperCategoryId(sc.id);
+                                                    setEditingSuperCategoryName(sc.name);
+                                                }}
+                                            >
+                                                <Pencil className="h-5 w-5" />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                                                onClick={() => handleDeleteSuperCategory(sc.id, sc.name)}
+                                            >
+                                                <Trash2 className="h-5 w-5" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                            {superCategories.length === 0 && (
+                                <div className="py-12 text-center text-slate-400 font-medium bg-slate-50/50 rounded-2xl border-2 border-dashed">
+                                    No menu groups configured yet.
+                                </div>
+                            )}
                         </div>
                     </div>
                 </TabsContent>

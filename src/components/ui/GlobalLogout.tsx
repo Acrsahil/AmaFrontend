@@ -49,8 +49,8 @@ export function GlobalLogout() {
     if (!isLoggedIn() || isLoginPage) return null;
 
     const user = getCurrentUser();
-    // Hide floating button for Admin and HQ roles as they'll have it in their dedicated layout header
-    const hideFloating = user?.role === "ADMIN" || user?.role === "BRANCH_MANAGER" || user?.role === "COUNTER" || user?.role === "KITCHEN";
+    // Hide floating button for all roles that have dedicated headers (including Waiter's MobileHeader)
+    const hideFloating = user?.role === "ADMIN" || user?.role === "BRANCH_MANAGER" || user?.role === "COUNTER" || user?.role === "KITCHEN" || user?.role === "WAITER";
 
     const userInitial = (user?.username || "W")[0].toUpperCase();
 

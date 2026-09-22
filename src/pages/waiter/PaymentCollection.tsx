@@ -61,6 +61,7 @@ export default function PaymentCollection() {
   const [activeTab, setActiveTab] = useState<'pending' | 'collected'>('pending');
   const [waiterCashInHand, setWaiterCashInHand] = useState<number | null>(null);
   const [waiterPaymentsHistory, setWaiterPaymentsHistory] = useState<any[]>([]);
+  const [handedOverOrderIds, setHandedOverOrderIds] = useState<Set<string | number>>(new Set());
 
   const loadInvoices = useCallback(async (isInitial = false) => {
     if (isInitial) setLoading(true);
@@ -560,52 +561,7 @@ export default function PaymentCollection() {
       .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
   }, [waiterPaymentsHistory]);
 
-  // Set of order IDs that have been handed over to the counter
-  const handedOverOrderIds = useMemo(() => {
-    const set = new Set<string | number>();
 
-    // 1. Explicitly confirmed in database
-    completedOrdersList.forEach(o => {
-      if (o.received_by_counter) {
-        set.add(o.id);
-      }
-    });
-
-    // 2. Identify all completed cash orders by this waiter
-    const myCashOrders = completedOrdersList
-      .filter(o => {
-        const pMethods = o.payment_methods_list || o.payment_methods || (o.payment_method ? [o.payment_method] : []);
-        const isCash = pMethods.some((m: string) => m?.toUpperCase() === 'CASH') || o.payment_method?.toUpperCase() === 'CASH';
-        return isCash;
-      })
-      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-
-    // Case A: If current waiter cash in hand is 0 or less (or all cash is settled),
-    // then ALL of the waiter's completed cash orders are handed over!
-    if (waiterCashInHand !== null && waiterCashInHand <= 0 && myCashOrders.length > 0) {
-      myCashOrders.forEach(o => set.add(o.id));
-      return set;
-    }
-
-    // Case B: Match against waiter payments history (handover transfers made to counter)
-    if (waiterPaymentsHistory.length > 0) {
-      const latestHandoverTime = new Date(waiterPaymentsHistory[0].created_at).getTime();
-      let remainingHandedOver = waiterPaymentsTodayTotal;
-
-      for (const order of myCashOrders) {
-        const orderTime = new Date(order.created_at).getTime();
-        const orderAmount = parseFloat(order.paid_amount || order.total_amount || 0);
-
-        // If order was created before or around latest handover, or covered by cumulative handed over amount
-        if (orderTime <= latestHandoverTime + 60000 || remainingHandedOver >= orderAmount) {
-          set.add(order.id);
-          remainingHandedOver -= orderAmount;
-        }
-      }
-    }
-
-    return set;
-  }, [completedOrdersList, waiterCashInHand, waiterPaymentsTodayTotal, waiterPaymentsHistory]);
 
   const getOrderCashAmount = (o: any) => {
     if (o.payments && Array.isArray(o.payments)) {

@@ -6,7 +6,8 @@ import {
     Clock,
     Shield,
     BarChart3,
-    FileText
+    FileText,
+    LayoutGrid
 } from "lucide-react";
 import { getCurrentUser } from "../../auth/auth";
 import { HandCoins, Menu } from "lucide-react";
@@ -15,6 +16,7 @@ const navItems = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/counter/dashboard" },
     { icon: Monitor, label: "POS Terminal", path: "/counter/pos" },
     { icon: Clock, label: "Order History", path: "/counter/orders" },
+    { icon: LayoutGrid, label: "Table Orders", path: "/counter/tables" },
     { icon: BarChart3, label: "Daily Sales", path: "/counter/daily-sales" },
     { icon: FileText, label: "Reports", path: "/counter/reports" },
     { icon: HandCoins, label: "Waiter Payments", path: "/counter/waiter-payments" },

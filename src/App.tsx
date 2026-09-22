@@ -217,7 +217,15 @@ const App = () => {
                 path="/counter/orders"
                 element={
                   <ProtectedRoute allowedRoles={["COUNTER", "ADMIN", "BRANCH_MANAGER"]}>
-                    <CounterOrders />
+                    <CounterOrders initialViewMode="list" />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/counter/tables"
+                element={
+                  <ProtectedRoute allowedRoles={["COUNTER", "ADMIN", "BRANCH_MANAGER"]}>
+                    <CounterOrders initialViewMode="table" />
                   </ProtectedRoute>
                 }
               />

@@ -121,8 +121,8 @@ function isTokenExpired(token) {
   try {
     const base64Url = token.split('.')[1];
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
-        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function (c) {
+      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
     }).join(''));
 
     const decoded = JSON.parse(jsonPayload);
@@ -147,7 +147,7 @@ export async function initializeAuth() {
       const refreshed = await refreshAccessToken();
       return !!refreshed;
     }
-    
+
     _accessToken = storedToken;
     console.log("💾 Restored session from localStorage");
     return true;
@@ -396,7 +396,7 @@ export async function fetchProducts(params = {}) {
   const res = await apiFetch(url);
   const data = await safeJson(res);
   if (!res.ok) throw new Error(data?.message || "Failed to fetch products");
-  
+
   if (data && typeof data === 'object' && data.results !== undefined) {
     // If specific pagination params are requested, return full object
     if (params.page || params.limit || params.page_size) {
@@ -473,6 +473,42 @@ export async function deleteCategory(id) {
   return data;
 }
 
+export async function fetchSuperCategories() {
+  const res = await apiFetch("/api/supercategory/");
+  const data = await safeJson(res);
+  if (!res.ok) throw new Error(data?.message || "Failed to fetch super categories");
+  return data.data;
+}
+
+export async function createSuperCategory(scData) {
+  const res = await apiFetch("/api/supercategory/", {
+    method: "POST",
+    body: JSON.stringify(scData),
+  });
+  const data = await safeJson(res);
+  if (!res.ok) throw new Error(data?.message || "Failed to create super category");
+  return data.data;
+}
+
+export async function updateSuperCategory(id, scData) {
+  const res = await apiFetch(`/api/supercategory/${id}/`, {
+    method: "PATCH",
+    body: JSON.stringify(scData),
+  });
+  const data = await safeJson(res);
+  if (!res.ok) throw new Error(data?.message || "Failed to update super category");
+  return data.data;
+}
+
+export async function deleteSuperCategory(id) {
+  const res = await apiFetch(`/api/supercategory/${id}/`, {
+    method: "DELETE",
+  });
+  const data = await safeJson(res);
+  if (!res.ok) throw new Error(data?.message || "Failed to delete super category");
+  return data;
+}
+
 export async function fetchBranch(id) {
   const res = await apiFetch(`/api/branch/${id}/`);
   const data = await safeJson(res);
@@ -513,7 +549,7 @@ export async function updateBranch(id, branchData) {
  */
 export async function updateBranchImage(id, imageFile) {
   const url = apiBaseUrl + `/api/branch/${id}/`;
-  
+
   const formData = new FormData();
   formData.append("image", imageFile);
 
@@ -554,7 +590,7 @@ export async function fetchCustomers(params = {}, urlOverride = null) {
   const res = await apiFetch(url);
   const data = await safeJson(res);
   if (!res.ok) throw new Error(data?.message || "Failed to fetch customers");
-  
+
   if (data && typeof data === 'object' && data.results !== undefined) {
     return data;
   }
@@ -619,7 +655,7 @@ export async function fetchInvoices(params = {}) {
   const res = await apiFetch(url);
   const data = await safeJson(res);
   if (!res.ok) throw new Error(data?.message || "Failed to fetch invoices");
-  
+
   // DRF PageNumberPagination returns results, count, next, previous.
   // If results is present, we return the whole object to allow pagination.
   // We keep data.data as a fallback for non-paginated or legacy responses.

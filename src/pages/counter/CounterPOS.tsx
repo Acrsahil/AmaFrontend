@@ -34,14 +34,15 @@ import {
     Keyboard,
     Menu,
     Layers,
-    Hash
+    Hash,
+    LayoutGrid
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { logout, getCurrentUser } from "../../auth/auth";
 import { ChangePasswordModal } from "@/components/auth/ChangePasswordModal";
 import { CustomerSelector } from "@/components/pos/CustomerSelector";
-import { fetchProducts, fetchCategories, createInvoice, fetchInvoices, fetchBranch, fetchTables } from "@/api/index.js";
+import { fetchProducts, fetchCategories, fetchSuperCategories, createInvoice, fetchInvoices, fetchBranch, fetchTables } from "@/api/index.js";
 import { MenuItem, User as UserType } from "@/lib/mockData";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -78,6 +79,9 @@ export default function CounterPOS() {
     const [operator, setOperator] = useState<UserType | null>(null);
     const [products, setProducts] = useState<MenuItem[]>([]);
     const [categories, setCategories] = useState<string[]>([]);
+    const [rawCategories, setRawCategories] = useState<any[]>([]);
+    const [superCategories, setSuperCategories] = useState<any[]>([]);
+    const [selectedSuperCategory, setSelectedSuperCategory] = useState<number | null>(null);
     const [floors, setFloors] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedCategory, setSelectedCategory] = useState("All");
@@ -208,13 +212,17 @@ export default function CounterPOS() {
         console.log("🏪 (POS) Starting data fetch for user:", user);
 
         try {
-            const [productsResponse, categoriesResponse, branchResponse, floorsResponse] = await Promise.all([
+            const [productsResponse, categoriesResponse, superCategoriesResponse, branchResponse, floorsResponse] = await Promise.all([
                 fetchProducts({ page_size: 1000 }).catch(err => {
                     console.error("❌ fetchProducts failed:", err);
                     return null;
                 }),
                 fetchCategories().catch(err => {
                     console.error("❌ fetchCategories failed:", err);
+                    return null;
+                }),
+                fetchSuperCategories().catch(err => {
+                    console.error("⚠️ fetchSuperCategories failed (non-critical):", err);
                     return null;
                 }),
                 user?.branch_id ? fetchBranch(user.branch_id).catch(err => {
@@ -226,6 +234,11 @@ export default function CounterPOS() {
                     return null;
                 })
             ]);
+
+            // 0. Process Super Categories
+            if (Array.isArray(superCategoriesResponse)) {
+                setSuperCategories(superCategoriesResponse);
+            }
 
             // 1. Process Branch Info (Non-critical)
             if (branchResponse && branchResponse.success) {
@@ -262,6 +275,7 @@ export default function CounterPOS() {
 
             // 3. Process Categories (Critical for UI but we can default to All)
             if (Array.isArray(categoriesResponse)) {
+                setRawCategories(categoriesResponse);
                 const categoryNames = ["All", ...categoriesResponse.map((cat: any) => cat.name).sort()];
                 setCategories(categoryNames);
             } else {
@@ -363,8 +377,25 @@ export default function CounterPOS() {
     };
 
 
+    const visibleCategories = useMemo(() => {
+        if (!selectedSuperCategory) return categories;
+        const sc = superCategories.find(s => s.id === selectedSuperCategory);
+        if (!sc) return categories;
+        const catNamesInSC = rawCategories
+            .filter((c: any) => c.supercategory === selectedSuperCategory)
+            .map((c: any) => c.name);
+        return ["All", ...catNamesInSC.sort()];
+    }, [categories, rawCategories, superCategories, selectedSuperCategory]);
+
     const filteredItems = useMemo(() => {
         let items = products;
+        // Filter by supercategory first
+        if (selectedSuperCategory) {
+            const catNamesInSC = rawCategories
+                .filter((c: any) => c.supercategory === selectedSuperCategory)
+                .map((c: any) => c.name);
+            items = items.filter(item => catNamesInSC.includes(item.category));
+        }
         if (selectedCategory && selectedCategory !== "All") {
             items = items.filter(item => item.category === selectedCategory);
         }
@@ -373,8 +404,8 @@ export default function CounterPOS() {
                 item.name.toLowerCase().includes(searchQuery.toLowerCase())
             );
         }
-        return items;
-    }, [products, selectedCategory, searchQuery]);
+        return items.sort((a, b) => a.name.localeCompare(b.name));
+    }, [products, rawCategories, selectedSuperCategory, selectedCategory, searchQuery]);
 
     const subtotal = useMemo(() =>
         cart.reduce((sum, c) => sum + (c.item.price * c.quantity), 0),
@@ -448,7 +479,7 @@ export default function CounterPOS() {
             toast.error("Cart is empty");
             return;
         }
-        setCashReceived(total.toFixed(2));
+        setCashReceived("");
         setPaymentMethod('cash');
         setShowCheckoutModal(true);
     };
@@ -576,6 +607,88 @@ export default function CounterPOS() {
             activeTabIdRef.current = nextId;
         }
         setTabs(filtered);
+    };
+
+    const handlePrintKOT = () => {
+        if (cart.length === 0) {
+            toast.error("Cart is empty");
+            return;
+        }
+
+        const itemRows = cart.map((item: any, index: number) => `
+            <div class="receipt-item-grid">
+                <div>${index + 1}</div>
+                <div>
+                    ${item.item.name}
+                    ${item.notes ? `<div style="font-size: 8pt; text-transform: none; margin-top: 1mm;">"${item.notes}"</div>` : ""}
+                </div>
+                <div style="text-align: right;">${item.quantity}</div>
+            </div>
+        `).join("") || "";
+
+        const html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8"/>
+    <title>KOT - Ama Bakery</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; color: black !important; background: white !important; font-family: 'Courier New', Courier, monospace !important; }
+        body { width: 80mm; padding: 4mm; }
+        .thermal-header { text-align: center; margin-bottom: 4mm; }
+        .thermal-title { font-size: 20pt; font-weight: bold; margin-bottom: 1mm; letter-spacing: 1px; text-transform: uppercase; border-bottom: 2px solid black; padding-bottom: 2px; }
+        .thermal-info-grid { display: grid; grid-template-columns: 1fr 1fr; font-size: 9pt; margin-bottom: 4mm; line-height: 1.4; gap: 2mm; text-align: left; }
+        .thermal-divider { border-top: 1px dashed black; margin: 3mm 0; }
+        .receipt-item-grid { display: grid; grid-template-columns: 8mm 1fr 12mm; gap: 1mm; font-size: 11pt; margin-bottom: 2mm; text-transform: uppercase; font-weight: bold; }
+        .thermal-footer { text-align: center; margin-top: 6mm; font-size: 10pt; font-weight: bold; text-transform: uppercase; border-top: 2px solid black; padding-top: 2px; }
+        
+        @media print {
+            @page { size: 80mm auto; margin: 0; }
+            body { width: 80mm; padding: 4mm; }
+        }
+    </style>
+</head>
+<body>
+    <div class="thermal-header">
+        <div class="thermal-title">** KOT **</div>
+        <div style="font-size: 12pt; font-weight: bold;">COUNTER TICKET</div>
+    </div>
+    
+    <div class="thermal-info-grid">
+        <div>
+            <div>DATE: ${new Date().toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+            <div>CSHR: ${operator?.name || "Counter"}</div>
+        </div>
+        <div style="text-align: right;">
+            <div>CUST: ${customer ? customer.name : "Walk-in"}</div>
+            <div>${tabs.find(t => t.id === activeTabId) ? `TAB: ${tabs.findIndex(t => t.id === activeTabId) + 1}` : ""}</div>
+        </div>
+    </div>
+
+    <div class="thermal-divider"></div>
+    
+    <div class="receipt-item-grid" style="border-bottom: 1px solid black; padding-bottom: 1mm; margin-bottom: 2mm; font-size: 10pt;">
+        <div>SN</div>
+        <div>ITEM</div>
+        <div style="text-align: right;">QTY</div>
+    </div>
+    
+    ${itemRows}
+
+    <div class="thermal-divider"></div>
+    
+    <div class="thermal-footer">
+        --- NOT A BILL ---
+    </div>
+
+    <script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};</script>
+</body>
+</html>`;
+
+        const win = window.open('', '_blank', 'width=400,height=700');
+        if (win) {
+            win.document.write(html);
+            win.document.close();
+        }
     };
 
     const handlePrint = () => {
@@ -717,15 +830,15 @@ export default function CounterPOS() {
         <div className={cn("bg-stone-50 flex flex-col overflow-hidden font-sans", hideHeader ? "h-[calc(100vh-64px)] md:h-[calc(100vh-64px)]" : "h-screen")}>
             {/* Top Header */}
             {!hideHeader && (
-                <header className="h-16 bg-white border-b px-6 pr-14 flex items-center justify-between shrink-0 z-10">
-                    <div className="flex items-center gap-4">
+                <header className="h-16 bg-white border-b px-4 flex items-center justify-between shrink-0 z-10 gap-4">
+                    <div className="flex items-center gap-2 shrink-0">
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="md:hidden rounded-xl h-10 w-10"
+                            className="rounded-xl h-10 w-10 bg-slate-100 hover:bg-slate-200 transition-colors"
                             onClick={() => window.dispatchEvent(new CustomEvent("open-counter-sidebar"))}
                         >
-                            <Menu className="h-6 w-6 text-slate-600" />
+                            <Menu className="h-5 w-5 text-slate-700" />
                         </Button>
                         {(operator?.role === "ADMIN" || operator?.role === "BRANCH_MANAGER" || operator?.role === "SUPER_ADMIN") && (
                             <Button
@@ -738,12 +851,106 @@ export default function CounterPOS() {
                                 <LayoutDashboard className="h-5 w-5" />
                             </Button>
                         )}
-                        <div>
-                            <h1 className="text-lg md:text-xl font-bold text-slate-800 leading-none">POS</h1>
+                        <h1 className="text-lg md:text-xl font-bold text-slate-800 leading-none hidden md:block mr-2">POS</h1>
+                    </div>
+
+                    {/* Middle Area: Tabs & Search */}
+                    <div className="flex-1 flex items-center gap-4 overflow-hidden">
+                        {/* Tabs Row */}
+                        <div className="flex items-center gap-1.5 overflow-x-auto shrink-0 custom-scrollbar max-w-[50%]">
+                            {tabs.map((tab, idx) => (
+                                <div
+                                    key={tab.id}
+                                    onClick={() => setActiveTabId(tab.id)}
+                                    className={cn(
+                                        "flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer whitespace-nowrap transition-all",
+                                        activeTabId === tab.id
+                                            ? "border-primary bg-primary/10 text-primary font-bold shadow-sm"
+                                            : "border-slate-200 bg-white text-slate-500 hover:border-primary/50"
+                                    )}
+                                >
+                                    <span className="text-xs">Order #{idx + 1}</span>
+                                    {tab.cart.length > 0 && (
+                                        <span className="bg-slate-900 text-white text-[9px] px-1.5 py-0.5 rounded-md font-black flex items-center justify-center">
+                                            {tab.cart.reduce((s, c) => s + c.quantity, 0)}
+                                        </span>
+                                    )}
+                                    <button
+                                        onClick={(e) => removeTab(tab.id, e)}
+                                        className="ml-1 hover:bg-red-100 hover:text-red-600 text-slate-400 rounded-full p-0.5 transition-colors"
+                                    >
+                                        <X className="h-3 w-3" />
+                                    </button>
+                                </div>
+                            ))}
+                            <Button
+                                variant="outline"
+                                onClick={addTab}
+                                className="h-8 w-8 p-0 rounded-lg border border-dashed border-slate-300 hover:border-primary hover:bg-primary/5 text-slate-400 hover:text-primary transition-all shrink-0 ml-1"
+                                title="New Order Section"
+                            >
+                                <Plus className="h-4 w-4" />
+                            </Button>
+                        </div>
+
+                        {/* Search Bar */}
+                        <div className="relative flex-1 min-w-[150px] max-w-[300px]">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                            <Input
+                                placeholder="Search products..."
+                                className="pl-9 pr-9 h-10 text-sm rounded-lg border border-slate-200 focus:border-primary bg-slate-50 transition-all shadow-sm focus:bg-white"
+                                value={searchQuery}
+                                onFocus={() => {
+                                    setActiveKeypadField('productSearch');
+                                    setShowKeypad(true);
+                                }}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                            {searchQuery && (
+                                <button
+                                    onClick={() => setSearchQuery("")}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors"
+                                >
+                                    <X className="h-3 w-3" />
+                                </button>
+                            )}
                         </div>
                     </div>
 
                     <div className="flex items-center gap-4">
+                        {/* Supercategory Row */}
+                        {superCategories.length > 0 && (
+                            <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar shrink-0 pr-4 border-r border-slate-200 mr-2">
+                                <button
+                                    onClick={() => { setSelectedSuperCategory(null); setSelectedCategory("All"); }}
+                                    className={cn(
+                                        "flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-black whitespace-nowrap transition-all shadow-sm active:scale-95 border",
+                                        !selectedSuperCategory
+                                            ? "bg-slate-900 text-white border-slate-900 shadow-md shadow-slate-900/10"
+                                            : "bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
+                                    )}
+                                >
+                                    <Layers className="h-4 w-4" />
+                                    All
+                                </button>
+                                {superCategories.map(sc => (
+                                    <button
+                                        key={sc.id}
+                                        onClick={() => { setSelectedSuperCategory(sc.id); setSelectedCategory("All"); }}
+                                        className={cn(
+                                            "flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-black whitespace-nowrap transition-all shadow-sm active:scale-95 border",
+                                            selectedSuperCategory === sc.id
+                                                ? "bg-primary text-white border-primary shadow-md shadow-primary/20"
+                                                : "bg-white text-slate-600 border-slate-200 hover:border-primary/50 hover:bg-slate-50"
+                                        )}
+                                    >
+                                        <LayoutGrid className="h-4 w-4" />
+                                        {sc.name}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" className="h-auto p-2 hover:bg-slate-50 flex items-center gap-3 rounded-2xl transition-all text-left">
@@ -787,118 +994,8 @@ export default function CounterPOS() {
 
             {/* Main Content Area */}
             <main className="flex-1 flex overflow-hidden">
-
-                {/* Left Side: Menu Selection */}
-                <section className="flex-1 flex flex-col overflow-hidden p-6 gap-6">
-                    {/* Search & Categories */}
-                    <div className="flex flex-col gap-4 shrink-0">
-                        {/* Tabs Row */}
-                        <div className="flex items-center gap-2 overflow-x-auto pb-1 shrink-0 custom-scrollbar">
-                            {tabs.map((tab, idx) => (
-                                <div
-                                    key={tab.id}
-                                    onClick={() => setActiveTabId(tab.id)}
-                                    className={cn(
-                                        "flex items-center gap-2 px-4 py-2 rounded-xl border-2 cursor-pointer whitespace-nowrap transition-all",
-                                        activeTabId === tab.id
-                                            ? "border-primary bg-primary/10 text-primary font-bold shadow-sm"
-                                            : "border-slate-200 bg-white text-slate-500 hover:border-primary/50"
-                                    )}
-                                >
-                                    <span className="text-sm">Order #{idx + 1}</span>
-                                    {tab.cart.length > 0 && (
-                                        <span className="bg-slate-900 text-white text-[10px] px-1.5 py-0.5 rounded-md font-black flex items-center justify-center">
-                                            {tab.cart.reduce((s, c) => s + c.quantity, 0)}
-                                        </span>
-                                    )}
-                                    <button
-                                        onClick={(e) => removeTab(tab.id, e)}
-                                        className="ml-1 hover:bg-red-100 hover:text-red-600 text-slate-400 rounded-full p-1 transition-colors"
-                                    >
-                                        <X className="h-3.5 w-3.5" />
-                                    </button>
-                                </div>
-                            ))}
-                            <Button
-                                variant="outline"
-                                onClick={addTab}
-                                className="h-10 w-10 p-0 rounded-xl border-2 border-dashed border-slate-300 hover:border-primary hover:bg-primary/5 text-slate-400 hover:text-primary transition-all shrink-0 ml-1"
-                                title="New Order Section"
-                            >
-                                <Plus className="h-5 w-5" />
-                            </Button>
-                        </div>
-
-
-                        <div className="relative">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                            <Input
-                                placeholder="Search products..."
-                                className="pl-12 h-12 md:h-14 text-base md:text-lg rounded-2xl border-2 border-slate-200 focus:border-primary bg-white transition-all shadow-sm focus:shadow-md"
-                                value={searchQuery}
-                                onFocus={() => {
-                                    setActiveKeypadField('productSearch');
-                                    setShowKeypad(true);
-                                }}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                            />
-                        </div>
-
-                        <div className="flex gap-2 p-1 bg-slate-200/50 rounded-2xl overflow-x-auto">
-                            {categories.map(cat => (
-                                <Button
-                                    key={cat}
-                                    variant={selectedCategory === cat ? "default" : "ghost"}
-                                    className={cn(
-                                        "rounded-xl px-4 md:px-6 h-9 md:h-11 font-bold whitespace-nowrap transition-all text-sm md:text-base",
-                                        selectedCategory === cat ? "shadow-md" : "text-slate-500 hover:text-primary"
-                                    )}
-                                    onClick={() => setSelectedCategory(cat)}
-                                >
-                                    {cat}
-                                </Button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Product Grid */}
-                    <div className="flex-1 overflow-y-auto pt-2 pb-10 px-2 custom-scrollbar -ml-2 -mr-2">
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
-                            {filteredItems.map(item => (
-                                <button
-                                    key={item.id}
-                                    onClick={() => addToCart(item)}
-                                    className="group flex flex-col justify-between bg-white rounded-[1.5rem] p-5 text-left border-2 border-slate-200 hover:border-primary hover:bg-orange-50/50 hover:-translate-y-1 transition-all hover:shadow-2xl hover:shadow-primary/10 active:scale-95 min-h-[140px]"
-                                >
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <div className="h-6 w-6 rounded-lg bg-primary/5 flex items-center justify-center">
-                                                {(() => {
-                                                    const Icons = [Cake, Coffee, Cookie, Pizza, Sandwich, Soup];
-                                                    const Icon = Icons[item.id.length % Icons.length];
-                                                    return <Icon className="h-3.5 w-3.5 text-primary/40" />;
-                                                })()}
-                                            </div>
-                                            <p className="text-[9px] font-black uppercase tracking-widest text-primary/60">{item.category}</p>
-                                        </div>
-                                        <h3 className="font-bold text-slate-800 text-sm md:text-base line-clamp-2 leading-tight group-hover:text-primary transition-colors">{item.name}</h3>
-                                    </div>
-                                    <div className="mt-4 flex items-end justify-between">
-                                        <div className="flex flex-col">
-                                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">Price</span>
-                                            <span className="text-xl font-black text-slate-900 leading-none">Rs.{item.price}</span>
-                                        </div>
-                                        <div className="h-8 w-8 md:h-10 md:w-10 rounded-xl md:rounded-2xl bg-slate-50 flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-all group-hover:rotate-6 group-hover:scale-110">
-                                            <Plus className="h-4 w-4 md:h-5 md:w-5" />
-                                        </div>
-                                    </div>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </section>
-                {/* Right Side: Cart & Billing (Desktop) */}
-                <aside className="hidden lg:flex w-[400px] bg-white border-l flex-col shadow-2xl z-20">
+                {/* Left Side: Cart & Billing (Desktop) */}
+                <aside className="hidden lg:flex w-[350px] bg-white border-r flex-col shadow-lg z-20">
                     <CartContent
                         cart={cart}
                         setCart={setCart}
@@ -918,6 +1015,45 @@ export default function CounterPOS() {
                         handleCheckout={handleCheckout}
                     />
                 </aside>
+
+                {/* Right Side: Menu Selection */}
+                <section className="flex-1 flex flex-col overflow-hidden p-2 md:p-3 gap-2 bg-slate-50">
+                    {/* Search & Categories */}
+                    <div className="flex flex-col gap-2 shrink-0">
+
+                        <div className="flex gap-1.5 p-1 bg-slate-200/50 rounded-lg overflow-x-auto">
+                            {visibleCategories.map(cat => (
+                                <Button
+                                    key={cat}
+                                    variant={selectedCategory === cat ? "default" : "ghost"}
+                                    size="sm"
+                                    className={cn(
+                                        "rounded-md px-3 h-8 font-bold whitespace-nowrap transition-all text-xs",
+                                        selectedCategory === cat ? "shadow-sm" : "text-slate-500 hover:text-primary"
+                                    )}
+                                    onClick={() => setSelectedCategory(cat)}
+                                >
+                                    {cat}
+                                </Button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Product Grid */}
+                    <div className="flex-1 overflow-y-auto pt-1 pb-4 px-1 custom-scrollbar -ml-1 -mr-1">
+                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-2">
+                            {filteredItems.map(item => (
+                                <button
+                                    key={item.id}
+                                    onClick={() => addToCart(item)}
+                                    className="group flex flex-col items-center justify-center bg-primary/20 rounded-md p-1.5 text-center border-2 border-primary/30 hover:border-primary hover:bg-primary/40 active:scale-95 transition-all shadow-sm h-[55px] shadow-primary/5"
+                                >
+                                    <h3 className="font-bold text-slate-800 text-[10px] sm:text-[11px] leading-tight line-clamp-2 group-hover:text-primary transition-colors tracking-tight uppercase">{item.name}</h3>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </section>
 
                 {/* Mobile Cart Sheet */}
                 <Sheet open={isMobileCartOpen} onOpenChange={setIsMobileCartOpen}>
@@ -999,121 +1135,137 @@ export default function CounterPOS() {
                     <DialogTitle className="sr-only">Checkout</DialogTitle>
                     <div className={cn("flex flex-col md:flex-row h-auto md:h-[650px] transition-all", showKeypad ? "max-h-[60vh] md:max-h-[70vh]" : "max-h-[90vh]")}>
                         {/* Checkout Info */}
-                        <div className={cn("flex-1 p-6 md:p-10 space-y-6 md:space-y-8 overflow-y-auto custom-scrollbar", showKeypad && "pb-40 md:pb-8")}>
-                            <div>
-                                <h2 className="text-3xl font-black text-slate-800 mb-2">Checkout</h2>
-                                <p className="text-sm text-slate-400 font-medium">Finalize the order and take payment</p>
+                        <div className={cn("flex-1 p-5 md:p-7 space-y-4 overflow-y-auto custom-scrollbar", showKeypad && "pb-40 md:pb-8")}>
+                            {/* Header - compact */}
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h2 className="text-2xl font-black text-slate-800 leading-none">Checkout</h2>
+                                    <p className="text-xs text-slate-400 font-medium mt-0.5">Finalize & take payment</p>
+                                </div>
                             </div>
 
-                            <div className="space-y-6">
-                                <div className="space-y-3">
-                                    <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Customer </Label>
-                                    <CustomerSelector
-                                        selectedCustomerId={customer?.id}
-                                        onSelect={(c) => setCustomer(c)}
-                                        searchTerm={customerSearch}
-                                        onSearchChange={(val) => setCustomerSearch(val)}
-                                        onFocus={() => {
-                                            setActiveKeypadField('customer');
-                                            setShowKeypad(true);
-                                        }}
-                                    />
-                                </div>
+                            {/* Customer */}
+                            <div className="space-y-1.5">
+                                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Customer</Label>
+                                <CustomerSelector
+                                    selectedCustomerId={customer?.id}
+                                    onSelect={(c) => setCustomer(c)}
+                                    searchTerm={customerSearch}
+                                    onSearchChange={(val) => setCustomerSearch(val)}
+                                    onFocus={() => {
+                                        setActiveKeypadField('customer');
+                                        setShowKeypad(true);
+                                    }}
+                                />
+                            </div>
 
-                                <div className="space-y-3">
-                                    <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Payment Method</Label>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {/* Payment Method — compact horizontal row */}
+                            <div className="space-y-1.5">
+                                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Payment Method</Label>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {[
+                                        { id: 'cash', icon: Banknote, label: 'Cash' },
+                                        { id: 'qr', icon: QrCode, label: 'QR' },
+                                        { id: 'card', icon: CreditCard, label: 'Card' },
+                                        { id: 'credit', icon: IndianRupee, label: 'Credit' },
+                                    ].map(({ id, icon: Icon, label }) => (
                                         <button
-                                            onClick={() => setPaymentMethod('cash')}
+                                            key={id}
+                                            onClick={() => setPaymentMethod(id as any)}
                                             className={cn(
-                                                "flex flex-col items-center justify-center p-6 rounded-3xl border-2 transition-all gap-2",
-                                                paymentMethod === 'cash' ? "border-primary bg-primary/5 shadow-inner" : "border-slate-100 hover:border-slate-200"
+                                                "flex flex-col items-center justify-center py-3 rounded-2xl border-2 transition-all gap-1.5",
+                                                paymentMethod === id ? "border-primary bg-primary/5 shadow-inner" : "border-slate-100 hover:border-slate-200"
                                             )}
                                         >
-                                            <Banknote className={cn("h-8 w-8", paymentMethod === 'cash' ? "text-primary" : "text-slate-300")} />
-                                            <span className={cn("text-xs font-black uppercase", paymentMethod === 'cash' ? "text-primary" : "text-slate-400")}>Cash</span>
+                                            <Icon className={cn("h-5 w-5", paymentMethod === id ? "text-primary" : "text-slate-300")} />
+                                            <span className={cn("text-[10px] font-black uppercase", paymentMethod === id ? "text-primary" : "text-slate-400")}>{label}</span>
                                         </button>
-                                        <button
-                                            onClick={() => setPaymentMethod('qr')}
-                                            className={cn(
-                                                "flex flex-col items-center justify-center p-6 rounded-3xl border-2 transition-all gap-2",
-                                                paymentMethod === 'qr' ? "border-primary bg-primary/5 shadow-inner" : "border-slate-100 hover:border-slate-200"
-                                            )}
-                                        >
-                                            <QrCode className={cn("h-8 w-8", paymentMethod === 'qr' ? "text-primary" : "text-slate-300")} />
-                                            <span className={cn("text-xs font-black uppercase", paymentMethod === 'qr' ? "text-primary" : "text-slate-400")}>QR</span>
-                                        </button>
-                                        <button
-                                            onClick={() => setPaymentMethod('card')}
-                                            className={cn(
-                                                "flex flex-col items-center justify-center p-6 rounded-3xl border-2 transition-all gap-2",
-                                                paymentMethod === 'card' ? "border-primary bg-primary/5 shadow-inner" : "border-slate-100 hover:border-slate-200"
-                                            )}
-                                        >
-                                            <CreditCard className={cn("h-8 w-8", paymentMethod === 'card' ? "text-primary" : "text-slate-300")} />
-                                            <span className={cn("text-xs font-black uppercase", paymentMethod === 'card' ? "text-primary" : "text-slate-400")}>Card</span>
-                                        </button>
-                                        <button
-                                            onClick={() => setPaymentMethod('credit')}
-                                            className={cn(
-                                                "flex flex-col items-center justify-center p-6 rounded-3xl border-2 transition-all gap-2",
-                                                paymentMethod === 'credit' ? "border-primary bg-primary/5 shadow-inner" : "border-slate-100 hover:border-slate-200"
-                                            )}
-                                        >
-                                            <IndianRupee className={cn("h-8 w-8", paymentMethod === 'credit' ? "text-primary" : "text-slate-300")} />
-                                            <span className={cn("text-xs font-black uppercase", paymentMethod === 'credit' ? "text-primary" : "text-slate-400")}>Credit</span>
-                                        </button>
-                                    </div>
+                                    ))}
                                 </div>
+                            </div>
 
-                                <div className="space-y-4 pt-4 border-t border-slate-100 italic">
-                                    <div className="flex items-center justify-between">
-                                        <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Discount (Optional)</Label>
-                                        <span className="text-xs font-bold text-emerald-600">
-                                            {discountAmount > 0 && `-Rs.${discountAmount.toFixed(2)}`}
-                                        </span>
+                            {/* Discount — compact single row */}
+                            <div className="border-t border-slate-100 pt-3 space-y-1.5">
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic">Discount (Optional)</Label>
+                                    {discountAmount > 0 && (
+                                        <span className="text-xs font-bold text-emerald-600">-Rs.{discountAmount.toFixed(2)}</span>
+                                    )}
+                                </div>
+                                <div className="flex gap-2">
+                                    <div className="relative w-24 shrink-0">
+                                        <Input
+                                            type="number"
+                                            min="0"
+                                            max="100"
+                                            placeholder="0"
+                                            value={discountPercent || ""}
+                                            onFocus={() => setActiveKeypadField('discount')}
+                                            onChange={(e) => setDiscountPercent(Math.min(100, Math.max(0, Number(e.target.value))))}
+                                            className={cn(
+                                                "h-9 pl-3 pr-7 font-bold transition-all",
+                                                activeKeypadField === 'discount' && "border-primary ring-2 ring-primary/10 shadow-sm"
+                                            )}
+                                        />
+                                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">%</span>
                                     </div>
-                                    <div className="flex gap-3">
-                                        <div className="flex-1">
-                                            <div className="relative">
-                                                <Input
-                                                    type="number"
-                                                    min="0"
-                                                    max="100"
-                                                    placeholder="0"
-                                                    value={discountPercent || ""}
-                                                    onFocus={() => {
-                                                        setActiveKeypadField('discount');
-                                                        setShowKeypad(true);
-                                                    }}
-                                                    onChange={(e) => setDiscountPercent(Math.min(100, Math.max(0, Number(e.target.value))))}
-                                                    className={cn(
-                                                        "h-10 pl-4 pr-8 font-bold transition-all",
-                                                        activeKeypadField === 'discount' && "border-primary ring-2 ring-primary/10 shadow-sm"
-                                                    )}
-                                                />
-                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">%</span>
-                                            </div>
-                                        </div>
-                                        <div className="flex gap-2">
-                                            {[5, 10, 15].map((percent) => (
-                                                <Button
-                                                    key={percent}
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() => setDiscountPercent(percent)}
-                                                    className={cn(
-                                                        "h-11 min-w-[50px] font-bold rounded-xl",
-                                                        discountPercent === percent && "bg-emerald-50 border-emerald-200 text-emerald-600"
-                                                    )}
-                                                >
-                                                    {percent}%
-                                                </Button>
-                                            ))}
-                                        </div>
+                                    <div className="flex gap-1.5 flex-1">
+                                        {[5, 10, 15].map((percent) => (
+                                            <Button
+                                                key={percent}
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => setDiscountPercent(percent)}
+                                                className={cn(
+                                                    "h-9 flex-1 font-bold rounded-xl text-xs",
+                                                    discountPercent === percent && "bg-emerald-50 border-emerald-200 text-emerald-600"
+                                                )}
+                                            >
+                                                {percent}%
+                                            </Button>
+                                        ))}
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Print KOT — compact */}
+                            <Button
+                                variant="outline"
+                                onClick={handlePrintKOT}
+                                className="w-full h-10 border-2 border-slate-200 text-slate-600 hover:border-primary hover:text-primary hover:bg-primary/5 rounded-xl font-bold transition-all flex items-center justify-center gap-2 text-sm"
+                            >
+                                <Printer className="h-4 w-4" />
+                                Print Order KOT
+                            </Button>
+
+                            {/* QR Code — shown inline on left when QR method selected */}
+                            {paymentMethod === 'qr' && (
+                                <div className="flex justify-center animate-in fade-in slide-in-from-bottom-2">
+                                    <div className="bg-white p-2 rounded-2xl shadow-md border border-slate-100 w-36 h-36 flex items-center justify-center overflow-hidden">
+                                        {branchInfo?.image_url ? (
+                                            <img
+                                                src={branchInfo.image_url}
+                                                alt="QR Code"
+                                                className="h-full w-full object-cover"
+                                                onError={(e) => {
+                                                    const target = e.target as HTMLImageElement;
+                                                    target.src = "/qr.png";
+                                                }}
+                                            />
+                                        ) : (
+                                            <img
+                                                src="/qr.png"
+                                                alt="QR Code"
+                                                className="h-full w-full object-cover"
+                                                onError={(e) => {
+                                                    const target = e.target as HTMLImageElement;
+                                                    target.src = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=AMABAKERY_PAYMENT";
+                                                }}
+                                            />
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Payment Processing */}
@@ -1151,7 +1303,6 @@ export default function CounterPOS() {
                                                 value={cashReceived}
                                                 onFocus={() => {
                                                     setActiveKeypadField('cash');
-                                                    setShowKeypad(true);
                                                 }}
                                                 min="0"
                                                 max="100000"
@@ -1204,37 +1355,56 @@ export default function CounterPOS() {
                                                 <p className="text-lg font-black text-success">Rs.{(parseFloat(cashReceived) - total).toFixed(2)}</p>
                                             </div>
                                         )}
+
+                                        {/* Inline Keypad for Modal (Cash & Discount) */}
+                                        <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100">
+                                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, "00", 0, "⌫"].map((key) => (
+                                                <Button
+                                                    key={key.toString()}
+                                                    variant="outline"
+                                                    type="button"
+                                                    className={cn(
+                                                        "h-12 md:h-14 text-lg font-black rounded-xl transition-all active:scale-95 bg-white border-2 shadow-sm p-0",
+                                                        key === "⌫" ? "text-destructive border-destructive/20 bg-destructive/5" : "hover:border-primary/40 text-slate-700"
+                                                    )}
+                                                    onClick={() => {
+                                                        const field = activeKeypadField || 'cash';
+                                                        if (field === 'cash') {
+                                                            if (key === "⌫") setCashReceived(prev => (prev.toString().length > 0 ? prev.toString().slice(0, -1) : ""));
+                                                            else if (key === "00") setCashReceived(prev => {
+                                                                const newVal = `${prev}00`;
+                                                                return parseFloat(newVal) <= 100000 ? newVal : prev;
+                                                            });
+                                                            else setCashReceived(prev => {
+                                                                const current = prev.toString();
+                                                                const newVal = current === "0" ? key.toString() : `${current}${key}`;
+                                                                return parseFloat(newVal) <= 100000 ? newVal : prev;
+                                                            });
+                                                        } else if (field === 'discount') {
+                                                            if (key === "⌫") setDiscountPercent(prev => {
+                                                                const current = prev.toString();
+                                                                const newVal = current.length > 1 ? parseInt(current.slice(0, -1)) : 0;
+                                                                return isNaN(newVal) ? 0 : newVal;
+                                                            });
+                                                            else if (key === "00") setDiscountPercent(prev => {
+                                                                const newVal = parseInt(`${prev}00`);
+                                                                return isNaN(newVal) ? 0 : Math.min(100, newVal);
+                                                            });
+                                                            else setDiscountPercent(prev => {
+                                                                const current = prev.toString();
+                                                                const newVal = parseInt(current === "0" ? key.toString() : `${current}${key}`);
+                                                                return isNaN(newVal) ? 0 : Math.min(100, newVal);
+                                                            });
+                                                        }
+                                                    }}
+                                                >
+                                                    {key}
+                                                </Button>
+                                            ))}
+                                        </div>
                                     </div>
 
-                                    {/* Visual Helpers per Payment Method */}
-                                    {paymentMethod === 'qr' && (
-                                        <div className="flex flex-col items-center gap-2 pt-2 border-t border-slate-100">
-                                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Scan QR Code</Label>
-                                            <div className="bg-white p-2 rounded-2xl shadow-md border border-slate-100 w-32 h-32 flex items-center justify-center overflow-hidden mx-auto">
-                                                {branchInfo?.image_url ? (
-                                                    <img
-                                                        src={branchInfo.image_url}
-                                                        alt="QR Code"
-                                                        className="h-full w-full object-cover"
-                                                        onError={(e) => {
-                                                            const target = e.target as HTMLImageElement;
-                                                            target.src = "/qr.png";
-                                                        }}
-                                                    />
-                                                ) : (
-                                                    <img
-                                                        src="/qr.png"
-                                                        alt="QR Code"
-                                                        className="h-full w-full object-cover"
-                                                        onError={(e) => {
-                                                            const target = e.target as HTMLImageElement;
-                                                            target.src = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=AMABAKERY_PAYMENT";
-                                                        }}
-                                                    />
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
+                                    {/* Visual Helpers per Payment Method — QR removed, shown on left side */}
 
                                     {paymentMethod === 'card' && (
                                         <div className="flex flex-col items-center justify-center gap-2 pt-2 border-t border-slate-100">
@@ -1527,7 +1697,7 @@ export default function CounterPOS() {
                     <div
                         ref={keyboardRef as any}
                         onMouseDown={(e) => e.stopPropagation()} // Prevent closing when clicking inside
-                        className="global-keyboard fixed bottom-0 left-0 right-0 z-[1000] bg-white/95 backdrop-blur-md border-t-2 border-primary/20 shadow-[0_-15px_40px_-10px_rgba(0,0,0,0.1)] animate-in slide-in-from-bottom-full duration-300 p-2 md:p-4 pointer-events-auto"
+                        className="global-keyboard fixed bottom-0 left-0 lg:left-[350px] right-0 z-[1000] bg-white/95 backdrop-blur-md border-[3px] border-primary/20 lg:border-l-[3px] shadow-[0_-15px_40px_-10px_rgba(0,0,0,0.15)] animate-in slide-in-from-bottom-full duration-300 p-2 md:p-4 pointer-events-auto"
                     >
                         <div className="max-w-7xl mx-auto">
                             <div className="flex items-center justify-between mb-2 px-1">
@@ -1742,10 +1912,10 @@ function CartContent({
 }: any) {
     return (
         <div className="flex flex-col h-full bg-white">
-            <div className="p-4 md:p-6 border-b shrink-0 flex items-center justify-between bg-white/50 backdrop-blur-sm sticky top-0 z-10">
-                <div className="flex items-center gap-3">
-                    <ShoppingCart className="h-5 w-5 md:h-6 md:w-6 text-primary" />
-                    <h2 className="font-black text-slate-800 text-base md:text-lg">Current Order</h2>
+            <div className="p-3 md:p-4 border-b shrink-0 flex items-center justify-between bg-white/50 backdrop-blur-sm sticky top-0 z-10">
+                <div className="flex items-center gap-2">
+                    <ShoppingCart className="h-4 w-4 md:h-5 md:w-5 text-primary" />
+                    <h2 className="font-black text-slate-800 text-sm md:text-md">Current Order</h2>
                 </div>
                 <Button
                     variant="ghost"
@@ -1759,7 +1929,7 @@ function CartContent({
             </div>
 
             {/* Cart Items */}
-            <div className="flex-1 overflow-y-auto p-3 md:p-4 space-y-3 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-2 md:p-3 space-y-2 custom-scrollbar">
                 {cart.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-slate-300 opacity-60 px-8 text-center min-h-[200px]">
                         <div className="h-16 w-16 md:h-20 md:w-20 rounded-full bg-slate-50 mb-4 flex items-center justify-center">

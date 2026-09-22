@@ -57,15 +57,15 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-export default function CounterOrders() {
+export default function CounterOrders({ initialViewMode = 'list' }: { initialViewMode?: 'list' | 'table' }) {
     const navigate = useNavigate();
     const [orders, setOrders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState<"ALL" | "PAID" | "UNPAID" | "PARTIAL" | "PENDING" | "WAITER RECEIVED">("ALL");
 
-    // View Mode: list or table-grid
-    const [viewMode, setViewMode] = useState<'list' | 'table'>('list');
+    // View Mode: list or table-grid, determined by prop
+    const viewMode = initialViewMode;
 
     // Table View state
     const [floors, setFloors] = useState<any[]>([]);
@@ -691,7 +691,9 @@ export default function CounterOrders() {
                         <Menu className="h-6 w-6 text-slate-600" />
                     </Button>
                     <div>
-                        <h1 className="text-lg md:text-xl font-bold text-slate-800 leading-none">Order History</h1>
+                        <h1 className="text-lg md:text-xl font-bold text-slate-800 leading-none">
+                            {viewMode === 'list' ? 'Order History' : 'Table Orders'}
+                        </h1>
                     </div>
                 </div>
 
@@ -738,34 +740,6 @@ export default function CounterOrders() {
 
             {/* Toolbar */}
             <div className="px-6 py-4 shrink-0 flex flex-col md:flex-row gap-4">
-                {/* View Mode Toggle */}
-                <div className="flex items-center bg-slate-100 rounded-xl p-1 gap-1 shrink-0">
-                    <button
-                        onClick={() => setViewMode('list')}
-                        className={cn(
-                            "flex items-center gap-1.5 px-3 h-8 rounded-lg text-sm font-semibold transition-all",
-                            viewMode === 'list'
-                                ? "bg-white text-slate-900 shadow-sm"
-                                : "text-slate-500 hover:text-slate-700"
-                        )}
-                    >
-                        <List className="h-3.5 w-3.5" />
-                        <span>List</span>
-                    </button>
-                    <button
-                        onClick={() => setViewMode('table')}
-                        className={cn(
-                            "flex items-center gap-1.5 px-3 h-8 rounded-lg text-sm font-semibold transition-all",
-                            viewMode === 'table'
-                                ? "bg-white text-slate-900 shadow-sm"
-                                : "text-slate-500 hover:text-slate-700"
-                        )}
-                    >
-                        <LayoutGrid className="h-3.5 w-3.5" />
-                        <span>Tables</span>
-                    </button>
-                </div>
-
                 {viewMode === 'list' && (
                     <>
                         <div className="relative flex-1">

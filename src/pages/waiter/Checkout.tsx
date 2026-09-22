@@ -60,7 +60,7 @@ export default function Checkout() {
     const [specialInstructions, setSpecialInstructions] = useState("");
     const [discountPercent, setDiscountPercent] = useState(0);
     const [isProcessing, setIsProcessing] = useState(false);
-    const [paymentTiming, setPaymentTiming] = useState<PaymentTiming>(null);
+    const [paymentTiming, setPaymentTiming] = useState<PaymentTiming>("later");
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(null);
     const [taxEnabled, setTaxEnabled] = useState(false);
     const [taxRate, setTaxRate] = useState(5);
@@ -511,496 +511,210 @@ export default function Checkout() {
 
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 pb-40">
-            <MobileHeader
-                title="Checkout"
-                showBack
-            />
+        <div className="min-h-screen bg-[#F5F5F7] text-left">
+            <MobileHeader title="Checkout" showBack />
 
-            <div className="p-4 space-y-4 max-w-2xl mx-auto">
-                <Card className="card-elevated p-6 animate-slide-up" style={{ animationDelay: '100ms' }}>
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-semibold flex items-center gap-2">
-                            <User className="h-5 w-5 text-primary" />
-                            Customer Information
-                        </h3>
-                        <span className="text-xs bg-slate-100 text-slate-500 font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">
-                            Optional
-                        </span>
+            <div className="p-3 pb-36 space-y-3 max-w-2xl mx-auto">
+
+                {/* ── SECTION 1: Order Summary ── */}
+                <div className="bg-white rounded-[24px] border border-black/[0.04] shadow-sm overflow-hidden">
+                    <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.04]">
+                        <div className="flex items-center gap-2">
+                            <Receipt className="h-5 w-5 text-gray-400" />
+                            <span className="text-[15px] font-semibold text-gray-900 tracking-tight">Table {state.tableNumber}</span>
+                        </div>
+                        <span className="text-[13px] font-medium text-gray-500">{state.cart.length} item{state.cart.length !== 1 ? 's' : ''}</span>
                     </div>
 
-                    <div className="space-y-4">
-                        <CustomerSelector
-                            selectedCustomerId={customer?.id}
-                            onSelect={(c) => setCustomer(c)}
-                            searchTerm={customerSearchTerm}
-                            onSearchChange={setCustomerSearchTerm}
-                            open={isCustomerSelectorOpen}
-                            onOpenChange={setIsCustomerSelectorOpen}
-                        />
-
-                        <Separator className="my-2" />
-
-                        <div>
-                            <Label htmlFor="specialInstructions" className="text-sm font-medium">Special Instructions</Label>
-                            <Input
-                                id="specialInstructions"
-                                type="text"
-                                placeholder="Any special requests?"
-                                value={specialInstructions}
-                                onChange={(e) => setSpecialInstructions(e.target.value)}
-                                className="mt-1"
-                            />
-                        </div>
-                    </div>
-                </Card>
-
-                {/* Order Summary Card */}
-                <Card className="card-elevated p-6 animate-slide-up" style={{ animationDelay: '200ms' }}>
-                    <div className="flex items-center gap-3 mb-4">
-                        <div className="h-12 w-12 rounded-xl bg-white p-1 shadow-sm border border-primary/10 flex items-center justify-center shrink-0 overflow-hidden">
-                            <img src="/logos/logo1white.jfif" alt="Logo" className="h-full w-full object-cover" />
-                        </div>
-                        <div>
-                            <h2 className="text-xl font-bold tracking-tight text-primary">Ama Bakery</h2>
-                            <p className="text-sm text-muted-foreground font-medium">
-                                Table {state.tableNumber}
-                            </p>
-                        </div>
-                    </div>
-
-                    <Separator className="my-4" />
-
-                    {/* Items List */}
-                    <div className="space-y-3 mb-4">
-                        {state.cart.map((cartItem, index) => (
-                            <div
-                                key={cartItem.item.id}
-                                className="flex justify-between items-start p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
-                                style={{ animationDelay: `${index * 50}ms` }}
-                            >
-                                <div className="flex-1">
-                                    <h3 className="font-medium">{cartItem.item.name}</h3>
-                                    <p className="text-sm text-muted-foreground">
-                                        Rs.{cartItem.item.price} × {cartItem.quantity}
-                                    </p>
+                    <div className="divide-y divide-black/[0.02]">
+                        {state.cart.map((cartItem) => (
+                            <div key={cartItem.item.id} className="flex items-center justify-between px-5 py-3 gap-3">
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-[14px] font-medium text-gray-900 truncate">{cartItem.item.name}</p>
                                     {cartItem.notes && (
-                                        <p className="text-xs text-primary mt-1 flex items-center gap-1">
-                                            <MessageSquare className="h-3 w-3" />
-                                            {cartItem.notes}
+                                        <p className="text-[11px] text-gray-500 flex items-center gap-0.5 mt-0.5">
+                                            <MessageSquare className="h-3 w-3 opacity-60" />{cartItem.notes}
                                         </p>
                                     )}
                                 </div>
-                                <span className="font-semibold text-lg">
-                                    Rs.{(cartItem.item.price * cartItem.quantity).toFixed(2)}
-                                </span>
+                                <div className="text-right shrink-0">
+                                    <span className="text-[11px] text-gray-400 font-medium mr-1.5">×{cartItem.quantity}</span>
+                                    <span className="text-[14px] font-semibold text-gray-900">Rs.{(cartItem.item.price * cartItem.quantity).toFixed(0)}</span>
+                                </div>
                             </div>
                         ))}
                     </div>
 
-                    <Separator className="my-4" />
-
-                    {/* Billing Details */}
-                    <div className="space-y-2">
-                        <div className="flex justify-between text-muted-foreground">
+                    <div className="px-5 py-3.5 bg-gray-50/50 border-t border-black/[0.04] space-y-2">
+                        <div className="flex justify-between text-[13px] text-gray-500 font-medium">
                             <span>Subtotal</span>
                             <span>Rs.{subtotal.toFixed(2)}</span>
                         </div>
-
-                        <div className="flex flex-col gap-2 py-2 animate-in fade-in slide-in-from-top-1">
-                            {taxEnabled && (
-                                <div className="flex justify-between items-center text-muted-foreground">
-                                    <div className="flex items-center gap-2">
-                                        <span>Tax</span>
-                                        <Switch
-                                            checked={taxEnabled}
-                                            onCheckedChange={setTaxEnabled}
-                                            className="scale-75 data-[state=checked]:bg-primary"
-                                        />
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <div className="flex items-center bg-white rounded-lg px-2 border w-20">
-                                            <Input
-                                                type="number"
-                                                value={taxRate}
-                                                onChange={(e) => setTaxRate(Number(e.target.value))}
-                                                className="w-12 h-7 p-0 text-center border-none bg-transparent text-xs font-bold focus-visible:ring-0"
-                                            />
-                                            <span className="text-[10px] font-bold text-slate-400">%</span>
-                                        </div>
-                                        <span className="font-bold text-foreground">Rs.{taxAmount.toFixed(2)}</span>
-                                    </div>
-                                </div>
-                            )}
-
-                            {!taxEnabled && (
-                                <div className="flex justify-between items-center text-muted-foreground">
-                                    <div className="flex items-center gap-2">
-                                        <span>Tax</span>
-                                        <Switch
-                                            checked={taxEnabled}
-                                            onCheckedChange={setTaxEnabled}
-                                            className="scale-75"
-                                        />
-                                    </div>
-                                    <span className="text-xs font-medium text-slate-300">Disabled</span>
-                                </div>
-                            )}
-                            {taxEnabled && (
-                                <div className="flex gap-1 justify-end">
-                                    {[5, 10, 15].map((rate) => (
-                                        <button
-                                            key={rate}
-                                            onClick={() => setTaxRate(rate)}
-                                            className={cn(
-                                                "px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all shadow-sm border",
-                                                taxRate === rate
-                                                    ? "bg-primary text-white border-primary"
-                                                    : "bg-white text-slate-500 border-slate-100 hover:bg-slate-50"
-                                            )}
-                                        >
-                                            {rate}%
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
                         {discountPercent > 0 && (
-                            <div className="flex justify-between text-success">
-                                <span className="flex items-center gap-1">
-                                    <Percent className="h-4 w-4" />
-                                    Discount ({discountPercent}%)
-                                </span>
+                            <div className="flex justify-between text-[13px] text-emerald-600 font-medium">
+                                <span>Discount ({discountPercent}%)</span>
                                 <span>-Rs.{discountAmount.toFixed(2)}</span>
                             </div>
                         )}
-
-                        <Separator className="my-3" />
-
-                        <div className="flex justify-between items-center text-xl font-bold">
-                            <span>Total</span>
-                            <span className="text-primary flex items-center gap-1">
-                                <IndianRupee className="h-5 w-5" />
-                                {total.toFixed(2)}
-                            </span>
+                        {taxEnabled && (
+                            <div className="flex justify-between text-[13px] text-gray-500 font-medium">
+                                <span>Tax ({taxRate}%)</span>
+                                <span>Rs.{taxAmount.toFixed(2)}</span>
+                            </div>
+                        )}
+                        <div className="flex justify-between items-center pt-1.5 border-t border-black/[0.04]">
+                            <span className="text-[15px] font-semibold text-gray-900">Total</span>
+                            <span className="text-[17px] font-bold text-gray-900">Rs.{total.toFixed(2)}</span>
                         </div>
                     </div>
-                </Card>
+                </div>
 
+                {/* ── SECTION 2: Payment Option ── */}
+                <div className="bg-white rounded-[24px] border border-black/[0.04] shadow-sm p-4 md:p-5">
+                    <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3.5 ml-1">Payment</p>
+                    <div className="grid grid-cols-2 gap-2.5">
+                        <button
+                            onClick={() => { setPaymentTiming("later"); setPaymentMethod(null); }}
+                            className={cn(
+                                "flex items-center gap-3 p-3.5 rounded-2xl border-2 transition-all active:scale-[0.98]",
+                                paymentTiming === "later"
+                                    ? "border-primary bg-primary/[0.02]"
+                                    : "border-black/[0.04] bg-white hover:bg-gray-50 text-gray-400"
+                            )}
+                        >
+                            <div className={cn("h-9 w-9 rounded-xl flex items-center justify-center shrink-0",
+                                paymentTiming === "later" ? "bg-primary/10 text-primary" : "bg-gray-100 text-gray-400")}>
+                                <CheckCircle2 className="h-4 w-4" />
+                            </div>
+                            <div className="text-left">
+                                <p className={cn("text-[14px] font-medium leading-none mb-1", paymentTiming === "later" ? "text-primary" : "text-gray-700")}>Pay Later</p>
+                                <p className="text-[11px] text-gray-400 font-medium">Bill on exit</p>
+                            </div>
+                        </button>
 
-                {/* Discount Card */}
-                <Card className="card-elevated p-6 animate-slide-up" style={{ animationDelay: '300ms' }}>
-                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                        <Percent className="h-5 w-5 text-primary" />
-                        Apply Discount (Optional)
-                    </h3>
+                        <button
+                            onClick={() => { setPaymentTiming("now"); setShowPaymentConfirmation(false); }}
+                            className={cn(
+                                "flex items-center gap-3 p-3.5 rounded-2xl border-2 transition-all active:scale-[0.98]",
+                                paymentTiming === "now"
+                                    ? "border-primary bg-primary/[0.02]"
+                                    : "border-black/[0.04] bg-white hover:bg-gray-50 text-gray-400"
+                            )}
+                        >
+                            <div className={cn("h-9 w-9 rounded-xl flex items-center justify-center shrink-0",
+                                paymentTiming === "now" ? "bg-primary/10 text-primary" : "bg-gray-100 text-gray-400")}>
+                                <Banknote className="h-4 w-4" />
+                            </div>
+                            <div className="text-left">
+                                <p className={cn("text-[14px] font-medium leading-none mb-1", paymentTiming === "now" ? "text-primary" : "text-gray-700")}>Pay Now</p>
+                                <p className="text-[11px] text-gray-400 font-medium">Collect now</p>
+                            </div>
+                        </button>
+                    </div>
 
-                    <div className="flex gap-3">
-                        <div className="flex-1">
-                            <Input
-                                type="text"
-                                inputMode="numeric"
-                                placeholder="Discount %"
-                                value={discountPercent ?? ""}
-                                onChange={(e) => {
-                                    let value = e.target.value.replace(/\D/g, ""); // only digits
-
-                                    if (value === "") {
-                                        setDiscountPercent(0);
-                                        return;
-                                    }
-
-                                    let num = Number(value);
-
-                                    if (num > 100) num = 100;
-
-                                    setDiscountPercent(num);
-                                }}
-                            />
-                        </div>
-                        <div className="flex gap-2">
-                            {[5, 10, 15].map((percent) => (
-                                <Button
-                                    key={percent}
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setDiscountPercent(percent)}
-                                    className="min-w-[60px]"
+                    {/* Payment Method sub-row — only if Pay Now */}
+                    {paymentTiming === "now" && (
+                        <div className="mt-3.5 grid grid-cols-4 gap-2">
+                            {[{ id: "cod", icon: <Banknote className="h-4 w-4" />, label: "Cash" },
+                            { id: "qr", icon: <QrCode className="h-4 w-4" />, label: "QR" },
+                            { id: "card", icon: <CreditCard className="h-4 w-4" />, label: "Card" },
+                            { id: "credit", icon: <IndianRupee className="h-4 w-4" />, label: "Credit" }].map(m => (
+                                <button
+                                    key={m.id}
+                                    onClick={() => setPaymentMethod(m.id as PaymentMethod)}
+                                    className={cn(
+                                        "flex flex-col items-center gap-1.5 py-3 rounded-2xl border transition-all active:scale-95 text-[11px] font-medium",
+                                        paymentMethod === m.id
+                                            ? "border-transparent bg-primary text-white shadow-md shadow-primary/20"
+                                            : "border-black/[0.04] bg-gray-50 text-gray-500 hover:bg-gray-100"
+                                    )}
                                 >
-                                    {percent}%
-                                </Button>
+                                    {m.icon}{m.label}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* ── SECTION 3: Discount (compact) ── */}
+                <div className="bg-white rounded-[24px] border border-black/[0.04] shadow-sm p-4 md:p-5">
+                    <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3.5 ml-1">Discount <span className="text-gray-300 font-medium normal-case">— optional</span></p>
+                    <div className="flex items-center gap-2.5">
+                        <div className="relative w-24 shrink-0">
+                            <input
+                                type="text" inputMode="numeric"
+                                placeholder="0"
+                                value={discountPercent || ""}
+                                onChange={(e) => {
+                                    const v = e.target.value.replace(/\D/g, "");
+                                    setDiscountPercent(Math.min(100, Number(v || 0)));
+                                }}
+                                className="w-full h-11 rounded-2xl border border-black/[0.08] bg-gray-50 text-center text-[15px] font-semibold text-gray-900 focus:outline-none focus:border-primary pr-6 transition-colors shadow-inner"
+                            />
+                            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[13px] text-gray-400 font-medium">%</span>
+                        </div>
+                        <div className="flex gap-2 flex-1">
+                            {[5, 10, 15, 20].map(p => (
+                                <button
+                                    key={p}
+                                    onClick={() => setDiscountPercent(discountPercent === p ? 0 : p)}
+                                    className={cn(
+                                        "flex-1 h-11 rounded-2xl text-[13px] font-medium transition-all active:scale-95",
+                                        discountPercent === p
+                                            ? "bg-primary text-white shadow-md shadow-primary/20"
+                                            : "bg-white text-gray-600 border border-black/[0.08] hover:bg-gray-50"
+                                    )}
+                                >{p}%</button>
                             ))}
                         </div>
                     </div>
-                </Card>
+                </div>
 
-                {/* Payment Timing Card */}
-                <Card className="card-elevated p-6 animate-slide-up" style={{ animationDelay: '400ms' }}>
-                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                        <Wallet className="h-5 w-5 text-primary" />
-                        Payment Option
-                    </h3>
+                {/* ── SECTION 4: Customer (collapsed by default) ── */}
+                <div className="bg-white rounded-[24px] border border-black/[0.04] shadow-sm p-4 md:p-5">
+                    <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3.5 ml-1">Customer <span className="text-gray-300 font-medium normal-case">— optional</span></p>
+                    <CustomerSelector
+                        selectedCustomerId={customer?.id}
+                        onSelect={(c) => setCustomer(c)}
+                        searchTerm={customerSearchTerm}
+                        onSearchChange={setCustomerSearchTerm}
+                        open={isCustomerSelectorOpen}
+                        onOpenChange={setIsCustomerSelectorOpen}
+                    />
+                    <input
+                        type="text"
+                        placeholder="Special instructions..."
+                        value={specialInstructions}
+                        onChange={(e) => setSpecialInstructions(e.target.value)}
+                        className="mt-3 w-full h-11 rounded-2xl border border-black/[0.08] bg-gray-50 text-[14px] text-gray-700 px-4 placeholder:text-gray-400 focus:outline-none focus:border-primary transition-colors shadow-inner"
+                    />
+                </div>
+            </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                        <button
-                            onClick={() => {
-                                setPaymentTiming("now");
-                                setShowPaymentConfirmation(false);
-                            }}
-                            className={cn(
-                                "p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 active:scale-95",
-                                paymentTiming === "now"
-                                    ? "border-primary bg-primary/10 shadow-lg"
-                                    : "border-border"
-                            )}
-                        >
-                            <Banknote className={cn(
-                                "h-8 w-8",
-                                paymentTiming === "now" ? "text-primary" : "text-muted-foreground"
-                            )} />
-                            <span className={cn(
-                                "font-semibold",
-                                paymentTiming === "now" ? "text-primary" : "text-foreground"
-                            )}>
-                                Pay Now
-                            </span>
-                        </button>
 
-                        <button
-                            onClick={() => {
-                                setPaymentTiming("later");
-                                setPaymentMethod(null);
-                                setShowPaymentConfirmation(false);
-                            }}
-                            className={cn(
-                                "p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 active:scale-95",
-                                paymentTiming === "later"
-                                    ? "border-warning bg-warning/10 shadow-lg"
-                                    : "border-border"
-                            )}
-                        >
-                            <CheckCircle2 className={cn(
-                                "h-8 w-8",
-                                paymentTiming === "later" ? "text-warning" : "text-muted-foreground"
-                            )} />
-                            <span className={cn(
-                                "font-semibold",
-                                paymentTiming === "later" ? "text-warning" : "text-foreground"
-                            )}>
-                                Pay Later
-                            </span>
-                        </button>
+            {/* Dialogs — untouched */}
+            {/* Cash Payment Modal - Now as a true Dialog */}
+            <Dialog open={showCashModal} onOpenChange={setShowCashModal}>
+                <DialogContent className="max-w-[calc(100%-2rem)] w-[380px] rounded-2xl p-0 overflow-hidden border-none shadow-2xl">
+                    <div className="bg-primary p-6 text-white text-center">
+                        <div className="h-16 w-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-4 border border-white/30">
+                            <Banknote className="h-8 w-8 text-white" />
+                        </div>
+                        <h3 className="text-xl font-bold">Cash Payment</h3>
+                        <p className="text-white/80 text-sm">Collect cash from customer</p>
                     </div>
-                </Card>
 
-                {/* Payment Method Card - Only show if Pay Now is selected */}
-                {paymentTiming === "now" && !showPaymentConfirmation && (
-                    <Card className="card-elevated p-6 animate-slide-up" style={{ animationDelay: '500ms' }}>
-                        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                            <CreditCard className="h-5 w-5 text-primary" />
-                            Select Payment Method
-                        </h3>
-
-                        <div className="grid grid-cols-2 gap-3">
-                            <button
-                                onClick={() => setPaymentMethod("cod")}
-                                className={cn(
-                                    "p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 active:scale-95",
-                                    paymentMethod === "cod"
-                                        ? "border-success bg-success/10 shadow-lg"
-                                        : "border-border"
-                                )}
-                            >
-                                <Banknote className={cn(
-                                    "h-8 w-8",
-                                    paymentMethod === "cod" ? "text-success" : "text-muted-foreground"
-                                )} />
-                                <span className={cn(
-                                    "font-semibold",
-                                    paymentMethod === "cod" ? "text-success" : "text-foreground"
-                                )}>
-                                    Cash (COD)
-                                </span>
-                            </button>
-
-                            <button
-                                onClick={() => setPaymentMethod("qr")}
-                                className={cn(
-                                    "p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 active:scale-95",
-                                    paymentMethod === "qr"
-                                        ? "border-primary bg-primary/10 shadow-lg"
-                                        : "border-border"
-                                )}
-                            >
-                                <QrCode className={cn(
-                                    "h-8 w-8",
-                                    paymentMethod === "qr" ? "text-primary" : "text-muted-foreground"
-                                )} />
-                                <span className={cn(
-                                    "font-semibold",
-                                    paymentMethod === "qr" ? "text-primary" : "text-foreground"
-                                )}>
-                                    QR Code
-                                </span>
-                            </button>
-
-                            <button
-                                onClick={() => setPaymentMethod("card")}
-                                className={cn(
-                                    "p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 active:scale-95",
-                                    paymentMethod === "card"
-                                        ? "border-primary bg-primary/10 shadow-lg"
-                                        : "border-border"
-                                )}
-                            >
-                                <CreditCard className={cn(
-                                    "h-8 w-8",
-                                    paymentMethod === "card" ? "text-primary" : "text-muted-foreground"
-                                )} />
-                                <span className={cn(
-                                    "font-semibold",
-                                    paymentMethod === "card" ? "text-primary" : "text-foreground"
-                                )}>
-                                    Card
-                                </span>
-                            </button>
-
-                            <button
-                                onClick={() => setPaymentMethod("credit")}
-                                className={cn(
-                                    "p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 active:scale-95",
-                                    paymentMethod === "credit"
-                                        ? "border-primary bg-primary/10 shadow-lg"
-                                        : "border-border"
-                                )}
-                            >
-                                <IndianRupee className={cn(
-                                    "h-8 w-8",
-                                    paymentMethod === "credit" ? "text-primary" : "text-muted-foreground"
-                                )} />
-                                <span className={cn(
-                                    "font-semibold",
-                                    paymentMethod === "credit" ? "text-primary" : "text-foreground"
-                                )}>
-                                    Credit
-                                </span>
-                            </button>
-                        </div>
-                    </Card>
-                )}
-
-                {/* Cash Payment Modal - Now as a true Dialog */}
-                <Dialog open={showCashModal} onOpenChange={setShowCashModal}>
-                    <DialogContent className="max-w-[calc(100%-2rem)] w-[380px] rounded-2xl p-0 overflow-hidden border-none shadow-2xl">
-                        <div className="bg-primary p-6 text-white text-center">
-                            <div className="h-16 w-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-4 border border-white/30">
-                                <Banknote className="h-8 w-8 text-white" />
-                            </div>
-                            <h3 className="text-xl font-bold">Cash Payment</h3>
-                            <p className="text-white/80 text-sm">Collect cash from customer</p>
-                        </div>
-
-                        <div className="p-6 space-y-6">
-                            <div className="space-y-4">
-                                <div className="flex justify-between items-center px-1">
-                                    <span className="text-muted-foreground font-medium">Total Amount</span>
-                                    <span className="text-xl font-black text-primary">Rs.{total.toFixed(2)}</span>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Amount Received</Label>
-                                    <div className="relative">
-                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-muted-foreground text-xl">Rs.</div>
-                                        <Input
-                                            type="text"
-                                            inputMode="decimal"
-                                            placeholder="0.00"
-                                            value={cashReceived}
-                                            onChange={(e) => {
-                                                let value = e.target.value;
-
-                                                // allow only numbers + one dot
-                                                value = value.replace(/[^0-9.]/g, "");
-
-                                                // prevent multiple dots
-                                                const parts = value.split(".");
-                                                if (parts.length > 2) {
-                                                    value = parts[0] + "." + parts.slice(1).join("");
-                                                }
-
-                                                setCashReceived(value);
-                                            }}
-                                            className="text-center text-3xl h-16 font-black border-2 border-primary/20 focus:border-primary pl-8 rounded-xl shadow-inner bg-slate-50"
-                                            autoFocus
-                                        />
-                                    </div>
-                                </div>
-
-                                {cashReceived && parseFloat(cashReceived) >= total && (
-                                    <div className="p-4 rounded-xl bg-success/10 border-2 border-success/20 text-success animate-in zoom-in-95 duration-300 shadow-sm">
-                                        <div className="flex justify-between items-center">
-                                            <div>
-                                                <p className="text-[10px] uppercase tracking-widest font-black opacity-70 mb-0.5">Change to Return</p>
-                                                <p className="text-3xl font-black">Rs.{(parseFloat(cashReceived) - total).toFixed(2)}</p>
-                                            </div>
-                                            <div className="h-12 w-12 rounded-full bg-success/20 flex items-center justify-center">
-                                                <IndianRupee className="h-6 w-6" />
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
+                    <div className="p-6 space-y-6">
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center px-1">
+                                <span className="text-muted-foreground font-medium">Total Amount</span>
+                                <span className="text-xl font-black text-primary">Rs.{total.toFixed(2)}</span>
                             </div>
 
-                            <div className="flex gap-3">
-                                <Button
-                                    variant="ghost"
-                                    className="flex-1 h-14 font-bold text-muted-foreground hover:bg-slate-100"
-                                    onClick={() => setShowCashModal(false)}
-                                    disabled={isProcessing}
-                                >
-                                    Cancel
-                                </Button>
-                                <Button
-                                    className="flex-[1.5] h-14 text-lg font-bold gradient-warm shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
-                                    onClick={handleCashPayment}
-                                    disabled={isProcessing || !cashReceived || parseFloat(cashReceived) <= 0}
-                                >
-                                    {isProcessing ? (
-                                        <div className="h-6 w-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                    ) : (
-                                        <>
-                                            <CheckCircle2 className="h-5 w-5 mr-2" />
-                                            Complete Order
-                                        </>
-                                    )}
-                                </Button>
-                            </div>
-                        </div>
-                    </DialogContent>
-                </Dialog>
-
-                {/* QR Payment Modal - Now as a true Dialog */}
-                <Dialog open={showPaymentConfirmation} onOpenChange={setShowPaymentConfirmation}>
-                    <DialogContent className="max-w-[calc(100%-2.5rem)] w-[320px] rounded-2xl p-0 overflow-hidden border-none shadow-2xl">
-                        <div className="bg-primary p-4 text-white text-center">
-                            <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-2 border border-white/30">
-                                <QrCode className="h-6 w-6 text-white" />
-                            </div>
-                            <h3 className="text-lg font-bold">Scan to Pay</h3>
-                            <p className="text-white/80 text-[10px]">Ready to receive payment</p>
-                        </div>
-
-                        <div className="p-4 text-center space-y-3">
-                            <div className="flex justify-between items-center px-1 text-left">
-                                <span className="text-[10px] font-medium text-muted-foreground uppercase">Payable Total:</span>
-                                <span className="text-sm font-black text-primary">Rs.{total.toFixed(2)}</span>
-                            </div>
-
-                            <div className="space-y-1.5 text-left">
-                                <Label className="text-[10px] font-black uppercase tracking-wider text-muted-foreground ml-1">QR Payment Amount</Label>
+                            <div className="space-y-2">
+                                <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Amount Received</Label>
                                 <div className="relative">
-                                    <div className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground text-sm">Rs.</div>
+                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-muted-foreground text-xl">Rs.</div>
                                     <Input
                                         type="text"
                                         inputMode="decimal"
@@ -1015,241 +729,292 @@ export default function Checkout() {
                                             }
                                             setCashReceived(value);
                                         }}
-                                        className="text-center text-xl h-10 font-black border-2 border-primary/20 focus:border-primary pl-6 rounded-xl bg-slate-50"
+                                        className="text-center text-3xl h-16 font-black border-2 border-primary/20 focus:border-primary pl-8 rounded-xl shadow-inner bg-slate-50"
                                         autoFocus
                                     />
                                 </div>
                             </div>
 
-                            <div className="relative group">
-                                <div className="absolute -inset-1 bg-gradient-to-r from-primary/20 to-primary/20 rounded-2xl blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200"></div>
-                                <div className="relative bg-white p-2 rounded-xl mx-auto border border-primary/10 shadow-md flex flex-col items-center justify-center overflow-hidden min-h-[140px]">
-                                    {!branchInfo ? (
-                                        <div className="flex flex-col items-center justify-center py-8">
-                                            <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
-                                            <p className="text-[10px] text-muted-foreground font-bold">Loading QR Code...</p>
+                            {cashReceived && parseFloat(cashReceived) >= total && (
+                                <div className="p-4 rounded-xl bg-success/10 border-2 border-success/20 text-success animate-in zoom-in-95 duration-300 shadow-sm">
+                                    <div className="flex justify-between items-center">
+                                        <div>
+                                            <p className="text-[10px] uppercase tracking-widest font-black opacity-70 mb-0.5">Change to Return</p>
+                                            <p className="text-3xl font-black">Rs.{(parseFloat(cashReceived) - total).toFixed(2)}</p>
                                         </div>
-                                    ) : (
-                                        <img
-                                            src={branchInfo?.image_url || "/qr.png"}
-                                            alt="QR Code"
-                                            className="h-28 w-28 object-cover"
-                                            onError={(e) => {
-                                                const target = e.target as HTMLImageElement;
-                                                console.log("❌ QR Code failed to load, using fallback");
-                                                target.src = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=AMABAKERY_PAYMENT";
-                                            }}
-                                            onLoad={() => {
-                                                console.log("✅ QR Code loaded successfully:", branchInfo?.image_url);
-                                            }}
-                                        />
-                                    )}
-                                </div>
-                            </div>
-
-                            <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-black opacity-60">Wait for confirmation</p>
-                            <div className="flex gap-3 pt-1">
-                                <Button
-                                    variant="outline"
-                                    className="flex-1 h-10 text-xs"
-                                    onClick={() => setShowPaymentConfirmation(false)}
-                                    disabled={isProcessing}
-                                >
-                                    Cancel
-                                </Button>
-                                <Button
-                                    className="flex-[1.5] h-10 text-xs font-bold bg-primary hover:bg-primary/95 text-white shadow-lg shadow-primary/20 transition-all active:scale-95"
-                                    onClick={handleQRPayment}
-                                    disabled={isProcessing || !cashReceived || parseFloat(cashReceived) <= 0}
-                                >
-                                    {isProcessing ? (
-                                        <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                    ) : (
-                                        <>
-                                            <CheckCircle2 className="h-4 w-4 mr-2" />
-                                            Confirm Paid
-                                        </>
-                                    )}
-                                </Button>
-                            </div>
-                        </div>
-                    </DialogContent>
-                </Dialog>
-
-                {/* Card Payment Modal */}
-                <Dialog open={showCardModal} onOpenChange={setShowCardModal}>
-                    <DialogContent className="max-w-[calc(100%-2rem)] w-[350px] rounded-2xl p-0 overflow-hidden border-none shadow-2xl">
-                        <div className="bg-primary p-6 text-white text-center">
-                            <div className="h-16 w-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-4 border border-white/30">
-                                <CreditCard className="h-8 w-8 text-white" />
-                            </div>
-                            <h3 className="text-xl font-bold">Card Payment</h3>
-                            <p className="text-white/80 text-sm">Swipe or Dip Card on Machine</p>
-                        </div>
-
-                        <div className="p-6 space-y-6">
-                            <div className="space-y-4">
-                                <div className="flex justify-between items-center px-1">
-                                    <span className="text-muted-foreground font-medium">Total Amount</span>
-                                    <span className="text-xl font-black text-primary">Rs.{total.toFixed(2)}</span>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Card Payment Amount</Label>
-                                    <div className="relative">
-                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-muted-foreground text-xl">Rs.</div>
-                                        <Input
-                                            type="text"
-                                            inputMode="decimal"
-                                            placeholder="0.00"
-                                            value={cashReceived}
-                                            onChange={(e) => {
-                                                let value = e.target.value;
-                                                value = value.replace(/[^0-9.]/g, "");
-                                                const parts = value.split(".");
-                                                if (parts.length > 2) {
-                                                    value = parts[0] + "." + parts.slice(1).join("");
-                                                }
-                                                setCashReceived(value);
-                                            }}
-                                            className="text-center text-3xl h-16 font-black border-2 border-primary/20 focus:border-primary pl-8 rounded-xl shadow-inner bg-slate-50"
-                                            autoFocus
-                                        />
+                                        <div className="h-12 w-12 rounded-full bg-success/20 flex items-center justify-center">
+                                            <IndianRupee className="h-6 w-6" />
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-
-                            <div className="flex gap-3">
-                                <Button
-                                    variant="ghost"
-                                    className="flex-1 h-14 font-bold text-muted-foreground hover:bg-slate-100"
-                                    onClick={() => setShowCardModal(false)}
-                                    disabled={isProcessing}
-                                >
-                                    Cancel
-                                </Button>
-                                <Button
-                                    className="flex-[1.5] h-14 text-lg font-bold gradient-warm shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
-                                    onClick={handleCardPayment}
-                                    disabled={isProcessing || !cashReceived || parseFloat(cashReceived) <= 0}
-                                >
-                                    {isProcessing ? (
-                                        <div className="h-6 w-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                    ) : (
-                                        <>
-                                            <CheckCircle2 className="h-5 w-5 mr-2" />
-                                            Complete Paid
-                                        </>
-                                    )}
-                                </Button>
-                            </div>
-                        </div>
-                    </DialogContent>
-                </Dialog>
-
-                {/* Credit Payment Modal */}
-                <Dialog open={showCreditModal} onOpenChange={setShowCreditModal}>
-                    <DialogContent className="max-w-[calc(100%-2rem)] w-[350px] rounded-2xl p-0 overflow-hidden border-none shadow-2xl">
-                        <div className="bg-primary p-6 text-white text-center">
-                            <div className="h-16 w-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-4 border border-white/30">
-                                <IndianRupee className="h-8 w-8 text-white" />
-                            </div>
-                            <h3 className="text-xl font-bold">Credit Payment</h3>
-                            <p className="text-white/80 text-sm">Add to customer balance</p>
-                        </div>
-
-                        <div className="p-6 space-y-6">
-                            <div className="space-y-4">
-                                <div className="flex justify-between items-center px-1">
-                                    <span className="text-muted-foreground font-medium">Total Amount</span>
-                                    <span className="text-xl font-black text-primary">Rs.{total.toFixed(2)}</span>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Amount to Credit</Label>
-                                    <div className="relative">
-                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-muted-foreground text-xl">Rs.</div>
-                                        <Input
-                                            type="text"
-                                            inputMode="decimal"
-                                            placeholder="0.00"
-                                            value={cashReceived}
-                                            onChange={(e) => {
-                                                let value = e.target.value;
-                                                value = value.replace(/[^0-9.]/g, "");
-                                                const parts = value.split(".");
-                                                if (parts.length > 2) {
-                                                    value = parts[0] + "." + parts.slice(1).join("");
-                                                }
-                                                setCashReceived(value);
-                                            }}
-                                            className="text-center text-3xl h-16 font-black border-2 border-primary/20 focus:border-primary pl-8 rounded-xl shadow-inner bg-slate-50"
-                                            autoFocus
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="flex gap-3">
-                                <Button
-                                    variant="ghost"
-                                    className="flex-1 h-14 font-bold text-muted-foreground hover:bg-slate-100"
-                                    onClick={() => setShowCreditModal(false)}
-                                    disabled={isProcessing}
-                                >
-                                    Cancel
-                                </Button>
-                                <Button
-                                    className="flex-[1.5] h-14 text-lg font-bold gradient-warm shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
-                                    onClick={handleCreditPayment}
-                                    disabled={isProcessing || !cashReceived || parseFloat(cashReceived) <= 0}
-                                >
-                                    {isProcessing ? (
-                                        <div className="h-6 w-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                    ) : (
-                                        <>
-                                            <CheckCircle2 className="h-5 w-5 mr-2" />
-                                            Complete Paid
-                                        </>
-                                    )}
-                                </Button>
-                            </div>
-                        </div>
-                    </DialogContent>
-                </Dialog>
-            </div>
-
-            {/* Fixed Bottom Actions */}
-            <div className="fixed bottom-16 left-0 right-0 p-4 bg-card border-t shadow-lg z-50">
-                <div className="max-w-2xl mx-auto space-y-3">
-                    <div className="flex items-center justify-between text-sm text-muted-foreground">
-                        <span>Total Amount</span>
-                        <span className="text-2xl font-bold text-primary">Rs.{total.toFixed(2)}</span>
-                    </div>
-
-                    <div className="flex gap-3">
-                        <Button
-                            className="w-full btn-touch gradient-warm shadow-warm-lg h-14 text-xl font-black rounded-2xl"
-                            onClick={showOrderPreview}
-                            disabled={isProcessing}
-                        >
-                            {isProcessing ? (
-                                <>
-                                    <div className="h-5 w-5 mr-2 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                    Processing...
-                                </>
-                            ) : (
-                                <>
-                                    <Receipt className="h-6 w-6 mr-3" />
-                                    Confirm & View Bill
-                                </>
                             )}
-                        </Button>
+                        </div>
+
+                        <div className="flex gap-3">
+                            <Button
+                                variant="ghost"
+                                className="flex-1 h-14 font-bold text-muted-foreground hover:bg-slate-100"
+                                onClick={() => setShowCashModal(false)}
+                                disabled={isProcessing}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                className="flex-[1.5] h-14 text-lg font-bold gradient-warm shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                                onClick={handleCashPayment}
+                                disabled={isProcessing || !cashReceived || parseFloat(cashReceived) <= 0}
+                            >
+                                {isProcessing ? (
+                                    <div className="h-6 w-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                ) : (
+                                    <>
+                                        <CheckCircle2 className="h-5 w-5 mr-2" />
+                                        Complete Order
+                                    </>
+                                )}
+                            </Button>
+                        </div>
                     </div>
-                </div>
-            </div>
+                </DialogContent>
+            </Dialog>
 
+            {/* QR Payment Modal - Now as a true Dialog */}
+            <Dialog open={showPaymentConfirmation} onOpenChange={setShowPaymentConfirmation}>
+                <DialogContent className="max-w-[calc(100%-2.5rem)] w-[320px] rounded-2xl p-0 overflow-hidden border-none shadow-2xl">
+                    <div className="bg-primary p-4 text-white text-center">
+                        <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-2 border border-white/30">
+                            <QrCode className="h-6 w-6 text-white" />
+                        </div>
+                        <h3 className="text-lg font-bold">Scan to Pay</h3>
+                        <p className="text-white/80 text-[10px]">Ready to receive payment</p>
+                    </div>
 
+                    <div className="p-4 text-center space-y-3">
+                        <div className="flex justify-between items-center px-1 text-left">
+                            <span className="text-[10px] font-medium text-muted-foreground uppercase">Payable Total:</span>
+                            <span className="text-sm font-black text-primary">Rs.{total.toFixed(2)}</span>
+                        </div>
+
+                        <div className="space-y-1.5 text-left">
+                            <Label className="text-[10px] font-black uppercase tracking-wider text-muted-foreground ml-1">QR Payment Amount</Label>
+                            <div className="relative">
+                                <div className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground text-sm">Rs.</div>
+                                <Input
+                                    type="text"
+                                    inputMode="decimal"
+                                    placeholder="0.00"
+                                    value={cashReceived}
+                                    onChange={(e) => {
+                                        let value = e.target.value;
+                                        value = value.replace(/[^0-9.]/g, "");
+                                        const parts = value.split(".");
+                                        if (parts.length > 2) {
+                                            value = parts[0] + "." + parts.slice(1).join("");
+                                        }
+                                        setCashReceived(value);
+                                    }}
+                                    className="text-center text-xl h-10 font-black border-2 border-primary/20 focus:border-primary pl-6 rounded-xl bg-slate-50"
+                                    autoFocus
+                                />
+                            </div>
+                        </div>
+
+                        <div className="relative group">
+                            <div className="absolute -inset-1 bg-gradient-to-r from-primary/20 to-primary/20 rounded-2xl blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200"></div>
+                            <div className="relative bg-white p-2 rounded-xl mx-auto border border-primary/10 shadow-md flex flex-col items-center justify-center overflow-hidden min-h-[140px]">
+                                {!branchInfo ? (
+                                    <div className="flex flex-col items-center justify-center py-8">
+                                        <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
+                                        <p className="text-[10px] text-muted-foreground font-bold">Loading QR Code...</p>
+                                    </div>
+                                ) : (
+                                    <img
+                                        src={branchInfo?.image_url || "/qr.png"}
+                                        alt="QR Code"
+                                        className="h-28 w-28 object-cover"
+                                        onError={(e) => {
+                                            const target = e.target as HTMLImageElement;
+                                            console.log("❌ QR Code failed to load, using fallback");
+                                            target.src = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=AMABAKERY_PAYMENT";
+                                        }}
+                                        onLoad={() => {
+                                            console.log("✅ QR Code loaded successfully:", branchInfo?.image_url);
+                                        }}
+                                    />
+                                )}
+                            </div>
+                        </div>
+
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-black opacity-60">Wait for confirmation</p>
+                        <div className="flex gap-3 pt-1">
+                            <Button
+                                variant="outline"
+                                className="flex-1 h-10 text-xs"
+                                onClick={() => setShowPaymentConfirmation(false)}
+                                disabled={isProcessing}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                className="flex-[1.5] h-10 text-xs font-bold bg-primary hover:bg-primary/95 text-white shadow-lg shadow-primary/20 transition-all active:scale-95"
+                                onClick={handleQRPayment}
+                                disabled={isProcessing || !cashReceived || parseFloat(cashReceived) <= 0}
+                            >
+                                {isProcessing ? (
+                                    <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                ) : (
+                                    <>
+                                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                                        Confirm Paid
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Card Payment Modal */}
+            <Dialog open={showCardModal} onOpenChange={setShowCardModal}>
+                <DialogContent className="max-w-[calc(100%-2rem)] w-[350px] rounded-2xl p-0 overflow-hidden border-none shadow-2xl">
+                    <div className="bg-primary p-6 text-white text-center">
+                        <div className="h-16 w-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-4 border border-white/30">
+                            <CreditCard className="h-8 w-8 text-white" />
+                        </div>
+                        <h3 className="text-xl font-bold">Card Payment</h3>
+                        <p className="text-white/80 text-sm">Swipe or Dip Card on Machine</p>
+                    </div>
+
+                    <div className="p-6 space-y-6">
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center px-1">
+                                <span className="text-muted-foreground font-medium">Total Amount</span>
+                                <span className="text-xl font-black text-primary">Rs.{total.toFixed(2)}</span>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Card Payment Amount</Label>
+                                <div className="relative">
+                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-muted-foreground text-xl">Rs.</div>
+                                    <Input
+                                        type="text"
+                                        inputMode="decimal"
+                                        placeholder="0.00"
+                                        value={cashReceived}
+                                        onChange={(e) => {
+                                            let value = e.target.value;
+                                            value = value.replace(/[^0-9.]/g, "");
+                                            const parts = value.split(".");
+                                            if (parts.length > 2) {
+                                                value = parts[0] + "." + parts.slice(1).join("");
+                                            }
+                                            setCashReceived(value);
+                                        }}
+                                        className="text-center text-3xl h-16 font-black border-2 border-primary/20 focus:border-primary pl-8 rounded-xl shadow-inner bg-slate-50"
+                                        autoFocus
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3">
+                            <Button
+                                variant="ghost"
+                                className="flex-1 h-14 font-bold text-muted-foreground hover:bg-slate-100"
+                                onClick={() => setShowCardModal(false)}
+                                disabled={isProcessing}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                className="flex-[1.5] h-14 text-lg font-bold gradient-warm shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                                onClick={handleCardPayment}
+                                disabled={isProcessing || !cashReceived || parseFloat(cashReceived) <= 0}
+                            >
+                                {isProcessing ? (
+                                    <div className="h-6 w-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                ) : (
+                                    <>
+                                        <CheckCircle2 className="h-5 w-5 mr-2" />
+                                        Complete Paid
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Credit Payment Modal */}
+            <Dialog open={showCreditModal} onOpenChange={setShowCreditModal}>
+                <DialogContent className="max-w-[calc(100%-2rem)] w-[350px] rounded-2xl p-0 overflow-hidden border-none shadow-2xl">
+                    <div className="bg-primary p-6 text-white text-center">
+                        <div className="h-16 w-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-4 border border-white/30">
+                            <IndianRupee className="h-8 w-8 text-white" />
+                        </div>
+                        <h3 className="text-xl font-bold">Credit Payment</h3>
+                        <p className="text-white/80 text-sm">Add to customer balance</p>
+                    </div>
+
+                    <div className="p-6 space-y-6">
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center px-1">
+                                <span className="text-muted-foreground font-medium">Total Amount</span>
+                                <span className="text-xl font-black text-primary">Rs.{total.toFixed(2)}</span>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Amount to Credit</Label>
+                                <div className="relative">
+                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-muted-foreground text-xl">Rs.</div>
+                                    <Input
+                                        type="text"
+                                        inputMode="decimal"
+                                        placeholder="0.00"
+                                        value={cashReceived}
+                                        onChange={(e) => {
+                                            let value = e.target.value;
+                                            value = value.replace(/[^0-9.]/g, "");
+                                            const parts = value.split(".");
+                                            if (parts.length > 2) {
+                                                value = parts[0] + "." + parts.slice(1).join("");
+                                            }
+                                            setCashReceived(value);
+                                        }}
+                                        className="text-center text-3xl h-16 font-black border-2 border-primary/20 focus:border-primary pl-8 rounded-xl shadow-inner bg-slate-50"
+                                        autoFocus
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3">
+                            <Button
+                                variant="ghost"
+                                className="flex-1 h-14 font-bold text-muted-foreground hover:bg-slate-100"
+                                onClick={() => setShowCreditModal(false)}
+                                disabled={isProcessing}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                className="flex-[1.5] h-14 text-lg font-bold gradient-warm shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                                onClick={handleCreditPayment}
+                                disabled={isProcessing || !cashReceived || parseFloat(cashReceived) <= 0}
+                            >
+                                {isProcessing ? (
+                                    <div className="h-6 w-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                ) : (
+                                    <>
+                                        <CheckCircle2 className="h-5 w-5 mr-2" />
+                                        Complete Paid
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             {/* Receipt Preview Dialog */}
             <Dialog open={showReceipt} onOpenChange={setShowReceipt}>
@@ -1380,7 +1145,23 @@ export default function Checkout() {
                 </DialogContent>
             </Dialog>
 
-            {/* Bottom Navigation */}
+            {/* Fixed Bottom Bar */}
+            <div className="fixed bottom-16 left-0 right-0 px-4 py-4 bg-white/80 backdrop-blur-xl border-t border-black/[0.04] z-50">
+                <div className="max-w-2xl mx-auto">
+                    <button
+                        className="w-full h-[54px] rounded-2xl bg-amber-500 hover:bg-amber-550 text-white font-semibold text-[17px] flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all active:scale-95 disabled:opacity-50"
+                        onClick={showOrderPreview}
+                        disabled={isProcessing}
+                    >
+                        {isProcessing ? (
+                            <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        ) : (
+                            <><Receipt className="h-5 w-5 opacity-90" /> Confirm &amp; Submit Bill</>
+                        )}
+                    </button>
+                </div>
+            </div>
+
             <WaiterBottomNav />
         </div>
     );

@@ -26,69 +26,117 @@ export default function TableSelection() {
   const [allTables, setAllTables] = useState<Table[]>([]);
   const [floors, setFloors] = useState<any[]>([]);
   const [selectedFloor, setSelectedFloor] = useState<any>(null);
-  const [selectedTable, setSelectedTable] = useState<Table | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
   const user = getCurrentUser();
 
-  // Fetch all active orders for today
+  // Comprehensive order fetching that matches counter logic exactly
   const loadOrders = useCallback(async () => {
+    if (!user?.branch_id) return;
+    
     try {
-      const params = { date: format(new Date(), 'yyyy-MM-dd'), page_size: '200' };
-      const response = await fetchInvoices(params);
-      const data = Array.isArray(response) ? response : (response.results || []);
-      
-      // Filter for active (unpaid/partial) orders only
-      const activeInvoices = data.filter((inv: any) => {
-        const isFullyPaid = inv.payment_status === 'PAID' && parseFloat(inv.due_amount || 0) <= 0;
-        return !isFullyPaid && !inv.is_deleted;
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const response = await fetchInvoices({
+        date: today,
+        page_size: '200'
       });
       
-      setActiveOrders(activeInvoices);
+      let allInvoices = [];
+      if (Array.isArray(response)) {
+        allInvoices = response;
+      } else if (response.results) {
+        allInvoices = response.results;
+      } else {
+        allInvoices = [];
+      }
+
+      // Apply EXACT same filtering as Counter does
+      const filteredInvoices = allInvoices.filter((inv: any) => {
+        // Must be SALE type and not deleted
+        if (inv.invoice_type !== 'SALE' || inv.is_deleted) {
+          return false;
+        }
+        
+        // Exclude fully paid orders that counter has received
+        const isFullyPaid = inv.payment_status === 'PAID' && inv.received_by_counter;
+        if (isFullyPaid) return false;
+        
+        // Exclude PAID orders with no due amount (settled)
+        const isPaidNoDue = inv.payment_status === 'PAID' && parseFloat(inv.due_amount || 0) <= 0;
+        if (isPaidNoDue) return false;
+        
+        // Exclude completed/cancelled orders
+        if (inv.invoice_status === 'COMPLETED' || inv.invoice_status === 'CANCELLED') {
+          return false;
+        }
+        
+        return true;
+      });
+
+      setActiveOrders(filteredInvoices);
     } catch (error) {
       console.error("Failed to fetch orders:", error);
       setActiveOrders([]);
     }
-  }, []);
+  }, [user?.branch_id]);
 
-  // WebSocket for realtime updates
+  // WebSocket for real-time updates
   useOrdersWebSocket(
-    useCallback(() => {
-      console.log("[TableSelection] Order update received, refreshing...");
-      loadOrders();
+    useCallback((data) => {
+      // Reload on any invoice change
+      if (data.type === "invoice_created" || 
+          data.type === "invoice_updated" || 
+          data.type === "invoice_deleted") {
+        loadOrders();
+      }
     }, [loadOrders]),
     user?.branch_id
   );
 
+  // Auto-refresh every 30 seconds as backup
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadOrders();
+    }, 30000);
+    
+    return () => clearInterval(interval);
+  }, [loadOrders]);
+
+  // Initial data load
   useEffect(() => {
     const loadInitialData = async () => {
       setLoading(true);
       try {
-        const branchFloors = await fetchTables();
-        setFloors(branchFloors || []);
+        // Load floors and orders in parallel
+        const [floorData] = await Promise.all([
+          fetchTables(),
+          loadOrders()
+        ]);
+        
+        setFloors(floorData || []);
 
-        // Load from localStorage
+        // Restore selected floor
         const storedFloorId = localStorage.getItem('selectedFloorId');
-        if (storedFloorId && branchFloors) {
-          const found = branchFloors.find((f: any) => f.id.toString() === storedFloorId);
+        if (storedFloorId && floorData) {
+          const found = floorData.find((f: any) => f.id.toString() === storedFloorId);
           if (found) {
             setSelectedFloor(found);
-          } else if (branchFloors.length > 0) {
-            setSelectedFloor(branchFloors[0]);
+          } else if (floorData.length > 0) {
+            setSelectedFloor(floorData[0]);
           }
-        } else if (branchFloors && branchFloors.length > 0) {
-          setSelectedFloor(branchFloors[0]);
+        } else if (floorData && floorData.length > 0) {
+          setSelectedFloor(floorData[0]);
         }
-
-        // Load orders
-        await loadOrders();
       } catch (error) {
-        console.error("Failed to fetch floors:", error);
+        console.error("Failed to load initial data:", error);
       } finally {
         setLoading(false);
       }
     };
-    loadInitialData();
+    
+    if (user?.branch_id) {
+      loadInitialData();
+    }
   }, [user?.branch_id, loadOrders]);
 
   const handleFloorChange = (floor: any) => {
@@ -96,37 +144,40 @@ export default function TableSelection() {
     localStorage.setItem('selectedFloorId', floor.id.toString());
   };
 
-  // Generate tables with actual occupancy status from real orders
+  // Generate tables with real occupancy status
   useEffect(() => {
-    if (selectedFloor) {
-      const count = selectedFloor.table_count || 0;
-      const generatedTables: Table[] = Array.from({ length: count }, (_, i) => {
-        const tableNum = i + 1;
-        
-        // Check if this table has any active orders on this floor
-        const tableOrders = activeOrders.filter((order: any) => {
-          // Match by floor
-          const floorId = order.floor ?? order.floor_id;
-          const matchById = floorId != null && String(floorId) === String(selectedFloor.id);
-          const matchByName = !matchById && order.floor_name && order.floor_name === selectedFloor.name;
-          if (!matchById && !matchByName) return false;
-          
-          // Match by table number
-          const orderTableNo = order.table_no ? Number(order.table_no) : null;
-          if (!orderTableNo) return false;
-          
-          return orderTableNo === tableNum;
-        });
-        
-        return {
-          id: `table-${selectedFloor.id}-${tableNum}`,
-          number: tableNum,
-          status: tableOrders.length > 0 ? 'occupied' : 'available',
-          capacity: 4
-        };
-      });
-      setAllTables(generatedTables);
+    if (!selectedFloor) {
+      setAllTables([]);
+      return;
     }
+
+    const count = selectedFloor.table_count || 0;
+    const generatedTables: Table[] = Array.from({ length: count }, (_, i) => {
+      const tableNum = i + 1;
+      
+      // Find orders for this specific table on this floor
+      const tableOrders = activeOrders.filter((order: any) => {
+        // Floor matching - try both ID and name
+        const orderFloorId = order.floor ?? order.floor_id;
+        const floorMatch = (orderFloorId && String(orderFloorId) === String(selectedFloor.id)) ||
+                          (order.floor_name && order.floor_name === selectedFloor.name);
+        
+        if (!floorMatch) return false;
+        
+        // Table number matching
+        const orderTableNo = order.table_no ? parseInt(String(order.table_no)) : null;
+        return orderTableNo === tableNum;
+      });
+      
+      return {
+        id: `table-${selectedFloor.id}-${tableNum}`,
+        number: tableNum,
+        status: tableOrders.length > 0 ? 'occupied' : 'available',
+        capacity: 4
+      };
+    });
+    
+    setAllTables(generatedTables);
   }, [selectedFloor, activeOrders]);
 
   const handleTableClick = (table: Table) => {

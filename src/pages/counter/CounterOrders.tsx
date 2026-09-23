@@ -54,6 +54,7 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
+    DropdownMenuLabel,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -64,6 +65,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState<"ALL" | "PAID" | "UNPAID" | "PARTIAL" | "PENDING" | "WAITER RECEIVED">("ALL");
+    const [paymentMethodFilter, setPaymentMethodFilter] = useState<"ALL" | "CASH" | "CREDIT" | "QR" | "CARD">("ALL");
 
     // View Mode: list or table-grid, determined by prop
     const viewMode = initialViewMode;
@@ -365,7 +367,22 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
     const handleTableBoxClick = (tableNumber: number) => {
         const tableInvoices = tableOrdersMap.get(tableNumber) || [];
         // Filter to only show UNPAID orders (for payment collection)
-        const unpaidOrders = tableInvoices.filter((o: any) => o.payment_status !== 'PAID');
+        // Exclude PAID orders and CREDIT-paid orders (no due amount)
+        const unpaidOrders = tableInvoices.filter((o: any) => {
+            // Exclude fully paid
+            if (o.payment_status === 'PAID') return false;
+            
+            // Exclude CREDIT/ONLINE paid with no due amount
+            const paymentMethods = o.payment_methods_list || o.payment_methods || [];
+            const isPaidWithCredit = paymentMethods.includes('CREDIT') || paymentMethods.includes('ONLINE');
+            const hasDueAmount = parseFloat(o.due_amount || 0) > 0;
+            
+            if (isPaidWithCredit && !hasDueAmount) return false;
+            
+            // Include all other unpaid orders
+            return true;
+        });
+        
         setTableViewSelectedTable(tableNumber);
         setTableOrders(unpaidOrders);
         setShowTableOrdersModal(true);
@@ -681,7 +698,15 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
             result = result.filter(order => order.payment_status === statusFilter);
         }
 
-        // 2. Search Query
+        // 2. Payment Method Filter
+        if (paymentMethodFilter !== "ALL") {
+            result = result.filter(order => {
+                const paymentMethods = order.payment_methods_list || order.payment_methods || [];
+                return paymentMethods.includes(paymentMethodFilter);
+            });
+        }
+
+        // 3. Search Query
         if (searchQuery.trim()) {
             const query = searchQuery.toLowerCase();
             result = result.filter(order =>
@@ -697,13 +722,13 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
             );
         }
 
-        // 3. Sort (newest first)
+        // 4. Sort (newest first)
         return result.sort((a, b) => {
             const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
             const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
             return dateB - dateA;
         });
-    }, [orders, searchQuery, statusFilter]);
+    }, [orders, searchQuery, statusFilter, paymentMethodFilter, productsMap]);
 
     return (
         <div className="h-screen bg-stone-50 flex flex-col overflow-hidden font-sans">
@@ -819,6 +844,24 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                 <DropdownMenuItem className="h-10 rounded-lg text-red-600" onClick={() => setStatusFilter("UNPAID")}>
                                     Unpaid
                                 </DropdownMenuItem>
+                                
+                                <DropdownMenuSeparator />
+                                <DropdownMenuLabel className="text-[10px] text-slate-400 uppercase tracking-widest px-2">Payment Method</DropdownMenuLabel>
+                                <DropdownMenuItem className="h-10 rounded-lg" onClick={() => setPaymentMethodFilter("ALL")}>
+                                    All Methods
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="h-10 rounded-lg text-green-600" onClick={() => setPaymentMethodFilter("CASH")}>
+                                    Cash
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="h-10 rounded-lg text-purple-600" onClick={() => setPaymentMethodFilter("CREDIT")}>
+                                    Credit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="h-10 rounded-lg text-blue-600" onClick={() => setPaymentMethodFilter("QR")}>
+                                    QR
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="h-10 rounded-lg text-amber-600" onClick={() => setPaymentMethodFilter("CARD")}>
+                                    Card
+                                </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </>
@@ -927,17 +970,43 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                         const hasAnyOrders = tableInvs.length > 0;
                                         
                                         // A table is OCCUPIED if it has any unpaid orders
-                                        const hasUnpaidOrders = hasAnyOrders && tableInvs.some(
-                                            (o: any) => o.payment_status !== 'PAID'
-                                        );
+                                        // Treat CREDIT payments as paid (no due amount)
+                                        const hasUnpaidOrders = hasAnyOrders && tableInvs.some((o: any) => {
+                                            // If paid in full, not occupied
+                                            if (o.payment_status === 'PAID') return false;
+                                            
+                                            // If paid with CREDIT and no due amount, consider as paid
+                                            const paymentMethods = o.payment_methods_list || o.payment_methods || [];
+                                            const isPaidWithCredit = paymentMethods.includes('CREDIT') || paymentMethods.includes('ONLINE');
+                                            const hasDueAmount = parseFloat(o.due_amount || 0) > 0;
+                                            
+                                            if (isPaidWithCredit && !hasDueAmount) return false;
+                                            
+                                            // Otherwise, it's unpaid
+                                            return true;
+                                        });
                                         
-                                        // Only sum due amounts from UNPAID orders
+                                        // Only sum due amounts from UNPAID orders (excluding CREDIT with no due)
                                         const totalDue = tableInvs
-                                            .filter((o: any) => o.payment_status !== 'PAID')
+                                            .filter((o: any) => {
+                                                if (o.payment_status === 'PAID') return false;
+                                                const paymentMethods = o.payment_methods_list || o.payment_methods || [];
+                                                const isPaidWithCredit = paymentMethods.includes('CREDIT') || paymentMethods.includes('ONLINE');
+                                                const hasDueAmount = parseFloat(o.due_amount || 0) > 0;
+                                                if (isPaidWithCredit && !hasDueAmount) return false;
+                                                return true;
+                                            })
                                             .reduce((sum: number, o: any) => sum + parseFloat(o.due_amount || o.total_amount || 0), 0);
                                         
-                                        // Count only unpaid orders
-                                        const unpaidOrderCount = tableInvs.filter((o: any) => o.payment_status !== 'PAID').length;
+                                        // Count only unpaid orders (excluding CREDIT with no due)
+                                        const unpaidOrderCount = tableInvs.filter((o: any) => {
+                                            if (o.payment_status === 'PAID') return false;
+                                            const paymentMethods = o.payment_methods_list || o.payment_methods || [];
+                                            const isPaidWithCredit = paymentMethods.includes('CREDIT') || paymentMethods.includes('ONLINE');
+                                            const hasDueAmount = parseFloat(o.due_amount || 0) > 0;
+                                            if (isPaidWithCredit && !hasDueAmount) return false;
+                                            return true;
+                                        }).length;
                                         const totalOrders = tableInvs.length;
 
                                         // Green = available (no orders or all paid), Yellow = occupied (has unpaid orders)
@@ -1202,24 +1271,15 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                     <div className="bg-white">
                         {/* Modal Header */}
                         <div className="px-6 pt-5 pb-4 border-b border-slate-100">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <DialogTitle className="text-lg font-bold text-slate-900">
-                                        Table {tableViewSelectedTable}
-                                        {selectedFloor?.name && (
-                                            <span className="ml-2 text-[11px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold">{selectedFloor.name}</span>
-                                        )}
-                                    </DialogTitle>
-                                    <p className="text-sm text-slate-400 mt-0.5">{tableOrders.length} order{tableOrders.length !== 1 ? 's' : ''} · Click an order to collect payment</p>
-                                </div>
-                                <button
-                                    onClick={() => setShowTableOrdersModal(false)}
-                                    className="h-8 w-8 rounded-lg hover:bg-slate-100 flex items-center justify-center transition-colors"
-                                >
-                                    <X className="h-4 w-4 text-slate-500" />
-                                </button>
+                            <div>
+                                <DialogTitle className="text-lg font-bold text-slate-900">
+                                    Table {tableViewSelectedTable}
+                                    {selectedFloor?.name && (
+                                        <span className="ml-2 text-[11px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold">{selectedFloor.name}</span>
+                                    )}
+                                </DialogTitle>
+                                <p className="text-sm text-slate-400 mt-0.5">{tableOrders.length} order{tableOrders.length !== 1 ? 's' : ''} · Click an order to collect payment</p>
                             </div>
-
                         </div>
 
                         {/* Order List */}

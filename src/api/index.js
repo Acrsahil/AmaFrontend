@@ -711,6 +711,18 @@ export async function addPayment(invoiceId, paymentData) {
   return data;
 }
 
+export async function deleteInvoice(invoiceId) {
+  const res = await apiFetch(`/api/invoice/${invoiceId}/`, {
+    method: "DELETE"
+  });
+  const data = await safeJson(res);
+  if (!res.ok) {
+    const errorMsg = data?.error || data?.message || "Failed to delete invoice";
+    throw new Error(errorMsg);
+  }
+  return data;
+}
+
 export async function createTable(tableData) {
   const res = await apiFetch("/api/floor/", {
     method: "POST",

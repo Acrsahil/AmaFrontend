@@ -28,12 +28,13 @@ import {
   RefreshCw,
   Coins,
   ShieldCheck,
-  AlertCircle
+  AlertCircle,
+  Trash2
 } from "lucide-react";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { fetchInvoices, addPayment, fetchInvoiceDetail, fetchBranch, fetchUsers, fetchWaiterPayments, fetchMe } from "@/api/index.js";
+import { fetchInvoices, addPayment, fetchInvoiceDetail, fetchBranch, fetchUsers, fetchWaiterPayments, fetchMe, deleteInvoice } from "@/api/index.js";
 import { getCurrentUser } from "@/auth/auth";
 import { useOrdersWebSocket } from "@/hooks/useOrdersWebSocket";
 
@@ -62,6 +63,8 @@ export default function PaymentCollection() {
   const [waiterCashInHand, setWaiterCashInHand] = useState<number | null>(null);
   const [waiterPaymentsHistory, setWaiterPaymentsHistory] = useState<any[]>([]);
   const [handedOverOrderIds, setHandedOverOrderIds] = useState<Set<string | number>>(new Set());
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const loadInvoices = useCallback(async (isInitial = false) => {
     if (isInitial) setLoading(true);
@@ -338,6 +341,29 @@ export default function PaymentCollection() {
       date: order.created_at
     });
     setShowReceipt(true);
+  };
+
+  const handleDeleteInvoice = async () => {
+    if (!selectedOrder) return;
+    
+    // Only allow delete for UNPAID invoices
+    if (selectedOrder.payment_status === 'PAID' || selectedOrder.payment_status === 'WAITER RECEIVED') {
+      toast.error("Cannot delete a paid invoice");
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      await deleteInvoice(selectedOrder.id);
+      toast.success("Invoice deleted successfully");
+      setShowPaymentDialog(false);
+      setShowDeleteConfirm(false);
+      loadInvoices(true); // Refresh list
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete invoice");
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handlePrint = () => {
@@ -1005,6 +1031,17 @@ export default function PaymentCollection() {
                 <span className="font-bold">Credit</span>
               </Button>
             </div>
+
+            {selectedOrder?.payment_status !== 'PAID' && selectedOrder?.payment_status !== 'WAITER RECEIVED' && (
+              <Button
+                variant="destructive"
+                className="w-full h-10 rounded-xl font-bold gap-2"
+                onClick={() => setShowDeleteConfirm(true)}
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete Order
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog >
@@ -1277,6 +1314,40 @@ export default function PaymentCollection() {
         </DialogContent>
       </Dialog >
 
+
+      {/* Delete Invoice Confirmation Modal */}
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <DialogContent className="max-w-[360px] rounded-2xl p-6 z-[110]">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-destructive">Delete Order</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-3">
+            <p className="text-sm text-slate-600">
+              Are you sure you want to delete order <span className="font-bold">#{selectedOrder?.invoice_number}</span>? 
+              <br />
+              <span className="text-xs">This action cannot be undone.</span>
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1 h-10 rounded-xl font-bold"
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={isDeleting}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                className="flex-1 h-10 rounded-xl font-bold"
+                onClick={handleDeleteInvoice}
+                disabled={isDeleting}
+              >
+                {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <WaiterBottomNav />
 

@@ -41,7 +41,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { format, parseISO } from "date-fns";
-import { fetchInvoices, addPayment, fetchProducts, fetchBranch, fetchInvoiceDetail, patchInvoice, fetchTables } from "@/api/index.js";
+import { fetchInvoices, addPayment, fetchProducts, fetchBranch, fetchInvoiceDetail, patchInvoice, fetchTables, deleteInvoice } from "@/api/index.js";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -84,6 +84,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
     const [selectedOrder, setSelectedOrder] = useState<any>(null);
     const [branchInfo, setBranchInfo] = useState<any>(null);
     const [paymentAmount, setPaymentAmount] = useState("");
+    const [discountAmount, setDiscountAmount] = useState("");
     const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CREDIT" | "QR">("CASH");
     const [paymentNotes, setPaymentNotes] = useState("");
     const [isPaying, setIsPaying] = useState(false);
@@ -101,6 +102,8 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
     const [isTransferringTable, setIsTransferringTable] = useState(false);
     const [tempAddedItems, setTempAddedItems] = useState<{ product: any, quantity: number }[]>([]);
     const [addItemsSearch, setAddItemsSearch] = useState("");
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     // Global Keyboard State
     const [showKeypad, setShowKeypad] = useState(false);
@@ -470,6 +473,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
     const handlePayOpen = async (order: any) => {
         setSelectedOrder(order);
         setPaymentAmount(order.due_amount || (order.total_amount - (order.paid_amount || 0)));
+        setDiscountAmount(""); // Reset discount
 
         // Pick a sensitive default for waiter-handled orders
         if (order.received_by_waiter && !order.received_by_counter && (order.payment_methods_list || order.payment_methods || []).length > 0) {
@@ -515,6 +519,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
     const handleRowClick = async (order: any) => {
         setSelectedOrder(order);
         setPaymentAmount(order.due_amount || (order.total_amount - (order.paid_amount || 0)));
+        setDiscountAmount(""); // Reset discount
 
         // Pick a sensitive default for waiter-handled orders
         if (order.received_by_waiter && !order.received_by_counter && (order.payment_methods_list || order.payment_methods || []).length > 0) {
@@ -543,6 +548,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
     const handlePaymentSubmit = async () => {
         if (!selectedOrder) return;
 
+        const discountPercent = parseFloat(discountAmount || "0");
         const currentDue = parseFloat(selectedOrder?.due_amount || (selectedOrder ? (selectedOrder.total_amount - (selectedOrder.paid_amount || 0)) : 0));
 
         // Allow 0 amount if we are just confirming waiter handover
@@ -555,21 +561,73 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
 
         setIsPaying(true);
         try {
-            // Cap the payment amount at the actual due amount for database accuracy
-            const actualPayment = Math.min(parseFloat(paymentAmount), currentDue);
+            let updatedOrder = selectedOrder;
 
-            await addPayment(selectedOrder.id, {
+            // Step 1: Apply discount to invoice if discount is provided
+            if (discountPercent > 0) {
+                // Calculate discount amount in Rs. from percentage
+                const subtotal = parseFloat(selectedOrder?.total_amount || 0) - parseFloat(selectedOrder?.tax_amount || 0) + parseFloat(selectedOrder?.discount || 0);
+                const discountRs = (subtotal * discountPercent) / 100;
+                
+                const discountResponse = await patchInvoice(selectedOrder.id, {
+                    discount: discountRs.toFixed(2)
+                });
+                
+                // Update selected order with response from server (backend recalculates totals)
+                updatedOrder = discountResponse.data || discountResponse;
+                setSelectedOrder(updatedOrder);
+            }
+
+            // Step 2: Process payment with the correct amount
+            const finalDue = updatedOrder.due_amount || (updatedOrder.total_amount - (updatedOrder.paid_amount || 0));
+            const actualPayment = Math.min(parseFloat(paymentAmount), Math.max(0, finalDue));
+
+            // Calculate discount in Rs. for the notes
+            const subtotal = parseFloat(selectedOrder?.total_amount || 0) - parseFloat(selectedOrder?.tax_amount || 0) + parseFloat(selectedOrder?.discount || 0);
+            const discountRsForNotes = (subtotal * discountPercent) / 100;
+
+            const paymentData: any = {
                 amount: isConfirmingHandover ? 0 : actualPayment,
                 payment_method: paymentMethod,
-                notes: paymentNotes
-            });
-            toast.success("Payment added successfully");
+                notes: discountPercent > 0 ? `${paymentNotes}${paymentNotes ? ' | ' : ''}Discount Applied: Rs.${discountRsForNotes.toFixed(2)}` : paymentNotes
+            };
+
+            await addPayment(updatedOrder.id, paymentData);
+            
+            const successMsg = discountPercent > 0 ? 
+                `Payment processed! Discount of Rs.${(discountRsForNotes).toFixed(2)} applied to invoice.` : 
+                "Payment added successfully";
+            
+            toast.success(successMsg);
             setShowDetailModal(false);
             loadInvoices(1, true); // Refresh list
         } catch (err: any) {
             toast.error(err.message || "Failed to process payment");
         } finally {
             setIsPaying(false);
+        }
+    };
+
+    const handleDeleteInvoice = async () => {
+        if (!selectedOrder) return;
+        
+        // Only allow delete for UNPAID invoices
+        if (selectedOrder.payment_status === 'PAID') {
+            toast.error("Cannot delete a paid invoice");
+            return;
+        }
+
+        setIsDeleting(true);
+        try {
+            await deleteInvoice(selectedOrder.id);
+            toast.success("Invoice deleted successfully");
+            setShowDetailModal(false);
+            setShowDeleteConfirm(false);
+            loadInvoices(1, true); // Refresh list
+        } catch (err: any) {
+            toast.error(err.message || "Failed to delete invoice");
+        } finally {
+            setIsDeleting(false);
         }
     };
 
@@ -1621,7 +1679,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                             <div className="border-t border-slate-200 pt-4 space-y-2">
                                 <div className="flex justify-between text-sm">
                                     <span className="text-slate-400 font-bold">Subtotal</span>
-                                    <span className="font-bold text-slate-600">Rs.{(parseFloat(selectedOrder?.total_amount || 0) - parseFloat(selectedOrder?.tax_amount || 0)).toFixed(2)}</span>
+                                    <span className="font-bold text-slate-600">Rs.{(parseFloat(selectedOrder?.total_amount || 0) - parseFloat(selectedOrder?.tax_amount || 0) + parseFloat(selectedOrder?.discount || 0)).toFixed(2)}</span>
                                 </div>
                                 {parseFloat(selectedOrder?.tax_amount || 0) > 0 && (
                                     <div className="flex justify-between text-sm">
@@ -1629,14 +1687,42 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                         <span className="font-bold text-slate-600">Rs.{parseFloat(selectedOrder?.tax_amount || 0).toFixed(2)}</span>
                                     </div>
                                 )}
+                                {(parseFloat(discountAmount || "0") > 0 || parseFloat(selectedOrder?.discount || 0) > 0) && (
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-amber-600 font-bold">Discount</span>
+                                        <span className="font-bold text-amber-600">
+                                            {(() => {
+                                                // If discountAmount (percentage) is provided, calculate Rs. amount
+                                                if (parseFloat(discountAmount || "0") > 0) {
+                                                    const subtotal = parseFloat(selectedOrder?.total_amount || 0) - parseFloat(selectedOrder?.tax_amount || 0) + parseFloat(selectedOrder?.discount || 0);
+                                                    const discountRs = (subtotal * parseFloat(discountAmount)) / 100;
+                                                    return `-Rs.${discountRs.toFixed(2)}`;
+                                                }
+                                                // Otherwise show existing discount from selectedOrder
+                                                return `-Rs.${parseFloat(selectedOrder?.discount || 0).toFixed(2)}`;
+                                            })()}
+                                        </span>
+                                    </div>
+                                )}
                                 <div className="flex justify-between items-center pt-2 border-t border-dashed border-slate-200">
                                     <span className="text-lg font-black text-slate-800">Grand Total</span>
-                                    <span className="text-2xl font-black text-primary">Rs.{selectedOrder?.total_amount}</span>
+                                    <span className="text-2xl font-black text-primary">
+                                        {(() => {
+                                            const discountPercent = parseFloat(discountAmount || "0");
+                                            if (discountPercent > 0) {
+                                                const subtotal = parseFloat(selectedOrder?.total_amount || 0) - parseFloat(selectedOrder?.tax_amount || 0) + parseFloat(selectedOrder?.discount || 0);
+                                                const discountRs = (subtotal * discountPercent) / 100;
+                                                const finalTotal = parseFloat(selectedOrder?.total_amount || 0) - discountRs;
+                                                return `Rs.${finalTotal.toFixed(2)}`;
+                                            }
+                                            return `Rs.${selectedOrder?.total_amount || "0.00"}`;
+                                        })()}
+                                    </span>
                                 </div>
                             </div>
 
                             {/* Print Buttons */}
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="grid grid-cols-3 gap-2">
                                 <Button variant="outline" className="h-12 rounded-xl font-bold gap-2 border-2 text-sm" onClick={() => { setAutoPrint(true); setShowReceipt(true); }}>
                                     <Printer className="h-4 w-4" />
                                     POS Print
@@ -1645,6 +1731,16 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                     <FileText className="h-4 w-4" />
                                     View Bill
                                 </Button>
+                                {selectedOrder?.payment_status !== 'PAID' && (
+                                    <Button 
+                                        variant="destructive" 
+                                        className="h-12 rounded-xl font-bold gap-2 text-sm" 
+                                        onClick={() => setShowDeleteConfirm(true)}
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                        Delete
+                                    </Button>
+                                )}
                             </div>
                         </div>
 
@@ -1663,8 +1759,26 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                         <p className="text-lg font-black text-emerald-700">Rs.{selectedOrder?.paid_amount || 0}</p>
                                     </div>
                                     <div className="p-3 rounded-xl bg-white border border-slate-200">
-                                        <p className="text-[9px] text-slate-400 font-bold uppercase mb-0.5">Due</p>
-                                        <p className="text-lg font-black text-slate-900">Rs.{selectedOrder?.due_amount || (selectedOrder ? (selectedOrder.total_amount - (selectedOrder.paid_amount || 0)) : 0)}</p>
+                                        <p className="text-[9px] text-slate-400 font-bold uppercase mb-0.5">
+                                            Due {parseFloat(discountAmount || "0") > 0 && <span className="text-amber-600">(With Discount)</span>}
+                                        </p>
+                                        <div className="space-y-1">
+                                            {parseFloat(discountAmount || "0") > 0 && (
+                                                <p className="text-xs text-slate-400 line-through">
+                                                    Rs.{parseFloat(selectedOrder?.due_amount || "0").toFixed(2)}
+                                                </p>
+                                            )}
+                                            <p className="text-lg font-black text-slate-900">
+                                                {(() => {
+                                                    if (parseFloat(discountAmount || "0") > 0) {
+                                                        const subtotal = parseFloat(selectedOrder?.total_amount || 0) - parseFloat(selectedOrder?.tax_amount || 0) + parseFloat(selectedOrder?.discount || 0);
+                                                        const discountRs = (subtotal * parseFloat(discountAmount)) / 100;
+                                                        return `Rs.${Math.max(0, parseFloat(selectedOrder?.due_amount || "0") - discountRs).toFixed(2)}`;
+                                                    }
+                                                    return `Rs.${parseFloat(selectedOrder?.due_amount || "0").toFixed(2)}`;
+                                                })()}
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -1722,11 +1836,51 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
 
                                 {/* Payment Form - Only if unpaid */}
                                 {(selectedOrder?.payment_status !== 'PAID' && parseFloat(selectedOrder?.due_amount || "0") > 0) ? (() => {
-                                    const currentDue = parseFloat(selectedOrder?.due_amount || (selectedOrder ? (selectedOrder.total_amount - (selectedOrder.paid_amount || 0)) : 0));
+                                    const originalDue = parseFloat(selectedOrder?.due_amount || (selectedOrder ? (selectedOrder.total_amount - (selectedOrder.paid_amount || 0)) : 0));
+                                    const discountPercent = parseFloat(discountAmount || "0");
+                                    
+                                    // Calculate discount in Rs. from percentage
+                                    let discountRs = 0;
+                                    if (discountPercent > 0) {
+                                        const subtotal = parseFloat(selectedOrder?.total_amount || 0) - parseFloat(selectedOrder?.tax_amount || 0) + parseFloat(selectedOrder?.discount || 0);
+                                        discountRs = (subtotal * discountPercent) / 100;
+                                    }
+                                    
+                                    const currentDue = Math.max(0, originalDue - discountRs);
                                     const changeAmount = Math.max(0, parseFloat(paymentAmount || "0") - currentDue);
 
                                     return (
                                         <div className="space-y-4 animate-in fade-in slide-in-from-right-2 pt-2 border-t border-slate-200">
+                                            {/* Discount Section */}
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Discount % (Optional)</Label>
+                                                <div className="relative">
+                                                    <Input
+                                                        type="number"
+                                                        min="0"
+                                                        max="100"
+                                                        step="0.1"
+                                                        className="h-12 text-lg font-black text-center border-2 border-slate-200 focus:border-amber-400 rounded-xl pr-8"
+                                                        value={discountAmount}
+                                                        placeholder="0"
+                                                        onChange={(e) => {
+                                                            const percent = parseFloat(e.target.value) || 0;
+                                                            if (percent >= 0 && percent <= 100) {
+                                                                setDiscountAmount(e.target.value);
+                                                                // Calculate discount amount from percentage
+                                                                const subtotal = parseFloat(selectedOrder?.total_amount || 0) - parseFloat(selectedOrder?.tax_amount || 0) + parseFloat(selectedOrder?.discount || 0);
+                                                                const discountRs = (subtotal * percent) / 100;
+                                                                // Auto-update payment amount when discount changes
+                                                                const currentDue = parseFloat(selectedOrder?.due_amount || (selectedOrder ? (selectedOrder.total_amount - (selectedOrder.paid_amount || 0)) : 0));
+                                                                const newDue = Math.max(0, currentDue - discountRs);
+                                                                setPaymentAmount(newDue.toString());
+                                                            }
+                                                        }}
+                                                    />
+                                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-lg font-black text-slate-300">%</span>
+                                                </div>
+                                            </div>
+
                                             <div className="space-y-2">
                                                 <Label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Amount to Pay</Label>
                                                 <div className="relative">
@@ -1779,9 +1933,9 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
 
                                             {/* QR Code Display */}
                                             {paymentMethod === 'QR' && (
-                                                <div className="flex flex-col items-center gap-2">
-                                                    <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Scan QR Code</Label>
-                                                    <div className="bg-white p-2 rounded-xl shadow-md border border-slate-100 w-28 h-28 flex items-center justify-center overflow-hidden">
+                                                <div className="flex flex-col items-center gap-1 py-2">
+                                                    <Label className="text-[8px] font-black uppercase tracking-widest text-slate-400">QR</Label>
+                                                    <div className="bg-white p-1.5 rounded-lg shadow-md border border-slate-100 w-20 h-20 flex items-center justify-center overflow-hidden">
                                                         {branchInfo?.image_url ? (
                                                             <img
                                                                 src={branchInfo.image_url}
@@ -2089,6 +2243,40 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                         >
                             {isTransferringTable ? <Loader2 className="h-5 w-5 animate-spin" /> : "Transfer"}
                         </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete Invoice Confirmation Modal */}
+            <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+                <DialogContent className="max-w-[360px] rounded-2xl p-6 z-[110]">
+                    <DialogHeader>
+                        <DialogTitle className="text-lg font-bold text-destructive">Delete Invoice</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 mt-3">
+                        <p className="text-sm text-slate-600">
+                            Are you sure you want to delete invoice <span className="font-bold">#{selectedOrder?.invoice_number}</span>? 
+                            <br />
+                            <span className="text-xs">This action cannot be undone.</span>
+                        </p>
+                        <div className="flex gap-2">
+                            <Button
+                                variant="outline"
+                                className="flex-1 h-10 rounded-xl font-bold"
+                                onClick={() => setShowDeleteConfirm(false)}
+                                disabled={isDeleting}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                className="flex-1 h-10 rounded-xl font-bold"
+                                onClick={handleDeleteInvoice}
+                                disabled={isDeleting}
+                            >
+                                {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
+                            </Button>
+                        </div>
                     </div>
                 </DialogContent>
             </Dialog>

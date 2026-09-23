@@ -201,9 +201,8 @@ export default function OrderStatus() {
   // Grid view: ALWAYS use ALL active orders regardless of mine/all tab, so
   // every waiter sees the true physical occupancy of every table on the floor.
   // The My/All tab only filters the list view below.
-  const allActiveOrders = allOrders.filter(
-    o => o?.invoice_status !== "COMPLETED" && o?.invoice_status !== "CANCELLED"
-  );
+  // FIXED: Use EXACT same logic as Counter's tableOrdersMap
+  const allActiveOrders = allOrders; // Don't filter by invoice_status here
   const tableOrderMap: Record<number, any[]> = {};
   allActiveOrders.forEach(o => {
     // Match by floor ID (preferred) or floor_name (fallback for list-API orders)
@@ -213,6 +212,14 @@ export default function OrderStatus() {
       const matchByName = !matchById && o.floor_name && o.floor_name === selectedFloor.name;
       if (!matchById && !matchByName) return;
     }
+    
+    // CRITICAL FIX: Apply Counter's exact payment filtering logic
+    // Only include active orders: not fully paid by counter
+    const isFullyPaid = o.payment_status === 'PAID' && o.received_by_counter;
+    if (isFullyPaid) return;
+    // Exclude PAID orders where due_amount is 0 (settled)
+    const isPaidNoDue = o.payment_status === 'PAID' && parseFloat(o.due_amount || 0) <= 0;
+    if (isPaidNoDue) return;
     const tableMatch = (o?.description || o?.invoice_description || "").match(/Table (\d+)/);
     const tableNo = o?.table_no ? Number(o.table_no) : (tableMatch ? parseInt(tableMatch[1]) : null);
     if (tableNo) {

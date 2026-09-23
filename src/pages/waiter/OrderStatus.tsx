@@ -203,8 +203,13 @@ export default function OrderStatus() {
   // occupied, and "All Orders" shows everyone's tables as occupied.
   const tableOrderMap: Record<number, any[]> = {};
   activeOrders.forEach(o => {
-    const floorId = o.floor || o.floor_id;
-    if (selectedFloor && String(floorId) !== String(selectedFloor.id)) return;
+    // Match by floor ID (preferred) or floor_name (fallback for list-API orders)
+    if (selectedFloor) {
+      const floorId = o.floor ?? o.floor_id;
+      const matchById = floorId != null && String(floorId) === String(selectedFloor.id);
+      const matchByName = !matchById && o.floor_name && o.floor_name === selectedFloor.name;
+      if (!matchById && !matchByName) return;
+    }
     const tableMatch = (o?.description || o?.invoice_description || "").match(/Table (\d+)/);
     const tableNo = o?.table_no ? Number(o.table_no) : (tableMatch ? parseInt(tableMatch[1]) : null);
     if (tableNo) {

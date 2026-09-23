@@ -346,10 +346,13 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
         orders.forEach(o => {
             const tNo = o.table_no ? Number(o.table_no) : null;
             if (!tNo) return;
-            // Filter by selected floor — skip orders that don't belong to this floor
-            if (selectedFloor && o.floor_name && o.floor_name !== selectedFloor.name) return;
-            // If order has no floor_name and a floor is selected, skip it
-            if (selectedFloor && !o.floor_name) return;
+            // Filter by selected floor — match by ID (preferred) or floor_name (fallback)
+            if (selectedFloor) {
+                const floorId = o.floor ?? o.floor_id;
+                const matchById = floorId != null && String(floorId) === String(selectedFloor.id);
+                const matchByName = !matchById && o.floor_name && o.floor_name === selectedFloor.name;
+                if (!matchById && !matchByName) return;
+            }
             // Only include active orders: not fully paid by counter
             const isFullyPaid = o.payment_status === 'PAID' && o.received_by_counter;
             if (isFullyPaid) return;

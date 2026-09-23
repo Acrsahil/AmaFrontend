@@ -373,7 +373,25 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                 const matchByName = !matchById && o.floor_name && o.floor_name === selectedFloor.name;
                 if (!matchById && !matchByName) return;
             }
-            // Include ALL orders like Order History does - no filtering by payment status
+            
+            // Exclude CREADIT status orders - they are settled and table is free
+            if (o.payment_status === 'CREADIT') return;
+            
+            // Exclude orders with CREDIT payment method - table should not be occupied
+            const hasCreditPayment = (
+                (o.payment_methods_list || o.payment_methods || []).some((m: string) => m?.toUpperCase() === 'CREDIT') ||
+                (o.payment_details || []).some((p: any) => p.payment_method?.toUpperCase() === 'CREDIT') ||
+                o.payment_method?.toUpperCase() === 'CREDIT'
+            );
+            if (hasCreditPayment) return;
+            
+            // Only include active orders: not fully paid by counter
+            const isFullyPaid = o.payment_status === 'PAID' && o.received_by_counter;
+            if (isFullyPaid) return;
+            // Exclude PAID orders where due_amount is 0 (settled)
+            const isPaidNoDue = o.payment_status === 'PAID' && parseFloat(o.due_amount || 0) <= 0;
+            if (isPaidNoDue) return;
+            
             if (!map.has(tNo)) map.set(tNo, []);
             map.get(tNo)!.push(o);
         });
@@ -698,6 +716,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
     };
 
     const getDisplayStatus = (order: any) => {
+        if (order.payment_status === 'CREADIT') return 'creadit';
         if (order.payment_status === 'PAID') return 'paid';
         if (order.payment_status === 'WAITER RECEIVED' && order.received_by_waiter && !order.received_by_counter) {
             return 'waiter-paid'; // maps to 'Waiter Received' label in StatusBadge
@@ -913,12 +932,22 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                 ) : (
                                     floors.map(floor => {
                                         const floorTables = Array.from({ length: floor.table_count || 0 }, (_, i) => i + 1);
-                                        // Count occupied tables: tables with unpaid orders
-                                        const occupiedTableNos = new Set();
-                                        orders.forEach(o => {
-                                            if (o.table_no && o.floor_name === floor.name && o.payment_status !== 'PAID') {
-                                                occupiedTableNos.add(Number(o.table_no));
-                                            }
+                                        // Count occupied tables for THIS floor by checking orders with matching floor_name
+                                        const floorActiveOrders = orders.filter(o => {
+                                            if (!o.table_no || o.floor_name !== floor.name) return false;
+                                            const isFullyPaid = o.payment_status === 'PAID' && o.received_by_counter;
+                                            if (isFullyPaid) return false;
+                                            const isPaidNoDue = o.payment_status === 'PAID' && parseFloat(o.due_amount || 0) <= 0;
+                                            if (isPaidNoDue) return false;
+                                            // Exclude CREADIT orders
+                                            if (o.payment_status === 'CREADIT') return false;
+                                            // Exclude orders paid with CREDIT - table should not be occupied
+                                            const isPaidWithCredit = o.payment_status === 'PAID' && (
+                                                (o.payment_methods_list || o.payment_methods || []).some((m: string) => m.toUpperCase() === 'CREDIT') ||
+                                                (o.payment_details || []).some((p: any) => p.payment_method?.toUpperCase() === 'CREDIT')
+                                            );
+                                            if (isPaidWithCredit) return false;
+                                            return true;
                                         });
                                         const occupiedCount = occupiedTableNos.size;
                                         return (
@@ -1215,7 +1244,13 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                                         <StatusBadge
                                                             status={getDisplayStatus(order)}
                                                             className="text-[11px] px-2.5 py-1"
-                                                            label={getDisplayStatus(order) === 'waiter-paid' ? `Received by ${order.received_by_waiter_name || 'Waiter'}` : undefined}
+                                                            label={
+                                                                getDisplayStatus(order) === 'creadit' 
+                                                                    ? `Credited by ${order.received_by_counter_name || order.received_by_waiter_name || order.created_by_name || 'User'}` 
+                                                                    : getDisplayStatus(order) === 'waiter-paid' 
+                                                                    ? `Received by ${order.received_by_waiter_name || 'Waiter'}` 
+                                                                    : undefined
+                                                            }
                                                         />
                                                         {order.payment_status === 'PAID' && (
                                                             <div className="h-5 w-5 rounded-full bg-success/20 flex items-center justify-center">
@@ -1333,7 +1368,17 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-sm font-bold text-slate-800 font-mono">#{order.invoice_number?.slice(-6) || order.id}</span>
-                                                        <StatusBadge status={getDisplayStatus(order)} className="text-[10px] px-2 py-0.5" />
+                                                        <StatusBadge 
+                                                            status={getDisplayStatus(order)} 
+                                                            className="text-[10px] px-2 py-0.5"
+                                                            label={
+                                                                getDisplayStatus(order) === 'creadit' 
+                                                                    ? `Credited by ${order.received_by_counter_name || order.received_by_waiter_name || order.created_by_name || 'User'}` 
+                                                                    : getDisplayStatus(order) === 'waiter-paid' 
+                                                                    ? `Received by ${order.received_by_waiter_name || 'Waiter'}` 
+                                                                    : undefined
+                                                            }
+                                                        />
                                                     </div>
                                                     <div className="flex items-center gap-2 mt-0.5">
                                                         <span className="text-xs text-slate-400">

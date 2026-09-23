@@ -236,7 +236,13 @@ export default function PaymentCollection() {
   const handlePaymentClick = (order: any) => {
     setSelectedOrder(order);
     const isPaid = (order.payment_status === 'PAID' || order.payment_status === 'WAITER RECEIVED' || (order.payment_status === 'PARTIAL' && order.received_by_waiter)) && Number(order.due_amount || 0) <= 0;
-    if (isPaid) {
+    const isCreadit = order.payment_status === 'CREADIT';
+    // Check if paid with CREDIT
+    const isPaidWithCredit = order.payment_status === 'PAID' && (
+      (order.payment_methods_list || order.payment_methods || []).some((m: string) => m.toUpperCase() === 'CREDIT') ||
+      (order.payment_details || []).some((p: any) => p.payment_method?.toUpperCase() === 'CREDIT')
+    );
+    if (isPaid || isPaidWithCredit || isCreadit) {
       setShowAlreadyPaidDialog(true);
     } else {
       setShowPaymentDialog(true);
@@ -526,6 +532,16 @@ export default function PaymentCollection() {
       const isPaid = ((o.payment_status === 'PAID' || o.payment_status === 'WAITER RECEIVED' || (o.payment_status === 'PARTIAL' && o.received_by_waiter)) && Number(o.due_amount || 0) <= 0);
       if (isPaid) return false;
 
+      // Exclude CREADIT orders - they are settled and don't need waiter collection
+      if (o.payment_status === 'CREADIT') return false;
+
+      // Exclude orders paid with CREDIT - they should not appear as pending
+      const isPaidWithCredit = o.payment_status === 'PAID' && (
+        (o.payment_methods_list || o.payment_methods || []).some((m: string) => m.toUpperCase() === 'CREDIT') ||
+        (o.payment_details || []).some((p: any) => p.payment_method?.toUpperCase() === 'CREDIT')
+      );
+      if (isPaidWithCredit) return false;
+
       // Takeaway orders not created by this waiter belong to the counter POS
       const isTakeaway = !o.table_no;
       if (isTakeaway) {
@@ -541,6 +557,16 @@ export default function PaymentCollection() {
     return orders.filter(o => {
       const isPaid = ((o.payment_status === 'PAID' || o.payment_status === 'WAITER RECEIVED' || (o.payment_status === 'PARTIAL' && o.received_by_waiter)) && Number(o.due_amount || 0) <= 0);
       if (!isPaid) return false;
+
+      // Exclude CREADIT orders - they don't go through waiter collection
+      if (o.payment_status === 'CREADIT') return false;
+
+      // Exclude orders paid with CREDIT from completed list
+      const isPaidWithCredit = o.payment_status === 'PAID' && (
+        (o.payment_methods_list || o.payment_methods || []).some((m: string) => m.toUpperCase() === 'CREDIT') ||
+        (o.payment_details || []).some((p: any) => p.payment_method?.toUpperCase() === 'CREDIT')
+      );
+      if (isPaidWithCredit) return false;
 
       // Only show orders specifically collected by or created by this waiter
       return isMyOrder(o);
@@ -609,7 +635,13 @@ export default function PaymentCollection() {
 
   const getHandoverStatus = (order: any) => {
     const isPaid = ((order.payment_status === 'PAID' || order.payment_status === 'WAITER RECEIVED' || (order.payment_status === 'PARTIAL' && order.received_by_waiter)) && Number(order.due_amount || 0) <= 0);
-    if (!isPaid) return null;
+    const isCreadit = order.payment_status === 'CREADIT';
+    // Check if paid with CREDIT
+    const isPaidWithCredit = order.payment_status === 'PAID' && (
+      (order.payment_methods_list || order.payment_methods || []).some((m: string) => m.toUpperCase() === 'CREDIT') ||
+      (order.payment_details || []).some((p: any) => p.payment_method?.toUpperCase() === 'CREDIT')
+    );
+    if (!isPaid && !isPaidWithCredit && !isCreadit) return null;
 
     const pMethods = order.payment_methods_list || order.payment_methods || (order.payment_method ? [order.payment_method] : []);
     const isCash = pMethods.some((m: string) => m?.toUpperCase() === 'CASH') || order.payment_method?.toUpperCase() === 'CASH';
@@ -646,6 +678,12 @@ export default function PaymentCollection() {
   const PaymentOrderCard = ({ order, onPaymentClick }: { order: any; onPaymentClick: (order: any) => void }) => {
     const [showItems, setShowItems] = useState(false);
     const isPaid = ((order.payment_status === 'PAID' || order.payment_status === 'WAITER RECEIVED' || (order.payment_status === 'PARTIAL' && order.received_by_waiter)) && Number(order.due_amount || 0) <= 0);
+    const isCreadit = order.payment_status === 'CREADIT';
+    // Check if paid with CREDIT
+    const isPaidWithCredit = order.payment_status === 'PAID' && (
+      (order.payment_methods_list || order.payment_methods || []).some((m: string) => m.toUpperCase() === 'CREDIT') ||
+      (order.payment_details || []).some((p: any) => p.payment_method?.toUpperCase() === 'CREDIT')
+    );
     const handover = getHandoverStatus(order);
     const itemsCount = (order.items || []).length;
     const dueAmount = Number(isPaid ? (order.paid_amount ?? order.total_amount) : (order.due_amount ?? order.total_amount));

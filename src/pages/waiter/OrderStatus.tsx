@@ -295,32 +295,47 @@ export default function OrderStatus() {
 
   // Grid view: ALWAYS use ALL active orders regardless of mine/all tab, so
   // every waiter sees the true physical occupancy of every table on the floor.
-  // Build a map: tableNo -> list of ALL orders for Table View (like Order History in Counter)
-  // Filtered by the selected floor so tables show correct status
-  const tableOrderMap: Record<number, any[]> = useMemo(() => {
-    const map: Record<number, any[]> = {};
-    console.log('🔍 WAITER: Building tableOrderMap with', allOrders.length, 'orders on floor', selectedFloor?.name);
-    allOrders.forEach(o => {
-      const tNo = o.table_no ? Number(o.table_no) : null;
-      if (!tNo) return;
-      // Filter by selected floor — match by ID (preferred) or floor_name (fallback)
-      if (selectedFloor) {
-        const floorId = o.floor ?? o.floor_id;
-        const matchById = floorId != null && String(floorId) === String(selectedFloor.id);
-        const matchByName = !matchById && o.floor_name && o.floor_name === selectedFloor.name;
-        if (!matchById && !matchByName) {
-          console.log('❌ Order', o.id, 'table', o.table_no, 'filtered out - floor mismatch:', { floorId, orderFloorName: o.floor_name, selectedFloor: selectedFloor.name });
-          return;
-        }
-      }
-      // Include ALL orders like Counter Order History does - no filtering by payment status
-      console.log('✅ Order', o.id, 'table', o.table_no, 'included - status:', o.payment_status, 'due:', o.due_amount);
-      if (!map[tNo]) map[tNo] = [];
-      map[tNo].push(o);
-    });
-    console.log('📊 Final tableOrderMap:', map);
-    return map;
-  }, [allOrders, selectedFloor]);
+  // The My/All tab only filters the list view below.
+  const allActiveOrders = allOrders.filter(o => {
+    if (o?.invoice_status === "COMPLETED" || o?.invoice_status === "CANCELLED") return false;
+    
+    // Exclude CREADIT orders - they are settled and don't occupy tables
+    if (o.payment_status === 'CREADIT') return false;
+    
+    // Exclude orders with CREDIT payment method - tables should not be occupied
+    const hasCreditPayment = (
+      (o.payment_methods_list || o.payment_methods || []).some((m: string) => m?.toUpperCase() === 'CREDIT') ||
+      (o.payment_details || []).some((p: any) => p.payment_method?.toUpperCase() === 'CREDIT') ||
+      o.payment_method?.toUpperCase() === 'CREDIT'
+    );
+    if (hasCreditPayment) return false;
+    
+    // Exclude fully paid orders by counter - synced with counter logic
+    const isFullyPaidByCounter = o.payment_status === 'PAID' && o.received_by_counter;
+    if (isFullyPaidByCounter) return false;
+    
+    // Exclude PAID orders where due_amount is 0 (settled)
+    const isPaidNoDue = o.payment_status === 'PAID' && parseFloat(o.due_amount || 0) <= 0;
+    if (isPaidNoDue) return false;
+    
+    return true;
+  });
+  const tableOrderMap: Record<number, any[]> = {};
+  allActiveOrders.forEach(o => {
+    // Match by floor ID (preferred) or floor_name (fallback for list-API orders)
+    if (selectedFloor) {
+      const floorId = o.floor ?? o.floor_id;
+      const matchById = floorId != null && String(floorId) === String(selectedFloor.id);
+      const matchByName = !matchById && o.floor_name && o.floor_name === selectedFloor.name;
+      if (!matchById && !matchByName) return;
+    }
+    const tableMatch = (o?.description || o?.invoice_description || "").match(/Table (\d+)/);
+    const tableNo = o?.table_no ? Number(o.table_no) : (tableMatch ? parseInt(tableMatch[1]) : null);
+    if (tableNo) {
+      if (!tableOrderMap[tableNo]) tableOrderMap[tableNo] = [];
+      tableOrderMap[tableNo].push(o);
+    }
+  });
 
   const handleEditOrder = (order: any) => {
     const tableNo = order.table_no || "takeaway";
@@ -750,6 +765,11 @@ export default function OrderStatus() {
           {modalOrder && (() => {
             const isReady = modalOrder.invoice_status === "READY";
             const isPaid = (modalOrder.payment_status === "PAID" || modalOrder.payment_status === "WAITER RECEIVED") && Number(modalOrder.due_amount || 0) <= 0;
+            // Check if paid with CREDIT
+            const isPaidWithCredit = modalOrder.payment_status === 'PAID' && (
+              (modalOrder.payment_methods_list || modalOrder.payment_methods || []).some((m: string) => m.toUpperCase() === 'CREDIT') ||
+              (modalOrder.payment_details || []).some((p: any) => p.payment_method?.toUpperCase() === 'CREDIT')
+            );
             const tableMatch = (modalOrder?.description || modalOrder?.invoice_description || "").match(/Table (\d+)/);
             const tableNo = modalOrder?.table_no || (tableMatch ? tableMatch[1] : "?");
             return (
@@ -941,6 +961,11 @@ function OrderCard({
   const isReady = order.invoice_status === "READY";
   const isCompleted = order.invoice_status === "COMPLETED";
   const isPaid = (order.payment_status === "PAID" || order.payment_status === "WAITER RECEIVED" || isCompleted) && Number(order.due_amount || 0) <= 0;
+  // Check if paid with CREDIT
+  const isPaidWithCredit = order.payment_status === 'PAID' && (
+    (order.payment_methods_list || order.payment_methods || []).some((m: string) => m.toUpperCase() === 'CREDIT') ||
+    (order.payment_details || []).some((p: any) => p.payment_method?.toUpperCase() === 'CREDIT')
+  );
   const [showItems, setShowItems] = useState(false);
   const isMyPickUp = String(order.received_by_waiter) === String(currentUser?.id);
   const tableMatch = (order?.description || order?.invoice_description || "").match(/Table (\d+)/);

@@ -424,27 +424,30 @@ export default function CounterDashboard() {
                             </div>
                         </div>
 
-                        {/* Payment Methods pie chart */}
+                        {/* Payment Methods pie chart - ALL METHODS */}
                         <div className="bg-white rounded-[2rem] border-2 border-slate-100 p-8 shadow-sm text-center">
-                            <h3 className="text-lg font-black uppercase tracking-tight mb-6 capitalize">{timeframe} Payments</h3>
+                            <h3 className="text-lg font-black uppercase tracking-tight mb-1 capitalize">Payment Method</h3>
+                            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mb-6">{timeframe} breakdown</p>
                             <div className="h-[320px] w-full">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
                                         <Pie
                                             data={(() => {
+                                                // Get all payment methods (CASH, QR, CARD, ONLINE, CREDIT)
                                                 const methods = (dashboardData?.sales_by_payment_method || [])
-                                                    .filter((p: any) => ['CASH', 'QR'].includes(p.payment_method?.toUpperCase()))
                                                     .map((p: any) => ({
-                                                        name: (p.payment_method || 'other').toLowerCase(),
+                                                        name: (p.payment_method || 'other').toUpperCase(),
                                                         value: parseFloat(String(p.total_amount || 0)) || 0
-                                                    }));
+                                                    }))
+                                                    .filter((m: any) => m.value > 0);
 
+                                                // Add pending orders as a separate category
                                                 const pending = (dashboardData?.sales_by_status || [])
                                                     .find((s: any) => s.payment_status?.toUpperCase() === 'PENDING');
 
                                                 if (pending && parseFloat(String(pending.total_amount)) > 0) {
                                                     methods.push({
-                                                        name: 'pending',
+                                                        name: 'PENDING',
                                                         value: parseFloat(String(pending.total_amount))
                                                     });
                                                 }
@@ -455,17 +458,73 @@ export default function CounterDashboard() {
                                             outerRadius={70}
                                             paddingAngle={5}
                                             stroke="none"
+                                            label={({
+                                                cx,
+                                                cy,
+                                                midAngle,
+                                                innerRadius,
+                                                outerRadius,
+                                                percent
+                                            }) => {
+                                                if (percent < 0.05) return null; // Don't show label if slice is too small
+                                                const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+                                                const x = cx + radius * Math.cos(-midAngle * Math.PI / 180);
+                                                const y = cy + radius * Math.sin(-midAngle * Math.PI / 180);
+
+                                                return (
+                                                    <text
+                                                        x={x}
+                                                        y={y}
+                                                        fill="white"
+                                                        textAnchor={x > cx ? 'start' : 'end'}
+                                                        dominantBaseline="central"
+                                                        style={{ fontSize: '11px', fontWeight: 'bold' }}
+                                                    >
+                                                        {`${(percent * 100).toFixed(0)}%`}
+                                                    </text>
+                                                );
+                                            }}
                                         >
-                                            {[
-                                                'hsl(142, 71%, 45%)', // Cash - Green
-                                                'hsl(217, 91%, 60%)', // QR - Blue
-                                                'hsl(0, 84%, 60%)',   // Pending - Red
-                                                'hsl(32, 95%, 44%)'   // Other - Amber
-                                            ].map((color, index) => (
-                                                <Cell key={`cell-pay-${index}`} fill={color} />
-                                            ))}
+                                            {(() => {
+                                                // Color mapping for each payment method
+                                                const colorMap: Record<string, string> = {
+                                                    'CASH': 'hsl(142, 71%, 45%)',     // Green
+                                                    'QR': 'hsl(217, 91%, 60%)',       // Blue
+                                                    'CARD': 'hsl(32, 95%, 44%)',      // Amber
+                                                    'ONLINE': 'hsl(280, 65%, 60%)',   // Purple
+                                                    'CREDIT': 'hsl(199, 89%, 48%)',   // Cyan
+                                                    'PENDING': 'hsl(0, 84%, 60%)',    // Red
+                                                };
+                                                
+                                                const data = (() => {
+                                                    const methods = (dashboardData?.sales_by_payment_method || [])
+                                                        .map((p: any) => ({
+                                                            name: (p.payment_method || 'other').toUpperCase(),
+                                                            value: parseFloat(String(p.total_amount || 0)) || 0
+                                                        }))
+                                                        .filter((m: any) => m.value > 0);
+
+                                                    const pending = (dashboardData?.sales_by_status || [])
+                                                        .find((s: any) => s.payment_status?.toUpperCase() === 'PENDING');
+
+                                                    if (pending && parseFloat(String(pending.total_amount)) > 0) {
+                                                        methods.push({
+                                                            name: 'PENDING',
+                                                            value: parseFloat(String(pending.total_amount))
+                                                        });
+                                                    }
+                                                    return methods;
+                                                })();
+
+                                                return data.map((item: any, index: number) => (
+                                                    <Cell key={`cell-pay-${index}`} fill={colorMap[item.name] || 'hsl(210, 10%, 60%)'} />
+                                                ));
+                                            })()}
                                         </Pie>
-                                        <Tooltip formatter={(value: any) => [`Rs.${Number(value).toLocaleString()}`, 'Total']} />
+                                        <Tooltip 
+                                            formatter={(value: any, name: string) => [`Rs.${Number(value).toLocaleString()}`, name]}
+                                            contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', fontWeight: 'bold' }}
+                                        />
                                         <Legend
                                             layout="horizontal"
                                             align="center"

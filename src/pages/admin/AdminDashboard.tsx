@@ -537,7 +537,17 @@ export default function AdminDashboard() {
                     {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </td>
                   <td className="px-6 py-4">
-                    <StatusBadge status={(order.payment_status || "PENDING").toLowerCase()} className="h-6 px-2 text-[9px]" />
+                    <StatusBadge 
+                      status={(order.payment_status || "PENDING").toLowerCase()} 
+                      className="h-6 px-2 text-[9px]"
+                      label={
+                        (order.payment_status || '').toLowerCase() === 'creadit'
+                          ? `Credited by ${order.received_by_counter_name || order.received_by_waiter_name || order.created_by_name || 'User'}`
+                          : (order.payment_status || '').toLowerCase() === 'waiter received'
+                          ? `Received by ${order.received_by_waiter_name || 'Waiter'}`
+                          : undefined
+                      }
+                    />
                   </td>
                   <td className="px-6 py-4 text-right font-black text-primary">Rs.{order.total_amount}</td>
                 </tr>
@@ -583,7 +593,16 @@ export default function AdminDashboard() {
                 <div className="grid grid-cols-2 gap-4 text-xs font-bold uppercase tracking-widest text-slate-400">
                   <div>
                     <p>Status</p>
-                    <StatusBadge status={selectedOrder.payment_status.toLowerCase()} />
+                    <StatusBadge 
+                      status={selectedOrder.payment_status.toLowerCase()}
+                      label={
+                        selectedOrder.payment_status.toLowerCase() === 'creadit'
+                          ? `Credited by ${selectedOrder.received_by_counter_name || selectedOrder.received_by_waiter_name || selectedOrder.created_by_name || 'User'}`
+                          : selectedOrder.payment_status.toLowerCase() === 'waiter received'
+                          ? `Received by ${selectedOrder.received_by_waiter_name || 'Waiter'}`
+                          : undefined
+                      }
+                    />
                   </div>
                   <div className="text-right">
                     <p>Time</p>

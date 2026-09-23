@@ -736,7 +736,16 @@ export default function AdminOrders() {
                     {order.created_at ? format(parseSafeDate(order.created_at)!, 'MMM d, h:mm a') : 'N/A'}
                   </td>
                   <td className="px-6 py-4">
-                    <StatusBadge status={(order.payment_status || 'unpaid').toLowerCase()} />
+                    <StatusBadge 
+                      status={(order.payment_status || 'unpaid').toLowerCase()} 
+                      label={
+                        (order.payment_status || '').toLowerCase() === 'creadit'
+                          ? `Credited by ${order.received_by_counter_name || order.received_by_waiter_name || order.created_by_name || 'User'}`
+                          : (order.payment_status || '').toLowerCase() === 'waiter received'
+                          ? `Received by ${order.received_by_waiter_name || 'Waiter'}`
+                          : undefined
+                      }
+                    />
                   </td>
                   <td className="px-6 py-4 text-right font-semibold">Rs.{order.total_amount}</td>
                   <td className="px-6 py-4 text-right">

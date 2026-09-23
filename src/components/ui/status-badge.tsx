@@ -57,6 +57,10 @@ const statusConfig: Record<string, { label: string; className: string }> = {
     label: 'Unpaid',
     className: 'bg-destructive/15 text-destructive border-destructive/30',
   },
+  creadit: {
+    label: 'Credit',
+    className: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+  },
   low: {
     label: 'Low Stock',
     className: 'bg-destructive/15 text-destructive border-destructive/30',

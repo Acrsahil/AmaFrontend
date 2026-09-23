@@ -630,6 +630,13 @@ export default function AdminCustomers() {
                                                         <StatusBadge
                                                             status={invoice.payment_status?.toLowerCase() || "pending"}
                                                             className="h-5 px-1.5 text-[9px]"
+                                                            label={
+                                                                (invoice.payment_status?.toLowerCase() || '') === 'creadit'
+                                                                    ? `Credited by ${invoice.received_by_counter_name || invoice.received_by_waiter_name || invoice.created_by_name || 'User'}`
+                                                                    : (invoice.payment_status?.toLowerCase() || '') === 'waiter received'
+                                                                    ? `Received by ${invoice.received_by_waiter_name || 'Waiter'}`
+                                                                    : undefined
+                                                            }
                                                         />
                                                     </div>
                                                 </div>

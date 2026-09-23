@@ -61,17 +61,24 @@ export default function OrderStatus() {
   const [showTableOrdersModal, setShowTableOrdersModal] = useState(false);
   const [modalTableOrders, setModalTableOrders] = useState<any[]>([]);
 
+  // Fetch all invoices for today with a large page_size to get everything in one request
+  const fetchAllInvoicePages = useCallback(async (params: Record<string, string>) => {
+    const res = await fetchInvoices({ ...params, page_size: '200' });
+    // fetchInvoices returns paginated object { results, next, ... } or a plain array
+    return Array.isArray(res) ? res : (res.results || []);
+  }, []);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [dataRes, notifs, prodData, catData, floorsData] = await Promise.all([
-        fetchInvoices({ date: format(new Date(), 'yyyy-MM-dd') }),
+      const [invoiceList, notifs, prodData, catData, floorsData] = await Promise.all([
+        fetchAllInvoicePages({ date: format(new Date(), 'yyyy-MM-dd') }),
         fetchNotifications(),
         fetchProducts(),
         fetchCategories(),
         fetchTables()
       ]);
-      const data = dataRes.results || dataRes;
+      const data = invoiceList;
 
       const enrichedOrders = await Promise.all(
         (data || []).map(async (inv: any) => {
@@ -101,7 +108,7 @@ export default function OrderStatus() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchAllInvoicePages]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -164,8 +171,10 @@ export default function OrderStatus() {
   );
 
   // ── Helpers ──────────────────────────────────────────────────────────────
+  const myUserId = currentUser?.id;
   const displayOrders = allOrders.filter((o) => {
-    const isMine = String(o.created_by) === String(currentUser?.id);
+    // Guard: if we can't identify ourselves, treat nothing as "mine"
+    const isMine = myUserId != null && String(o.created_by) === String(myUserId);
     return activeTab === "mine" ? isMine : true;
   });
 
@@ -181,7 +190,7 @@ export default function OrderStatus() {
   const filteredNotifs = notifications.reduce((acc: any[], cur: any) => {
     const order = allOrders.find(o => String(o.id) === String(cur.invoice));
     if (!order || order.invoice_status !== "READY") return acc;
-    const isMine = String(order.created_by) === String(currentUser?.id);
+    const isMine = myUserId != null && String(order.created_by) === String(myUserId);
     if (activeTab === "mine" && !isMine) return acc;
     const idx = acc.findIndex(n => String(n.invoice) === String(cur.invoice));
     if (idx > -1) { if (cur.id > acc[idx].id) acc[idx] = cur; }
@@ -189,7 +198,9 @@ export default function OrderStatus() {
     return acc;
   }, []);
 
-  // Build per-table order map (table_no → order[]) for the current floor
+  // Build per-table order map (table_no → order[]) for the current floor.
+  // Uses tab-filtered activeOrders so "My Orders" only shows MY tables as
+  // occupied, and "All Orders" shows everyone's tables as occupied.
   const tableOrderMap: Record<number, any[]> = {};
   activeOrders.forEach(o => {
     const floorId = o.floor || o.floor_id;

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Waiter API</title>
+</head>
+<body>
+    <h1>Debug Waiter API</h1>
+    <button onclick="testAPI()">Test API Calls</button>
+    <div id="results"></div>
+
+    <script>
+        async function testAPI() {
+            const results = document.getElementById('results');
+            results.innerHTML = '<p>Testing API...</p>';
+            
+            try {
+                // First check if we have authentication
+                const token = localStorage.getItem('token');
+                results.innerHTML += `<p>Token exists: ${!!token}</p>`;
+                
+                if (!token) {
+                    results.innerHTML += '<p style="color: red;">No token found. Please login first.</p>';
+                    return;
+                }
+                
+                // Test fetchInvoices
+                const today = new Date().toISOString().split('T')[0];
+                const apiUrl = 'YOUR_API_BASE_URL'; // Replace with actual API URL
+                
+                const response = await fetch(`${apiUrl}/api/invoice/?date=${today}&page_size=200`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    results.innerHTML += `<p>API Response Status: ${response.status}</p>`;
+                    results.innerHTML += `<p>Total invoices: ${data.results ? data.results.length : 'No results array'}</p>`;
+                    
+                    const invoices = data.results || data;
+                    if (Array.isArray(invoices)) {
+                        const saleInvoices = invoices.filter(inv => inv.invoice_type === 'SALE');
+                        const activeInvoices = saleInvoices.filter(inv => {
+                            const isFullyPaid = inv.payment_status === 'PAID' && parseFloat(inv.due_amount || 0) <= 0;
+                            return !isFullyPaid && !inv.is_deleted;
+                        });
+                        
+                        results.innerHTML += `<p>SALE invoices: ${saleInvoices.length}</p>`;
+                        results.innerHTML += `<p>Active invoices: ${activeInvoices.length}</p>`;
+                        
+                        // Show sample invoices with table info
+                        const tablesWithOrders = activeInvoices.filter(inv => inv.table_no);
+                        results.innerHTML += `<p>Invoices with tables: ${tablesWithOrders.length}</p>`;
+                        
+                        if (tablesWithOrders.length > 0) {
+                            results.innerHTML += '<h3>Sample invoices with tables:</h3>';
+                            tablesWithOrders.slice(0, 3).forEach(inv => {
+                                results.innerHTML += `
+                                    <div style="border: 1px solid #ccc; padding: 10px; margin: 5px;">
+                                        <p>Invoice ID: ${inv.id}</p>
+                                        <p>Table: ${inv.table_no}</p>
+                                        <p>Floor ID: ${inv.floor || inv.floor_id}</p>
+                                        <p>Floor Name: ${inv.floor_name}</p>
+                                        <p>Payment Status: ${inv.payment_status}</p>
+                                        <p>Due Amount: ${inv.due_amount}</p>
+                                        <p>Created By: ${inv.created_by}</p>
+                                    </div>
+                                `;
+                            });
+                        }
+                    }
+                } else {
+                    results.innerHTML += `<p style="color: red;">API Error: ${response.status} ${response.statusText}</p>`;
+                }
+                
+            } catch (error) {
+                results.innerHTML += `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>

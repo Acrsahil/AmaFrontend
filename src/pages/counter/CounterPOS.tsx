@@ -1362,34 +1362,17 @@ export default function CounterPOS() {
                                                         key === "⌫" ? "text-destructive border-destructive/20 bg-destructive/5" : "hover:border-primary/40 text-slate-700"
                                                     )}
                                                     onClick={() => {
-                                                        const field = activeKeypadField || 'cash';
-                                                        if (field === 'cash') {
-                                                            if (key === "⌫") setCashReceived(prev => (prev.toString().length > 0 ? prev.toString().slice(0, -1) : ""));
-                                                            else if (key === "00") setCashReceived(prev => {
-                                                                const newVal = `${prev}00`;
-                                                                return parseFloat(newVal) <= 100000 ? newVal : prev;
-                                                            });
-                                                            else setCashReceived(prev => {
-                                                                const current = prev.toString();
-                                                                const newVal = current === "0" ? key.toString() : `${current}${key}`;
-                                                                return parseFloat(newVal) <= 100000 ? newVal : prev;
-                                                            });
-                                                        } else if (field === 'discount') {
-                                                            if (key === "⌫") setDiscountPercent(prev => {
-                                                                const current = prev.toString();
-                                                                const newVal = current.length > 1 ? parseInt(current.slice(0, -1)) : 0;
-                                                                return isNaN(newVal) ? 0 : newVal;
-                                                            });
-                                                            else if (key === "00") setDiscountPercent(prev => {
-                                                                const newVal = parseInt(`${prev}00`);
-                                                                return isNaN(newVal) ? 0 : Math.min(100, newVal);
-                                                            });
-                                                            else setDiscountPercent(prev => {
-                                                                const current = prev.toString();
-                                                                const newVal = parseInt(current === "0" ? key.toString() : `${current}${key}`);
-                                                                return isNaN(newVal) ? 0 : Math.min(100, newVal);
-                                                            });
-                                                        }
+                                                        // Direct cash input - no activeKeypadField needed
+                                                        if (key === "⌫") setCashReceived(prev => (prev.toString().length > 0 ? prev.toString().slice(0, -1) : ""));
+                                                        else if (key === "00") setCashReceived(prev => {
+                                                            const newVal = `${prev}00`;
+                                                            return parseFloat(newVal) <= 100000 ? newVal : prev;
+                                                        });
+                                                        else setCashReceived(prev => {
+                                                            const current = prev.toString();
+                                                            const newVal = current === "0" ? key.toString() : `${current}${key}`;
+                                                            return parseFloat(newVal) <= 100000 ? newVal : prev;
+                                                        });
                                                     }}
                                                 >
                                                     {key}

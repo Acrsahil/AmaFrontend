@@ -1,16 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { MobileHeader } from "@/components/layout/MobileHeader";
 import { TableCard } from "@/components/waiter/TableCard";
 import { WaiterBottomNav } from "@/components/waiter/WaiterBottomNav";
 import { Table } from "@/lib/mockData";
-import { getAllOrders } from "@/lib/orderStorage";
-import { fetchTables } from "@/api/index.js";
+import { fetchTables, fetchInvoices } from "@/api/index.js";
 import { getCurrentUser } from "../../auth/auth";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Plus, Users, Layers, ChevronDown } from "lucide-react";
+import { Plus, Users, Layers, ChevronDown, Loader2 } from "lucide-react";
+import { format } from "date-fns";
+import { useOrdersWebSocket } from "@/hooks/useOrdersWebSocket";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,10 +27,42 @@ export default function TableSelection() {
   const [floors, setFloors] = useState<any[]>([]);
   const [selectedFloor, setSelectedFloor] = useState<any>(null);
   const [selectedTable, setSelectedTable] = useState<Table | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [activeOrders, setActiveOrders] = useState<any[]>([]);
   const user = getCurrentUser();
+
+  // Fetch all active orders for today
+  const loadOrders = useCallback(async () => {
+    try {
+      const params = { date: format(new Date(), 'yyyy-MM-dd'), page_size: '200' };
+      const response = await fetchInvoices(params);
+      const data = Array.isArray(response) ? response : (response.results || []);
+      
+      // Filter for active (unpaid/partial) orders only
+      const activeInvoices = data.filter((inv: any) => {
+        const isFullyPaid = inv.payment_status === 'PAID' && parseFloat(inv.due_amount || 0) <= 0;
+        return !isFullyPaid && !inv.is_deleted;
+      });
+      
+      setActiveOrders(activeInvoices);
+    } catch (error) {
+      console.error("Failed to fetch orders:", error);
+      setActiveOrders([]);
+    }
+  }, []);
+
+  // WebSocket for realtime updates
+  useOrdersWebSocket(
+    useCallback(() => {
+      console.log("[TableSelection] Order update received, refreshing...");
+      loadOrders();
+    }, [loadOrders]),
+    user?.branch_id
+  );
 
   useEffect(() => {
     const loadInitialData = async () => {
+      setLoading(true);
       try {
         const branchFloors = await fetchTables();
         setFloors(branchFloors || []);
@@ -40,39 +73,61 @@ export default function TableSelection() {
           const found = branchFloors.find((f: any) => f.id.toString() === storedFloorId);
           if (found) {
             setSelectedFloor(found);
-            return;
+          } else if (branchFloors.length > 0) {
+            setSelectedFloor(branchFloors[0]);
           }
-        }
-
-        if (branchFloors && branchFloors.length > 0) {
+        } else if (branchFloors && branchFloors.length > 0) {
           setSelectedFloor(branchFloors[0]);
         }
+
+        // Load orders
+        await loadOrders();
       } catch (error) {
         console.error("Failed to fetch floors:", error);
+      } finally {
+        setLoading(false);
       }
     };
     loadInitialData();
-  }, [user?.branch_id]);
+  }, [user?.branch_id, loadOrders]);
 
   const handleFloorChange = (floor: any) => {
     setSelectedFloor(floor);
     localStorage.setItem('selectedFloorId', floor.id.toString());
   };
 
+  // Generate tables with actual occupancy status from real orders
   useEffect(() => {
     if (selectedFloor) {
       const count = selectedFloor.table_count || 0;
-      const generatedTables: Table[] = Array.from({ length: count }, (_, i) => ({
-        id: `table-${selectedFloor.id}-${i + 1}`,
-        number: i + 1,
-        status: 'available',
-        capacity: 4
-      }));
+      const generatedTables: Table[] = Array.from({ length: count }, (_, i) => {
+        const tableNum = i + 1;
+        
+        // Check if this table has any active orders on this floor
+        const tableOrders = activeOrders.filter((order: any) => {
+          // Match by floor
+          const floorId = order.floor ?? order.floor_id;
+          const matchById = floorId != null && String(floorId) === String(selectedFloor.id);
+          const matchByName = !matchById && order.floor_name && order.floor_name === selectedFloor.name;
+          if (!matchById && !matchByName) return false;
+          
+          // Match by table number
+          const orderTableNo = order.table_no ? Number(order.table_no) : null;
+          if (!orderTableNo) return false;
+          
+          return orderTableNo === tableNum;
+        });
+        
+        return {
+          id: `table-${selectedFloor.id}-${tableNum}`,
+          number: tableNum,
+          status: tableOrders.length > 0 ? 'occupied' : 'available',
+          capacity: 4
+        };
+      });
       setAllTables(generatedTables);
     }
-  }, [selectedFloor]);
-
-  const activeOrders = getAllOrders();
+  }, [selectedFloor, activeOrders]);
 
   const handleTableClick = (table: Table) => {
     if (selectedFloor) {
@@ -122,23 +177,31 @@ export default function TableSelection() {
           </DropdownMenu>
         </div>
 
-        {/* Table List (Row-wise) */}
-        <div className="space-y-1">
-          {allTables.length === 0 ? (
-            <div className="text-center py-12 text-slate-400">
-              <Layers className="h-12 w-12 mx-auto mb-3 opacity-20" />
-              <p>No tables found on this floor</p>
-            </div>
-          ) : (
-            allTables.map((table) => (
-              <TableCard
-                key={table.id}
-                table={table}
-                onClick={handleTableClick}
-              />
-            ))
-          )}
-        </div>
+        {/* Loading State */}
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <Loader2 className="h-10 w-10 text-primary animate-spin mb-3" />
+            <p className="text-gray-400 text-sm">Loading tables...</p>
+          </div>
+        ) : (
+          /* Table List (Row-wise) */
+          <div className="space-y-1">
+            {allTables.length === 0 ? (
+              <div className="text-center py-12 text-slate-400">
+                <Layers className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                <p>No tables found on this floor</p>
+              </div>
+            ) : (
+              allTables.map((table) => (
+                <TableCard
+                  key={table.id}
+                  table={table}
+                  onClick={handleTableClick}
+                />
+              ))
+            )}
+          </div>
+        )}
       </main>
 
 

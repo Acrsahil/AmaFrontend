@@ -50,30 +50,15 @@ export default function TableSelection() {
         allInvoices = [];
       }
 
-      // Apply EXACT same filtering as Counter does
-      const filteredInvoices = allInvoices.filter((inv: any) => {
-        // Must be SALE type and not deleted
-        if (inv.invoice_type !== 'SALE' || inv.is_deleted) {
-          return false;
-        }
-        
-        // Exclude fully paid orders that counter has received
-        const isFullyPaid = inv.payment_status === 'PAID' && inv.received_by_counter;
-        if (isFullyPaid) return false;
-        
-        // Exclude PAID orders with no due amount (settled)
-        const isPaidNoDue = inv.payment_status === 'PAID' && parseFloat(inv.due_amount || 0) <= 0;
-        if (isPaidNoDue) return false;
-        
-        // Exclude completed/cancelled orders
-        if (inv.invoice_status === 'COMPLETED' || inv.invoice_status === 'CANCELLED') {
-          return false;
-        }
-        
-        return true;
-      });
+      // IMPORTANT: Don't filter here like Counter does - Counter filters later in tableOrdersMap
+      // We need ALL invoices first, then filter when building table occupancy
+      
+      // Only basic filtering for validity (same as Counter's loadInvoices)
+      const validInvoices = allInvoices.filter((inv: any) => 
+        inv.invoice_type === 'SALE' && !inv.is_deleted
+      );
 
-      setActiveOrders(filteredInvoices);
+      setActiveOrders(validInvoices);
     } catch (error) {
       console.error("Failed to fetch orders:", error);
       setActiveOrders([]);
@@ -156,6 +141,7 @@ export default function TableSelection() {
       const tableNum = i + 1;
       
       // Find orders for this specific table on this floor
+      // Apply EXACT same filtering logic as Counter's tableOrdersMap
       const tableOrders = activeOrders.filter((order: any) => {
         // Floor matching - try both ID and name
         const orderFloorId = order.floor ?? order.floor_id;
@@ -166,7 +152,19 @@ export default function TableSelection() {
         
         // Table number matching
         const orderTableNo = order.table_no ? parseInt(String(order.table_no)) : null;
-        return orderTableNo === tableNum;
+        if (orderTableNo !== tableNum) return false;
+        
+        // CRITICAL: Apply Counter's tableOrdersMap payment filtering HERE
+        // Only include active orders: not fully paid by counter
+        const isFullyPaid = order.payment_status === 'PAID' && order.received_by_counter;
+        if (isFullyPaid) return false;
+        
+        // Exclude PAID orders where due_amount is 0 (settled)
+        const isPaidNoDue = order.payment_status === 'PAID' && parseFloat(order.due_amount || 0) <= 0;
+        if (isPaidNoDue) return false;
+        
+        // This matches Counter's logic exactly - no invoice_status filtering
+        return true;
       });
       
       return {

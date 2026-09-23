@@ -501,7 +501,8 @@ export default function CounterPOS() {
             toast.error("Cart is empty");
             return;
         }
-        setCashReceived("");
+        // Prefill the cash received amount with the total
+        setCashReceived(total.toFixed(2));
         setPaymentMethod('cash');
         setShowCheckoutModal(true);
     };

@@ -43,14 +43,58 @@ function playNotificationSound() {
     if (!notificationAudioRef.current) {
       notificationAudioRef.current = new Audio("/noti.mp3");
       notificationAudioRef.current.preload = "auto";
+      // Set volume to ensure it's audible
+      notificationAudioRef.current.volume = 0.8;
     }
 
     // Reset to start so rapid notifications still ring
     const audio = notificationAudioRef.current;
     audio.currentTime = 0;
-    audio.play().catch((err) => {
-      console.warn("[Notification] Failed to play sound:", err);
-    });
+    
+    // Create a user interaction promise to handle autoplay policies
+    const playPromise = audio.play();
+    
+    if (playPromise !== undefined) {
+      playPromise
+        .then(() => {
+          console.log("[Notification] Sound played successfully");
+        })
+        .catch((err) => {
+          console.warn("[Notification] Failed to play sound - trying fallback:", err);
+          
+          // Fallback: Try with a new Audio instance
+          try {
+            const fallbackAudio = new Audio("/noti.mp3");
+            fallbackAudio.volume = 0.8;
+            fallbackAudio.play().catch(e => {
+              console.warn("[Notification] Fallback audio also failed:", e);
+              
+              // Last resort: Try Web Audio API beep
+              try {
+                const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = 800; // High pitch for notification
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.5);
+                
+                console.log("[Notification] Played Web Audio beep as fallback");
+              } catch (webAudioErr) {
+                console.warn("[Notification] All audio methods failed:", webAudioErr);
+              }
+            });
+          } catch (fallbackErr) {
+            console.warn("[Notification] Fallback creation failed:", fallbackErr);
+          }
+        });
+    }
   } catch (err) {
     console.warn("[Notification] Error playing sound:", err);
   }

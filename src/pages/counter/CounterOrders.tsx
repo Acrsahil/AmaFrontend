@@ -270,7 +270,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
         try {
             const params: any = {
                 page: pageNumber,
-                page_size: 1000,  // Load more orders to include old pending orders from today
+                page_size: 1000,  // Large page size to get all today's orders
                 date: dateFilter
             };
             const response = await fetchInvoices(params);
@@ -286,8 +286,24 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
 
                 if (isReset) {
                     setOrders(validOrders);
+                    // If there's more data on next page, auto-load it for table view accuracy
+                    if (nextUrl && viewMode === 'table') {
+                        console.log('🔄 Auto-loading more pages for table view...');
+                        loadInvoices(pageNumber + 1, false);
+                    }
                 } else {
-                    setOrders(prev => [...prev, ...validOrders]);
+                    // DEDUPLICATE: Merge new orders with existing, remove duplicates by ID
+                    setOrders(prev => {
+                        const combined = [...prev, ...validOrders];
+                        const uniqueMap = new Map();
+                        combined.forEach(order => uniqueMap.set(order.id, order));
+                        return Array.from(uniqueMap.values()).sort((a: any, b: any) => b.id - a.id);
+                    });
+                    // Continue auto-loading if in table view and more pages exist
+                    if (nextUrl && viewMode === 'table') {
+                        console.log('🔄 Auto-loading next page for table view...');
+                        loadInvoices(pageNumber + 1, false);
+                    }
                 }
                 setHasMore(!!nextUrl);
                 if (!isReset) setPage(pageNumber);
@@ -302,7 +318,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
             setLoading(false);
             setLoadingMore(false);
         }
-    }, [dateFilter]);
+    }, [dateFilter, viewMode]);
 
     const loadFloors = useCallback(async () => {
         setFloorsLoading(true);

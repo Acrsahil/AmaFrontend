@@ -268,6 +268,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
         try {
             const params: any = {
                 page: pageNumber,
+                page_size: 200,  // Load more orders to include old pending orders from today
                 date: dateFilter
             };
             const response = await fetchInvoices(params);
@@ -340,8 +341,8 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
         }
     }, [viewMode, floors.length, loadFloors]);
 
-    // Build a map: tableNo -> list of ACTIVE (unpaid) orders only for Table View
-    // Filtered by the selected floor so tables only show orders for that floor
+    // Build a map: tableNo -> list of ALL orders for Table View (like Order History)
+    // Filtered by the selected floor so tables show correct status
     const tableOrdersMap = useMemo(() => {
         const map = new Map<number, any[]>();
         orders.forEach(o => {
@@ -354,12 +355,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                 const matchByName = !matchById && o.floor_name && o.floor_name === selectedFloor.name;
                 if (!matchById && !matchByName) return;
             }
-            // Only include active orders: not fully paid by counter
-            const isFullyPaid = o.payment_status === 'PAID' && o.received_by_counter;
-            if (isFullyPaid) return;
-            // Exclude PAID orders where due_amount is 0 (settled)
-            const isPaidNoDue = o.payment_status === 'PAID' && parseFloat(o.due_amount || 0) <= 0;
-            if (isPaidNoDue) return;
+            // Include ALL orders like Order History does - no filtering by payment status
             if (!map.has(tNo)) map.set(tNo, []);
             map.get(tNo)!.push(o);
         });
@@ -856,17 +852,14 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                 ) : (
                                     floors.map(floor => {
                                         const floorTables = Array.from({ length: floor.table_count || 0 }, (_, i) => i + 1);
-                                        // Count occupied tables for THIS floor by checking orders with matching floor_name
-                                        const floorActiveOrders = orders.filter(o => {
-                                            if (!o.table_no || o.floor_name !== floor.name) return false;
-                                            const isFullyPaid = o.payment_status === 'PAID' && o.received_by_counter;
-                                            if (isFullyPaid) return false;
-                                            const isPaidNoDue = o.payment_status === 'PAID' && parseFloat(o.due_amount || 0) <= 0;
-                                            if (isPaidNoDue) return false;
-                                            return true;
+                                        // Count occupied tables: tables with unpaid orders
+                                        const occupiedTableNos = new Set();
+                                        orders.forEach(o => {
+                                            if (o.table_no && o.floor_name === floor.name && o.payment_status !== 'PAID') {
+                                                occupiedTableNos.add(Number(o.table_no));
+                                            }
                                         });
-                                        const occupiedTableNos = new Set(floorActiveOrders.map(o => Number(o.table_no)));
-                                        const occupiedCount = floorTables.filter(t => occupiedTableNos.has(t)).length;
+                                        const occupiedCount = occupiedTableNos.size;
                                         return (
                                             <button
                                                 key={floor.id}
@@ -929,43 +922,38 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                     {Array.from({ length: selectedFloor.table_count || 0 }, (_, i) => {
                                         const tableNum = i + 1;
                                         const tableInvs = tableOrdersMap.get(tableNum) || [];
-                                        const hasActive = tableInvs.length > 0;
+                                        const hasAnyOrders = tableInvs.length > 0;
+                                        
+                                        // A table is OCCUPIED if it has any unpaid orders
+                                        const hasUnpaidOrders = hasAnyOrders && tableInvs.some(
+                                            (o: any) => o.payment_status !== 'PAID'
+                                        );
+                                        
                                         const totalDue = tableInvs.reduce((sum: number, o: any) => sum + parseFloat(o.due_amount || o.total_amount || 0), 0);
                                         const totalOrders = tableInvs.length;
 
-                                        // Check if all active orders have been collected by the waiter
-                                        const allWaiterReceived = hasActive && tableInvs.every(
-                                            (o: any) => o.payment_status === 'WAITER RECEIVED' || o.payment_status === 'PAID'
-                                        );
+                                        // Green = available (no orders or all paid), Yellow = occupied (has unpaid orders)
+                                        const cardColor = hasUnpaidOrders
+                                            ? 'bg-[#c68b07] border-[#b07b06] hover:bg-[#b88106] hover:border-[#a06f05] cursor-pointer shadow-md text-white'  // Yellow/Orange for occupied
+                                            : 'bg-emerald-500 border-emerald-500 hover:bg-emerald-400 hover:border-emerald-400 text-white';                        // Green for available
 
-                                        // Green = available, Emerald = waiter collected, Warm Gold = still unpaid
-                                        const cardColor = !hasActive
-                                            ? 'bg-emerald-500 border-emerald-500 hover:bg-emerald-400 hover:border-emerald-400 text-white'
-                                            : allWaiterReceived
-                                                ? 'bg-emerald-600 border-emerald-700 hover:bg-emerald-500 hover:border-emerald-600 cursor-pointer shadow-md text-white'
-                                                : 'bg-[#c68b07] border-[#b07b06] hover:bg-[#b88106] hover:border-[#a06f05] cursor-pointer shadow-md text-white';
+                                        const dotColor = hasUnpaidOrders
+                                            ? 'bg-white animate-pulse'
+                                            : 'bg-white/70';
 
-                                        const dotColor = !hasActive
-                                            ? 'bg-white/70'
-                                            : allWaiterReceived
-                                                ? 'bg-white/90 animate-pulse'
-                                                : 'bg-white animate-pulse';
-
-                                        const statusLabel = !hasActive ? 'Available' : allWaiterReceived ? 'Collected' : 'Occupied';
-                                        const statusTextColor = !hasActive
-                                            ? 'text-emerald-100 font-semibold'
-                                            : allWaiterReceived
-                                                ? 'text-emerald-100 font-bold'
-                                                : 'text-amber-100 font-bold';
+                                        const statusLabel = hasUnpaidOrders ? 'Occupied' : 'Available';
+                                        const statusTextColor = hasUnpaidOrders
+                                            ? 'text-amber-100 font-bold'
+                                            : 'text-emerald-100 font-semibold';
 
                                         return (
                                             <button
                                                 key={tableNum}
-                                                onClick={() => hasActive && handleTableBoxClick(tableNum)}
+                                                onClick={() => hasAnyOrders && handleTableBoxClick(tableNum)}
                                                 className={cn(
                                                     "relative flex flex-col p-3 rounded-2xl border-2 transition-all text-left group active:scale-95",
                                                     cardColor,
-                                                    !hasActive && "cursor-default"
+                                                    !hasAnyOrders && "cursor-default"
                                                 )}
                                             >
                                                 {/* Status dot */}
@@ -974,14 +962,14 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                                 {/* Table icon */}
                                                 <div className={cn(
                                                     "h-10 w-10 rounded-xl flex items-center justify-center mb-2",
-                                                    !hasActive
+                                                    !hasAnyOrders
                                                         ? "bg-emerald-400/60 text-white"
                                                         : "bg-white/20 text-white"
                                                 )}>
                                                     <UtensilsCrossed className="h-4 w-4" />
                                                 </div>
 
-                                                <p className={cn("text-[10px] font-black uppercase tracking-wider", !hasActive ? "text-emerald-100" : allWaiterReceived ? "text-emerald-100/90" : "text-amber-100/90")}>
+                                                <p className={cn("text-[10px] font-black uppercase tracking-wider", !hasAnyOrders ? "text-emerald-100" : hasUnpaidOrders ? "text-amber-100/90" : "text-emerald-100/90")}>
                                                     TABLE
                                                 </p>
                                                 <p className="text-lg font-black leading-tight text-white">
@@ -989,14 +977,14 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                                 </p>
                                                 <p className={cn("text-[10px] font-bold mt-0.5", statusTextColor)}>{statusLabel}</p>
 
-                                                {hasActive && (
+                                                {hasAnyOrders && (
                                                     <div className="mt-2 pt-2 border-t border-white/20 w-full">
-                                                        <p className={cn("text-[10px] font-semibold", allWaiterReceived ? "text-emerald-100" : "text-amber-100")}>{totalOrders} order{totalOrders > 1 ? 's' : ''}</p>
-                                                        <p className="text-[11px] font-black text-white">{allWaiterReceived ? 'Collected ✓' : `Rs.${totalDue.toFixed(0)} due`}</p>
+                                                        <p className={cn("text-[10px] font-semibold", hasUnpaidOrders ? "text-amber-100" : "text-emerald-100")}>{totalOrders} order{totalOrders > 1 ? 's' : ''}</p>
+                                                        <p className="text-[11px] font-black text-white">{hasUnpaidOrders ? `Rs.${totalDue.toFixed(0)} due` : 'All Paid ✓'}</p>
                                                     </div>
                                                 )}
 
-                                                {hasActive && (
+                                                {hasAnyOrders && (
                                                     <div className="absolute inset-0 rounded-2xl ring-2 ring-white/30 group-hover:ring-white/50 transition-all pointer-events-none" />
                                                 )}
                                             </button>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { MobileHeader } from "@/components/layout/MobileHeader";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -33,6 +33,10 @@ export default function OrderStatus() {
   const [allOrders, setAllOrders] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [dateFilter, setDateFilter] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [activeTab, setActiveTab] = useState<MainTab>("mine");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
 
@@ -68,26 +72,63 @@ export default function OrderStatus() {
     return Array.isArray(res) ? res : (res.results || []);
   }, []);
 
+  const loadInvoices = useCallback(async (pageNumber: number = 1, isReset: boolean = false) => {
+    if (isReset) {
+      setLoading(true);
+      setPage(1);
+    } else {
+      setLoadingMore(true);
+    }
+    try {
+      const params: any = {
+        page: pageNumber,
+        page_size: 200,  // Load more orders to include old pending orders from today
+        date: dateFilter
+      };
+      const response = await fetchInvoices(params);
+      const data = response.results || response;
+      const nextUrl = response.next;
+
+      if (Array.isArray(data)) {
+        const validOrders = data.filter((inv: any) =>
+          inv.invoice_type === 'SALE' && !inv.is_deleted
+        );
+        // Sort by ID descending (newest first)
+        validOrders.sort((a: any, b: any) => b.id - a.id);
+
+        if (isReset) {
+          setAllOrders(validOrders);
+        } else {
+          setAllOrders(prev => [...prev, ...validOrders]);
+        }
+        setHasMore(!!nextUrl);
+        if (!isReset) setPage(pageNumber);
+      } else {
+        setAllOrders([]);
+        setHasMore(false);
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to load orders");
+      setAllOrders([]);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  }, [dateFilter]);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [invoiceList, notifs, prodData, catData, floorsData] = await Promise.all([
-        fetchAllInvoicePages({ date: format(new Date(), 'yyyy-MM-dd') }),
+      const [notifs, prodData, catData, floorsData] = await Promise.all([
         fetchNotifications(),
         fetchProducts(),
         fetchCategories(),
         fetchTables()
       ]);
-      const data = invoiceList;
 
-      const enrichedOrders = await Promise.all(
-        (data || []).map(async (inv: any) => {
-          try { return await fetchInvoiceDetail(inv.id); }
-          catch { return inv; }
-        })
-      );
+      // Load fresh invoice data using Counter's exact method
+      await loadInvoices(1, true);
 
-      setAllOrders(enrichedOrders);
       setNotifications((notifs.results || notifs || []).filter((n: any) => !n.is_read));
       setProducts(prodData.results || prodData || []);
       setCategories(catData.results || catData || []);
@@ -108,9 +149,46 @@ export default function OrderStatus() {
     } finally {
       setLoading(false);
     }
-  }, [fetchAllInvoicePages]);
+  }, [loadInvoices]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Ensure data is loaded on mount and when accessing component
+  useEffect(() => {
+    if (allOrders.length === 0) {
+      loadData();
+    }
+  }, [allOrders.length, loadData]);
+
+  // Refresh data when switching to table view to avoid stale cache
+  useEffect(() => {
+    if (viewMode === 'grid') {
+      // Force refresh when switching to table view to get latest occupancy
+      loadInvoices(1, true);
+      // Also ensure floors are loaded for table view
+      if (floors.length === 0) {
+        loadData(); // Load floors and other essential data
+      }
+    }
+  }, [viewMode, loadInvoices, loadData, floors.length]);
+
+  // Refresh data when window regains focus (user returns from other pages)
+  useEffect(() => {
+    const handleFocus = () => {
+      console.log('Window focus - refreshing waiter data');
+      loadInvoices(1, true);
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [loadInvoices]);
+
+  // Cleanup WebSocket timer - COPIED FROM COUNTER
+  useEffect(() => {
+    return () => {
+      if (wsRefreshTimerRef.current) clearTimeout(wsRefreshTimerRef.current);
+    };
+  }, []);
 
   // Restore saved floor selection
   useEffect(() => {
@@ -132,9 +210,13 @@ export default function OrderStatus() {
     })));
   }, [selectedFloor]);
 
-  // WebSocket live refresh
+  // WebSocket live refresh - COPIED FROM COUNTER LOGIC
+  const wsRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useOrdersWebSocket(
     useCallback((data) => {
+      if (wsRefreshTimerRef.current) clearTimeout(wsRefreshTimerRef.current);
+      wsRefreshTimerRef.current = setTimeout(() => loadInvoices(1, true), 500); // Use loadInvoices like Counter
+      
       if (data.type === "invoice_updated" && data.status === "READY") {
         fetchInvoiceDetail(data.invoice_id)
           .then((order) => {
@@ -161,10 +243,7 @@ export default function OrderStatus() {
               });
             }
           })
-          .catch(() => { })
-          .finally(() => loadData());
-      } else if (data.type === "invoice_created" || data.type === "invoice_updated") {
-        loadData();
+          .catch(() => { });
       }
     }, [loadData, currentUser?.id]),
     currentUser?.branch_id
@@ -200,33 +279,32 @@ export default function OrderStatus() {
 
   // Grid view: ALWAYS use ALL active orders regardless of mine/all tab, so
   // every waiter sees the true physical occupancy of every table on the floor.
-  // The My/All tab only filters the list view below.
-  // FIXED: Use EXACT same logic as Counter's tableOrdersMap
-  const allActiveOrders = allOrders; // Don't filter by invoice_status here
-  const tableOrderMap: Record<number, any[]> = {};
-  allActiveOrders.forEach(o => {
-    // Match by floor ID (preferred) or floor_name (fallback for list-API orders)
-    if (selectedFloor) {
-      const floorId = o.floor ?? o.floor_id;
-      const matchById = floorId != null && String(floorId) === String(selectedFloor.id);
-      const matchByName = !matchById && o.floor_name && o.floor_name === selectedFloor.name;
-      if (!matchById && !matchByName) return;
-    }
-    
-    // CRITICAL FIX: Apply Counter's exact payment filtering logic
-    // Only include active orders: not fully paid by counter
-    const isFullyPaid = o.payment_status === 'PAID' && o.received_by_counter;
-    if (isFullyPaid) return;
-    // Exclude PAID orders where due_amount is 0 (settled)
-    const isPaidNoDue = o.payment_status === 'PAID' && parseFloat(o.due_amount || 0) <= 0;
-    if (isPaidNoDue) return;
-    const tableMatch = (o?.description || o?.invoice_description || "").match(/Table (\d+)/);
-    const tableNo = o?.table_no ? Number(o.table_no) : (tableMatch ? parseInt(tableMatch[1]) : null);
-    if (tableNo) {
-      if (!tableOrderMap[tableNo]) tableOrderMap[tableNo] = [];
-      tableOrderMap[tableNo].push(o);
-    }
-  });
+  // Build a map: tableNo -> list of ALL orders for Table View (like Order History in Counter)
+  // Filtered by the selected floor so tables show correct status
+  const tableOrderMap: Record<number, any[]> = useMemo(() => {
+    const map: Record<number, any[]> = {};
+    console.log('🔍 WAITER: Building tableOrderMap with', allOrders.length, 'orders on floor', selectedFloor?.name);
+    allOrders.forEach(o => {
+      const tNo = o.table_no ? Number(o.table_no) : null;
+      if (!tNo) return;
+      // Filter by selected floor — match by ID (preferred) or floor_name (fallback)
+      if (selectedFloor) {
+        const floorId = o.floor ?? o.floor_id;
+        const matchById = floorId != null && String(floorId) === String(selectedFloor.id);
+        const matchByName = !matchById && o.floor_name && o.floor_name === selectedFloor.name;
+        if (!matchById && !matchByName) {
+          console.log('❌ Order', o.id, 'table', o.table_no, 'filtered out - floor mismatch:', { floorId, orderFloorName: o.floor_name, selectedFloor: selectedFloor.name });
+          return;
+        }
+      }
+      // Include ALL orders like Counter Order History does - no filtering by payment status
+      console.log('✅ Order', o.id, 'table', o.table_no, 'included - status:', o.payment_status, 'due:', o.due_amount);
+      if (!map[tNo]) map[tNo] = [];
+      map[tNo].push(o);
+    });
+    console.log('📊 Final tableOrderMap:', map);
+    return map;
+  }, [allOrders, selectedFloor]);
 
   const handleEditOrder = (order: any) => {
     const tableNo = order.table_no || "takeaway";
@@ -359,6 +437,14 @@ export default function OrderStatus() {
         ) : viewMode === "grid" ? (
 
           /* ══ GRID VIEW ══════════════════════════════════════════════════════════ */
+          
+          // Show loading if floors haven't been loaded yet or if orders are being refreshed
+          floors.length === 0 || (loading && allOrders.length === 0) ? (
+            <div className="flex flex-col items-center justify-center py-16">
+              <Loader2 className="h-10 w-10 text-primary animate-spin mb-3" />
+              <p className="text-gray-400 text-sm">Loading table data...</p>
+            </div>
+          ) : (
           <div className="px-3 space-y-3">
 
             {/* Floor selector */}
@@ -409,7 +495,13 @@ export default function OrderStatus() {
               <div className="grid grid-cols-3 gap-2">
                 {allTableDefs.map(table => {
                   const orders = tableOrderMap[table.number] || [];
-                  const hasOrder = orders.length > 0;
+                  const hasAnyOrders = orders.length > 0;
+                  
+                  // A table is OCCUPIED if it has any unpaid orders (matches Counter logic)
+                  const hasUnpaidOrders = hasAnyOrders && orders.some(
+                    (o: any) => o.payment_status !== 'PAID'
+                  );
+                  
                   const isReady = orders.some((o: any) => o.invoice_status === "READY");
                   const totalAmount = orders.reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
 
@@ -421,9 +513,9 @@ export default function OrderStatus() {
                         "relative flex flex-col items-center justify-center rounded-2xl border transition-all active:scale-[0.96] py-4 px-2 min-h-[96px]",
                         isReady
                           ? "bg-[#1D1D1F] border-[#1D1D1F] shadow-lg"
-                          : hasOrder
-                            ? "bg-[#FFF9C4] border-[#F0C000]"
-                            : "bg-white border-[#D1D1D6] hover:border-[#8E8E93]"
+                          : hasUnpaidOrders
+                            ? "bg-[#FFF9C4] border-[#F0C000]"  // Yellow for unpaid orders
+                            : "bg-white border-[#D1D1D6] hover:border-[#8E8E93]"  // White/Available
                       )}
                     >
                       {/* Ready pulse dot */}
@@ -438,12 +530,12 @@ export default function OrderStatus() {
 
                       <span className={cn(
                         "text-[9px] font-semibold uppercase tracking-widest",
-                        isReady ? "text-[#30D158]" : hasOrder ? "text-[#78570A]/70" : "text-[#C7C7CC]"
+                        isReady ? "text-[#30D158]" : hasUnpaidOrders ? "text-[#78570A]/70" : "text-[#C7C7CC]"
                       )}>
-                        {isReady ? "READY" : hasOrder ? "OCCUPIED" : "FREE"}
+                        {isReady ? "READY" : hasUnpaidOrders ? "OCCUPIED" : "FREE"}
                       </span>
 
-                      {hasOrder && (
+                      {hasAnyOrders && (
                         <span className={cn(
                           "mt-1.5 text-[11px] font-semibold tabular-nums",
                           isReady ? "text-white/70" : "text-[#78570A]/80"
@@ -472,6 +564,7 @@ export default function OrderStatus() {
               ))}
             </div>
           </div>
+          )
 
         ) : (
 

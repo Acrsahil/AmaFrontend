@@ -337,7 +337,7 @@ export default function CounterDashboard() {
                     </div>
 
                     {/* Main Charts Row */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                         {/* Category breakdown bar chart */}
                         <div className="bg-white rounded-[2rem] border-2 border-slate-100 p-8 shadow-sm">
                             <div className="mb-6 text-center">
@@ -385,50 +385,11 @@ export default function CounterDashboard() {
                             </div>
                         </div>
 
-                        {/* Payment Status distribution pie chart */}
-                        <div className="bg-white rounded-[2rem] border-2 border-slate-100 p-8 shadow-sm text-center">
-                            <h3 className="text-lg font-black uppercase tracking-tight mb-6 capitalize">{timeframe} Payment Status</h3>
-                            <div className="h-[320px] w-full">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <PieChart>
-                                        <Pie
-                                            data={(dashboardData?.sales_by_status || []).map((item: any) => ({
-                                                name: (item.payment_status || 'Other').toLowerCase(),
-                                                value: parseFloat(String(item.total_amount || 0)) || 0
-                                            }))}
-                                            dataKey="value"
-                                            innerRadius={50}
-                                            outerRadius={70}
-                                            paddingAngle={5}
-                                            stroke="none"
-                                        >
-                                            {(dashboardData?.sales_by_status || []).map((_: any, index: number) => (
-                                                <Cell key={`cell-status-${index}`} fill={PAYMENT_COLORS[index % PAYMENT_COLORS.length]} />
-                                            ))}
-                                        </Pie>
-                                        <Tooltip formatter={(value: any) => [`Rs.${Number(value).toLocaleString()}`, 'Total']} />
-                                        <Legend
-                                            layout="horizontal"
-                                            align="center"
-                                            verticalAlign="bottom"
-                                            iconType="circle"
-                                            wrapperStyle={{ paddingTop: '20px' }}
-                                            formatter={(value, entry: any) => (
-                                                <span className="text-[10px] font-black uppercase text-slate-500 ml-1">
-                                                    {value}: <span className="text-slate-900 font-black">Rs.{Number(entry.payload.value).toLocaleString()}</span>
-                                                </span>
-                                            )}
-                                        />
-                                    </PieChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </div>
-
                         {/* Payment Methods pie chart - ALL METHODS */}
                         <div className="bg-white rounded-[2rem] border-2 border-slate-100 p-8 shadow-sm text-center">
                             <h3 className="text-lg font-black uppercase tracking-tight mb-1 capitalize">Payment Method</h3>
                             <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mb-6">{timeframe} breakdown</p>
-                            <div className="h-[320px] w-full">
+                            <div className="h-[380px] w-full">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
                                         <Pie
@@ -454,10 +415,11 @@ export default function CounterDashboard() {
                                                 return methods;
                                             })()}
                                             dataKey="value"
-                                            innerRadius={50}
-                                            outerRadius={70}
+                                            innerRadius={70}
+                                            outerRadius={100}
                                             paddingAngle={5}
                                             stroke="none"
+                                            labelLine={false}
                                             label={({
                                                 cx,
                                                 cy,
@@ -476,9 +438,9 @@ export default function CounterDashboard() {
                                                         x={x}
                                                         y={y}
                                                         fill="white"
-                                                        textAnchor={x > cx ? 'start' : 'end'}
+                                                        textAnchor="middle"
                                                         dominantBaseline="central"
-                                                        style={{ fontSize: '11px', fontWeight: 'bold' }}
+                                                        style={{ fontSize: '12px', fontWeight: 'bold' }}
                                                     >
                                                         {`${(percent * 100).toFixed(0)}%`}
                                                     </text>

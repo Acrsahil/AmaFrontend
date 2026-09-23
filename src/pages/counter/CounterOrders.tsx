@@ -65,7 +65,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState<"ALL" | "PAID" | "UNPAID" | "PARTIAL" | "PENDING" | "WAITER RECEIVED">("ALL");
-    const [paymentMethodFilter, setPaymentMethodFilter] = useState<"ALL" | "CASH" | "CREDIT" | "QR" | "CARD">("ALL");
+    const [paymentMethodFilter, setPaymentMethodFilter] = useState<"ALL" | "CASH" | "CREDIT" | "QR">("ALL");
 
     // View Mode: list or table-grid, determined by prop
     const viewMode = initialViewMode;
@@ -84,7 +84,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
     const [selectedOrder, setSelectedOrder] = useState<any>(null);
     const [branchInfo, setBranchInfo] = useState<any>(null);
     const [paymentAmount, setPaymentAmount] = useState("");
-    const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CREDIT" | "QR" | "CARD">("CASH");
+    const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CREDIT" | "QR">("CASH");
     const [paymentNotes, setPaymentNotes] = useState("");
     const [isPaying, setIsPaying] = useState(false);
     const [productsMap, setProductsMap] = useState<Record<string, any>>({});
@@ -894,9 +894,6 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                 <DropdownMenuItem className="h-10 rounded-lg text-blue-600" onClick={() => setPaymentMethodFilter("QR")}>
                                     QR
                                 </DropdownMenuItem>
-                                <DropdownMenuItem className="h-10 rounded-lg text-amber-600" onClick={() => setPaymentMethodFilter("CARD")}>
-                                    Card
-                                </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </>
@@ -949,6 +946,8 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                             if (isPaidWithCredit) return false;
                                             return true;
                                         });
+                                        // Count unique occupied tables for this floor
+                                        const occupiedTableNos = new Set(floorActiveOrders.map(o => o.table_no).filter(Boolean));
                                         const occupiedCount = occupiedTableNos.size;
                                         return (
                                             <button
@@ -1757,12 +1756,11 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
 
                                             <div className="space-y-2">
                                                 <Label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Payment Method</Label>
-                                                <div className="grid grid-cols-2 gap-2">
+                                                <div className="grid grid-cols-3 gap-2">
                                                     {[
                                                         { id: 'CASH', icon: Banknote, label: 'Cash' },
                                                         { id: 'CREDIT', icon: Wallet, label: 'Credit' },
-                                                        { id: 'QR', icon: QrCode, label: 'QR' },
-                                                        { id: 'CARD', icon: CreditCard, label: 'Card' }
+                                                        { id: 'QR', icon: QrCode, label: 'QR' }
                                                     ].map((method) => (
                                                         <button
                                                             key={method.id}

@@ -50,10 +50,8 @@ export default function TableSelection() {
         allInvoices = [];
       }
 
-      // IMPORTANT: Don't filter here like Counter does - Counter filters later in tableOrdersMap
-      // We need ALL invoices first, then filter when building table occupancy
-      
-      // Only basic filtering for validity (same as Counter's loadInvoices)
+      // PERFORMANCE FIX: Only basic filtering for validity (same as Counter's loadInvoices)
+      // Don't fetch detailed invoices - use list data directly
       const validInvoices = allInvoices.filter((inv: any) => 
         inv.invoice_type === 'SALE' && !inv.is_deleted
       );
@@ -78,11 +76,11 @@ export default function TableSelection() {
     user?.branch_id
   );
 
-  // Auto-refresh every 30 seconds as backup
+  // Auto-refresh every 60 seconds as backup (reduced from 30s for better performance)
   useEffect(() => {
     const interval = setInterval(() => {
       loadOrders();
-    }, 30000);
+    }, 60000); // Increased to 60 seconds
     
     return () => clearInterval(interval);
   }, [loadOrders]);

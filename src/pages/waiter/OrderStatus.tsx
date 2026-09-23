@@ -178,13 +178,13 @@ export default function OrderStatus() {
     return activeTab === "mine" ? isMine : true;
   });
 
+  // List view: tab-filtered orders (mine vs all)
   const activeOrders = displayOrders.filter(
     o => o?.invoice_status !== "COMPLETED" && o?.invoice_status !== "CANCELLED"
   );
   const doneOrders = displayOrders.filter(
     o => o?.invoice_status === "COMPLETED" || o?.invoice_status === "CANCELLED"
   );
-
   const readyOrders = activeOrders.filter(o => o?.invoice_status === "READY");
 
   const filteredNotifs = notifications.reduce((acc: any[], cur: any) => {
@@ -198,11 +198,14 @@ export default function OrderStatus() {
     return acc;
   }, []);
 
-  // Build per-table order map (table_no → order[]) for the current floor.
-  // Uses tab-filtered activeOrders so "My Orders" only shows MY tables as
-  // occupied, and "All Orders" shows everyone's tables as occupied.
+  // Grid view: ALWAYS use ALL active orders regardless of mine/all tab, so
+  // every waiter sees the true physical occupancy of every table on the floor.
+  // The My/All tab only filters the list view below.
+  const allActiveOrders = allOrders.filter(
+    o => o?.invoice_status !== "COMPLETED" && o?.invoice_status !== "CANCELLED"
+  );
   const tableOrderMap: Record<number, any[]> = {};
-  activeOrders.forEach(o => {
+  allActiveOrders.forEach(o => {
     // Match by floor ID (preferred) or floor_name (fallback for list-API orders)
     if (selectedFloor) {
       const floorId = o.floor ?? o.floor_id;
@@ -213,9 +216,7 @@ export default function OrderStatus() {
     const tableMatch = (o?.description || o?.invoice_description || "").match(/Table (\d+)/);
     const tableNo = o?.table_no ? Number(o.table_no) : (tableMatch ? parseInt(tableMatch[1]) : null);
     if (tableNo) {
-      if (!tableOrderMap[tableNo]) {
-        tableOrderMap[tableNo] = [];
-      }
+      if (!tableOrderMap[tableNo]) tableOrderMap[tableNo] = [];
       tableOrderMap[tableNo].push(o);
     }
   });

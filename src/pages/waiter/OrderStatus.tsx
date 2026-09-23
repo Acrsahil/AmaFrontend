@@ -82,7 +82,7 @@ export default function OrderStatus() {
     try {
       const params: any = {
         page: pageNumber,
-        page_size: 200,  // Load more orders to include old pending orders from today
+        page_size: 1000,  // Large page size to get all today's orders
         date: dateFilter
       };
       const response = await fetchInvoices(params);
@@ -98,8 +98,24 @@ export default function OrderStatus() {
 
         if (isReset) {
           setAllOrders(validOrders);
+          // If there's more data on next page, auto-load it for table view accuracy
+          if (nextUrl && viewMode === 'grid') {
+            console.log('🔄 WAITER: Auto-loading more pages for table view...');
+            loadInvoices(pageNumber + 1, false);
+          }
         } else {
-          setAllOrders(prev => [...prev, ...validOrders]);
+          // DEDUPLICATE: Merge new orders with existing, remove duplicates by ID
+          setAllOrders(prev => {
+            const combined = [...prev, ...validOrders];
+            const uniqueMap = new Map();
+            combined.forEach(order => uniqueMap.set(order.id, order));
+            return Array.from(uniqueMap.values()).sort((a: any, b: any) => b.id - a.id);
+          });
+          // Continue auto-loading if in table view and more pages exist
+          if (nextUrl && viewMode === 'grid') {
+            console.log('🔄 WAITER: Auto-loading next page for table view...');
+            loadInvoices(pageNumber + 1, false);
+          }
         }
         setHasMore(!!nextUrl);
         if (!isReset) setPage(pageNumber);
@@ -114,7 +130,7 @@ export default function OrderStatus() {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [dateFilter]);
+  }, [dateFilter, viewMode]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -561,6 +577,16 @@ export default function OrderStatus() {
                       return true;
                     })
                     .reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
+                  
+                  // Count only UNPAID orders for display
+                  const unpaidOrderCount = orders.filter((o: any) => {
+                    if (o.payment_status === 'PAID') return false;
+                    const paymentMethods = o.payment_methods_list || o.payment_methods || [];
+                    const isPaidWithCredit = paymentMethods.includes('CREDIT') || paymentMethods.includes('ONLINE');
+                    const hasDueAmount = parseFloat(o.due_amount || 0) > 0;
+                    if (isPaidWithCredit && !hasDueAmount) return false;
+                    return true;
+                  }).length;
 
                   return (
                     <button
@@ -598,7 +624,7 @@ export default function OrderStatus() {
                           isReady ? "text-white/70" : "text-[#78570A]/80"
                         )}>
                           Rs.{totalAmount.toFixed(0)}
-                          {orders.length > 1 && <span className="ml-1 px-1 bg-black/10 rounded font-bold">({orders.length})</span>}
+                          {unpaidOrderCount > 1 && <span className="ml-1 px-1 bg-black/10 rounded font-bold">({unpaidOrderCount})</span>}
                         </span>
                       )}
                     </button>

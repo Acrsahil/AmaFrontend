@@ -316,7 +316,21 @@ export default function OrderStatus() {
     console.log('🔍 Table', tableNum, 'tapped - all orders:', orders);
     if (orders && orders.length > 0) {
       // Filter to only show UNPAID orders in the modal (waiter can only act on these)
-      const unpaidOrders = orders.filter((o: any) => o.payment_status !== 'PAID');
+      // Exclude PAID orders and CREDIT-paid orders (no due amount)
+      const unpaidOrders = orders.filter((o: any) => {
+        // Exclude fully paid
+        if (o.payment_status === 'PAID') return false;
+        
+        // Exclude CREDIT/ONLINE paid with no due amount
+        const paymentMethods = o.payment_methods_list || o.payment_methods || [];
+        const isPaidWithCredit = paymentMethods.includes('CREDIT') || paymentMethods.includes('ONLINE');
+        const hasDueAmount = parseFloat(o.due_amount || 0) > 0;
+        
+        if (isPaidWithCredit && !hasDueAmount) return false;
+        
+        // Include all other unpaid orders
+        return true;
+      });
       console.log('💰 Unpaid orders for table', tableNum, ':', unpaidOrders);
       
       if (unpaidOrders.length === 0) {
@@ -518,15 +532,34 @@ export default function OrderStatus() {
                   const hasAnyOrders = orders.length > 0;
                   
                   // A table is OCCUPIED if it has any unpaid orders (matches Counter logic)
-                  const hasUnpaidOrders = hasAnyOrders && orders.some(
-                    (o: any) => o.payment_status !== 'PAID'
-                  );
+                  // Treat CREDIT payments as paid (no due amount)
+                  const hasUnpaidOrders = hasAnyOrders && orders.some((o: any) => {
+                    // If paid in full, not occupied
+                    if (o.payment_status === 'PAID') return false;
+                    
+                    // If paid with CREDIT and no due amount, consider as paid
+                    const paymentMethods = o.payment_methods_list || o.payment_methods || [];
+                    const isPaidWithCredit = paymentMethods.includes('CREDIT') || paymentMethods.includes('ONLINE');
+                    const hasDueAmount = parseFloat(o.due_amount || 0) > 0;
+                    
+                    if (isPaidWithCredit && !hasDueAmount) return false;
+                    
+                    // Otherwise, it's unpaid
+                    return true;
+                  });
                   
                   const isReady = orders.some((o: any) => o.invoice_status === "READY");
                   
-                  // Only sum amounts from UNPAID orders
+                  // Only sum amounts from UNPAID orders (excluding CREDIT with no due)
                   const totalAmount = orders
-                    .filter((o: any) => o.payment_status !== 'PAID')
+                    .filter((o: any) => {
+                      if (o.payment_status === 'PAID') return false;
+                      const paymentMethods = o.payment_methods_list || o.payment_methods || [];
+                      const isPaidWithCredit = paymentMethods.includes('CREDIT') || paymentMethods.includes('ONLINE');
+                      const hasDueAmount = parseFloat(o.due_amount || 0) > 0;
+                      if (isPaidWithCredit && !hasDueAmount) return false;
+                      return true;
+                    })
                     .reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
 
                   return (

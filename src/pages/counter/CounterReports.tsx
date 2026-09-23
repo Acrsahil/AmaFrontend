@@ -222,7 +222,7 @@ export default function CounterReports() {
                       "text-[11px] font-black px-2.5 py-1 rounded uppercase tracking-tight",
                       pm.payment_method === "CASH" ? "bg-green-100 text-green-700" :
                       pm.payment_method === "QR" ? "bg-blue-100 text-blue-700" :
-                      pm.payment_method === "ONLINE" ? "bg-purple-100 text-purple-700" :
+                      pm.payment_method === "CREDIT" ? "bg-purple-100 text-purple-700" :
                       pm.payment_method === "CARD" ? "bg-amber-100 text-amber-700" :
                       "bg-slate-100 text-slate-700"
                     )}>

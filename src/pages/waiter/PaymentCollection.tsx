@@ -47,16 +47,16 @@ export default function PaymentCollection() {
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showCashDialog, setShowCashDialog] = useState(false);
   const [cashReceived, setCashReceived] = useState("");
-  const [onlineReceived, setOnlineReceived] = useState("");
+  const [creditReceived, setCreditReceived] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
   const [receiptData, setReceiptData] = useState<any>(null);
   const [branchInfo, setBranchInfo] = useState<any>(null);
-  const [showOnlineDialog, setShowOnlineDialog] = useState(false);
+  const [showCreditDialog, setShowCreditDialog] = useState(false);
   const [completedOrder, setCompletedOrder] = useState<any | null>(null);
   const [completedChange, setCompletedChange] = useState<number>(0);
   const [showAlreadyPaidDialog, setShowAlreadyPaidDialog] = useState(false);
-  const [activeNonCashMethod, setActiveNonCashMethod] = useState<'QR' | 'CARD' | 'ONLINE'>('QR');
+  const [activeNonCashMethod, setActiveNonCashMethod] = useState<'QR' | 'CARD' | 'CREDIT'>('QR');
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<'pending' | 'collected'>('pending');
   const [waiterCashInHand, setWaiterCashInHand] = useState<number | null>(null);
@@ -243,7 +243,7 @@ export default function PaymentCollection() {
     }
   };
 
-  const handlePaymentMethod = (method: 'CASH' | 'CARD' | 'ONLINE' | 'QR') => {
+  const handlePaymentMethod = (method: 'CASH' | 'CARD' | 'CREDIT' | 'QR') => {
     if (method === 'CASH') {
       setShowPaymentDialog(false);
       setShowCashDialog(true);
@@ -251,8 +251,8 @@ export default function PaymentCollection() {
     } else {
       setActiveNonCashMethod(method);
       setShowPaymentDialog(false);
-      setShowOnlineDialog(true);
-      setOnlineReceived(String(selectedOrder.due_amount || selectedOrder.total_amount || 0));
+      setShowCreditDialog(true);
+      setCreditReceived(String(selectedOrder.due_amount || selectedOrder.total_amount || 0));
     }
   };
 
@@ -283,7 +283,7 @@ export default function PaymentCollection() {
 
       setShowPaymentDialog(false);
       setShowCashDialog(false);
-      setShowOnlineDialog(false);
+      setShowCreditDialog(false);
 
       setSelectedOrder(null);
       setCashReceived("");
@@ -959,12 +959,12 @@ export default function PaymentCollection() {
               <Button
                 variant="outline"
                 className="h-24 flex-col gap-2 rounded-2xl border-2 hover:border-orange-500 hover:bg-orange-500/5 hover:text-orange-500 transition-all group"
-                onClick={() => handlePaymentMethod('ONLINE')}
+                onClick={() => handlePaymentMethod('CREDIT')}
               >
                 <div className="h-10 w-10 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-orange-500/20">
                   <Wallet className="h-6 w-6 text-slate-400 group-hover:text-orange-500" />
                 </div>
-                <span className="font-bold">Online</span>
+                <span className="font-bold">Credit</span>
               </Button>
             </div>
           </div>
@@ -1099,24 +1099,24 @@ export default function PaymentCollection() {
         </DialogContent>
       </Dialog >
 
-      {/* Online Payment (QR) Dialog */}
-      < Dialog open={showOnlineDialog} onOpenChange={setShowOnlineDialog} >
+      {/* Credit Payment (QR/Card/Credit) Dialog */}
+      < Dialog open={showCreditDialog} onOpenChange={setShowCreditDialog} >
         <DialogContent className="max-w-[calc(100%-2.5rem)] w-[320px] rounded-2xl p-0 overflow-hidden border-none shadow-2xl">
           <div className="bg-primary p-4 text-white text-center">
             <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-2 border border-white/30">
               {activeNonCashMethod === 'QR' && <QrCode className="h-6 w-6 text-white" />}
               {activeNonCashMethod === 'CARD' && <CreditCard className="h-6 w-6 text-white" />}
-              {activeNonCashMethod === 'ONLINE' && <Wallet className="h-6 w-6 text-white" />}
+              {activeNonCashMethod === 'CREDIT' && <Wallet className="h-6 w-6 text-white" />}
             </div>
             <h3 className="text-lg font-bold leading-tight">
               {activeNonCashMethod === 'QR' && "QR Payment"}
               {activeNonCashMethod === 'CARD' && "Card Payment"}
-              {activeNonCashMethod === 'ONLINE' && "Online Payment"}
+              {activeNonCashMethod === 'CREDIT' && "Credit Payment"}
             </h3>
             <p className="text-white/80 text-[10px] italic">
               {activeNonCashMethod === 'QR' && "Scan QR to pay"}
               {activeNonCashMethod === 'CARD' && "Insert/Swipe card to pay"}
-              {activeNonCashMethod === 'ONLINE' && "Process online wallet payment"} • Table {selectedOrder?.table_no}
+              {activeNonCashMethod === 'CREDIT' && "Process credit payment"} • Table {selectedOrder?.table_no}
               {selectedOrder?.floor_name && ` • ${selectedOrder.floor_name}`}
             </p>
           </div>
@@ -1133,8 +1133,8 @@ export default function PaymentCollection() {
                 <div className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-300 text-xl">Rs.</div>
                 <Input
                   type="number"
-                  value={onlineReceived}
-                  onChange={(e) => setOnlineReceived(e.target.value)}
+                  value={creditReceived}
+                  onChange={(e) => setCreditReceived(e.target.value)}
                   className="text-center text-3xl h-14 font-black border-2 border-slate-100 focus:border-primary pl-10 rounded-xl bg-slate-50"
                   autoFocus
                 />
@@ -1174,13 +1174,13 @@ export default function PaymentCollection() {
               </div>
             )}
 
-            {activeNonCashMethod === 'ONLINE' && (
+            {activeNonCashMethod === 'CREDIT' && (
               <div className="relative p-3 bg-white rounded-[1.5rem] border-4 border-slate-50 shadow-inner group">
                 <div className="h-48 w-48 bg-slate-100 rounded-xl flex items-center justify-center overflow-hidden border border-slate-200">
                   <div className="flex flex-col items-center justify-center h-full p-4 text-center">
                     <Wallet className="h-10 w-10 text-primary mb-2 animate-pulse" />
-                    <p className="text-xs font-bold text-slate-700">Digital Wallet</p>
-                    <p className="text-[10px] text-slate-400">Process payment online</p>
+                    <p className="text-xs font-bold text-slate-700">Credit Payment</p>
+                    <p className="text-[10px] text-slate-400">Pay on credit/account</p>
                   </div>
                 </div>
               </div>
@@ -1202,7 +1202,7 @@ export default function PaymentCollection() {
               <p className="text-xs font-semibold text-slate-500">
                 {activeNonCashMethod === 'QR' && "Please ask the customer to scan and pay the exact amount above"}
                 {activeNonCashMethod === 'CARD' && "Please process the card payment for the exact amount above"}
-                {activeNonCashMethod === 'ONLINE' && "Please complete the online wallet payment for the exact amount above"}
+                {activeNonCashMethod === 'CREDIT' && "Please complete the credit payment for the exact amount above"}
               </p>
             </div>
 
@@ -1210,7 +1210,7 @@ export default function PaymentCollection() {
               <Button
                 className="w-full h-12 bg-primary hover:bg-primary/90 text-white font-black rounded-xl shadow-xl shadow-primary/20"
                 onClick={() => {
-                  const amt = parseFloat(onlineReceived);
+                  const amt = parseFloat(creditReceived);
                   const due = parseFloat(selectedOrder?.due_amount || selectedOrder?.total_amount || 0);
                   if (isNaN(amt) || amt <= 0) return toast.error("Enter a valid amount");
                   processPayment(activeNonCashMethod, Math.min(amt, due));
@@ -1229,7 +1229,7 @@ export default function PaymentCollection() {
               <Button
                 variant="ghost"
                 className="w-full h-10 text-slate-400 font-bold"
-                onClick={() => setShowOnlineDialog(false)}
+                onClick={() => setShowCreditDialog(false)}
                 disabled={isProcessing}
               >
                 Go Back

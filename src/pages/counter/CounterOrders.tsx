@@ -33,6 +33,7 @@ import {
     UtensilsCrossed,
     CircleDot,
     ChevronRight,
+    ChevronDown,
     ArrowRight
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
@@ -396,6 +397,27 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
         };
     }, []);
 
+    // Close on-screen keyboard when clicking/tapping anywhere outside of it.
+    // Because there's no blocking backdrop overlay, the click also reaches the
+    // target element (e.g. an order row) — so one click both selects the row
+    // AND dismisses the keyboard.
+    useEffect(() => {
+        if (!showKeypad) return;
+        const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
+            const target = e.target as HTMLElement;
+            if (target?.closest('.global-keyboard')) return; // click inside keyboard
+            if (target?.closest('.keyboard-input')) return;   // click on a keyboard-controlled input
+            setShowKeypad(false);
+            setActiveKeypadField(null);
+        };
+        document.addEventListener('mousedown', handleOutsideClick);
+        document.addEventListener('touchstart', handleOutsideClick);
+        return () => {
+            document.removeEventListener('mousedown', handleOutsideClick);
+            document.removeEventListener('touchstart', handleOutsideClick);
+        };
+    }, [showKeypad]);
+
     const handlePayOpen = async (order: any) => {
         setSelectedOrder(order);
         setPaymentAmount(order.due_amount || (order.total_amount - (order.paid_amount || 0)));
@@ -754,7 +776,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                             <Input
                                 placeholder="Search ID, Table, Customer or Mode..."
-                                className="pl-10 h-10 rounded-lg border-slate-200 bg-white shadow-sm focus-visible:ring-1"
+                                className="pl-10 h-10 rounded-lg border-slate-200 bg-white shadow-sm focus-visible:ring-1 keyboard-input"
                                 value={searchQuery}
                                 onFocus={() => {
                                     setActiveKeypadField('search');
@@ -1278,257 +1300,72 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                 <DialogContent
                     onInteractOutside={(e) => {
                         const target = e.target as HTMLElement;
-                        if (target?.closest('.global-keyboard') || target?.closest('.keyboard-backdrop')) {
+                        if (target?.closest('.global-keyboard')) {
                             e.preventDefault();
                         }
                     }}
-                    className="max-w-[540px] p-0 overflow-hidden border border-slate-200 shadow-xl rounded-2xl z-[50]"
+                    className={cn(
+                        "max-w-[95vw] md:max-w-[750px] p-0 overflow-hidden border-none shadow-3xl rounded-2xl md:rounded-[2.5rem] z-[50] transition-all duration-300",
+                        showKeypad && "!top-[35%] md:!top-[40%]"
+                    )}
                 >
-                    <div className="bg-white">
-                        <div className="px-6 pt-6 pb-4">
-                            <DialogHeader>
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <div className="flex items-center gap-2">
-                                            <DialogTitle className="text-xl font-semibold text-slate-900">Order Details</DialogTitle>
-                                            {(() => {
-                                                const tableMatch = (selectedOrder?.description || selectedOrder?.invoice_description || "").match(/Table (\d+)/);
-                                                const tableNo = selectedOrder?.table_no || (tableMatch ? tableMatch[1] : null);
-                                                return (
-                                                    <div className="flex items-center gap-2">
-                                                        {tableNo ? (
-                                                            <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 font-medium">
-                                                                Table {tableNo}
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 font-bold uppercase border border-amber-200">
-                                                                Takeaway
-                                                            </span>
-                                                        )}
-                                                        {selectedOrder?.floor_name && (
-                                                            <span className="text-[10px] px-2 py-0.5 rounded-md bg-primary/10 text-primary font-bold uppercase border border-primary/20">
-                                                                {selectedOrder.floor_name}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })()}
-                                        </div>
-                                        <p className="text-sm text-slate-400 mt-0.5">#{selectedOrder?.invoice_number} · {selectedOrder?.customer_name || 'Walk-in'}</p>
-                                    </div>
-                                    <div className="text-right">
-                                        <p className="text-xs text-slate-400 font-medium">Total</p>
-                                        <p className="text-xl font-semibold text-slate-900">Rs.{selectedOrder?.total_amount}</p>
-                                    </div>
-                                </div>
-                            </DialogHeader>
-                        </div>
-
-                        {/* Tabs */}
-                        <div className="px-6 flex gap-1 border-b border-slate-100">
-                            <button
-                                onClick={() => setActiveTab("payment")}
-                                className={cn(
-                                    "flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 transition-colors",
-                                    activeTab === "payment" ? "border-slate-900 text-slate-900" : "border-transparent text-slate-400 hover:text-slate-600"
-                                )}
-                            >
-                                <Banknote className="h-4 w-4" />
-                                Payment
-                            </button>
-                            <button
-                                onClick={() => setActiveTab("items")}
-                                className={cn(
-                                    "flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 transition-colors",
-                                    activeTab === "items" ? "border-slate-900 text-slate-900" : "border-transparent text-slate-400 hover:text-slate-600"
-                                )}
-                            >
-                                <FileText className="h-4 w-4" />
-                                Items
-                            </button>
-                        </div>
-
-                        <div className="p-6 max-h-[60vh] overflow-y-auto">
-                            {activeTab === "payment" ? (
-                                <div className="space-y-5">
-                                    {/* Paid / Due */}
-                                    <div className="grid grid-cols-2 gap-4 p-5 rounded-xl bg-slate-50">
-                                        <div>
-                                            <p className="text-xs text-slate-400 font-medium mb-1">Paid</p>
-                                            <p className="text-lg font-semibold text-emerald-600">Rs.{selectedOrder?.paid_amount || 0}</p>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="text-xs text-slate-400 font-medium mb-1">Due</p>
-                                            <p className="text-lg font-semibold text-slate-900">Rs.{selectedOrder?.due_amount || (selectedOrder ? (selectedOrder.total_amount - (selectedOrder.paid_amount || 0)) : 0)}</p>
-                                        </div>
-                                    </div>
-
-                                    {/* Receipt Log */}
-                                    {isFetchingDetail ? (
-                                        <div className="flex justify-center py-6">
-                                            <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                                        </div>
-                                    ) : (selectedOrder?.received_by_waiter_name || selectedOrder?.received_by_counter_name) && (
-                                        <div className="p-4 rounded-xl bg-slate-50 space-y-2">
-                                            <p className="text-xs text-slate-400 font-medium">Receipt Log</p>
-                                            <div className="flex justify-between text-sm">
-                                                {selectedOrder?.received_by_waiter_name && (
-                                                    <div>
-                                                        <span className="text-slate-400 text-xs">Waiter: </span>
-                                                        <span className="font-medium text-slate-700">{selectedOrder.received_by_waiter_name}</span>
-                                                    </div>
-                                                )}
-                                                {selectedOrder?.received_by_counter_name && (
-                                                    <div className="text-right">
-                                                        <span className="text-slate-400 text-xs">Counter: </span>
-                                                        <span className="font-medium text-slate-700">{selectedOrder.received_by_counter_name}</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Payment Details Section */}
-                                    {selectedOrder?.payment_details && selectedOrder.payment_details.length > 0 && (
-                                        <div className="p-4 rounded-xl bg-slate-50 space-y-2">
-                                            <p className="text-xs text-slate-400 font-medium">Payment Breakdown</p>
-                                            <div className="space-y-1.5">
-                                                {selectedOrder.payment_details.map((payment: any, idx: number) => (
-                                                    <div key={payment.id || idx} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-slate-100">
-                                                        <div className="flex items-center gap-2">
-                                                            <span className={cn(
-                                                                "text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider",
-                                                                payment.payment_method === "CASH" ? "bg-green-100 text-green-700" :
-                                                                    payment.payment_method === "QR" ? "bg-blue-100 text-blue-700" :
-                                                                        payment.payment_method === "ONLINE" ? "bg-purple-100 text-purple-700" :
-                                                                            payment.payment_method === "CARD" ? "bg-amber-100 text-amber-700" :
-                                                                                "bg-slate-100 text-slate-700"
-                                                            )}>
-                                                                {payment.payment_method}
-                                                            </span>
-                                                            <span className="text-xs text-slate-500">{payment.received_by_name || ''}</span>
-                                                        </div>
-                                                        <span className="font-bold text-sm">Rs.{parseFloat(payment.amount).toFixed(2)}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {(selectedOrder?.payment_status !== 'PAID' && parseFloat(selectedOrder?.due_amount || "0") > 0) ? (() => {
-                                        const currentDue = parseFloat(selectedOrder?.due_amount || (selectedOrder ? (selectedOrder.total_amount - (selectedOrder.paid_amount || 0)) : 0));
-                                        const changeAmount = Math.max(0, parseFloat(paymentAmount || "0") - currentDue);
-
-                                        return (
-                                            <div className="space-y-6 animate-in fade-in slide-in-from-top-4">
-                                                <div className="space-y-2">
-                                                    <Label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Amount to Pay</Label>
-                                                    <div className="relative">
-                                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-black text-slate-300">Rs.</span>
-                                                        <Input
-                                                            type="number"
-                                                            max="1000000"
-                                                            className="h-16 text-3xl font-black text-center border-2 border-primary/20 focus:border-primary rounded-2xl pl-10"
-                                                            value={paymentAmount}
-                                                            onFocus={() => {
-                                                                setActiveKeypadField('payment');
-                                                                setShowKeypad(true);
-                                                            }}
-                                                            onChange={(e) => {
-                                                                const val = parseFloat(e.target.value);
-                                                                if (val > 1000000) return;
-                                                                setPaymentAmount(e.target.value);
-                                                            }}
-                                                        />
-                                                        {changeAmount > 0 && (
-                                                            <div className="absolute -bottom-5 right-2 text-emerald-600 font-black text-[15px] animate-in slide-in-from-top-1 fade-in">
-                                                                Return: Rs.{changeAmount.toLocaleString()}
-                                                            </div>
-                                                        )}
-                                                    </div>
+                    <DialogTitle className="sr-only">Order Details</DialogTitle>
+                    <div className={cn("flex flex-col md:flex-row h-auto md:h-[650px] transition-all", showKeypad ? "max-h-[60vh] md:max-h-[70vh]" : "max-h-[90vh]")}>
+                        {/* Left Side: Order Info & Items */}
+                        <div className={cn("flex-1 p-5 md:p-7 space-y-4 overflow-y-auto custom-scrollbar", showKeypad && "pb-40 md:pb-8")}>
+                            {/* Header - compact */}
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <h2 className="text-2xl font-black text-slate-800 leading-none">Order Details</h2>
+                                        {(() => {
+                                            const tableMatch = (selectedOrder?.description || selectedOrder?.invoice_description || "").match(/Table (\d+)/);
+                                            const tableNo = selectedOrder?.table_no || (tableMatch ? tableMatch[1] : null);
+                                            return (
+                                                <div className="flex items-center gap-2">
+                                                    {tableNo ? (
+                                                        <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 font-medium">
+                                                            Table {tableNo}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 font-bold uppercase border border-amber-200">
+                                                            Takeaway
+                                                        </span>
+                                                    )}
+                                                    {selectedOrder?.floor_name && (
+                                                        <span className="text-[10px] px-2 py-0.5 rounded-md bg-primary/10 text-primary font-bold uppercase border border-primary/20">
+                                                            {selectedOrder.floor_name}
+                                                        </span>
+                                                    )}
                                                 </div>
-
-                                                <div className="space-y-2">
-                                                    <Label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Payment Method</Label>
-                                                    <div className="grid grid-cols-4 gap-2">
-                                                        {[
-                                                            { id: 'CASH', icon: Banknote, label: 'Cash' },
-                                                            { id: 'QR', icon: QrCode, label: 'QR' },
-                                                            { id: 'ONLINE', icon: Wallet, label: 'Online' },
-                                                            { id: 'CARD', icon: CreditCard, label: 'Card' }
-                                                        ].map((method) => (
-                                                            <button
-                                                                key={method.id}
-                                                                onClick={() => setPaymentMethod(method.id as any)}
-                                                                className={cn(
-                                                                    "flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all gap-1",
-                                                                    paymentMethod === method.id ? "border-primary bg-primary/5 text-primary shadow-sm" : "border-slate-100 text-slate-400 hover:border-slate-200"
-                                                                )}
-                                                            >
-                                                                <method.icon className="h-6 w-6" />
-                                                                <span className="text-[10px] font-black uppercase tracking-tighter">{method.label}</span>
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </div>
-
-                                                {/* QR Code Display */}
-                                                {paymentMethod === 'QR' && (
-                                                    <div className="flex flex-col items-center gap-2 pt-2">
-                                                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Scan QR Code</Label>
-                                                        <div className="bg-white p-2 rounded-2xl shadow-md border border-slate-100 w-32 h-32 flex items-center justify-center overflow-hidden mx-auto">
-                                                            {branchInfo?.image_url ? (
-                                                                <img
-                                                                    src={branchInfo.image_url}
-                                                                    alt="QR Code"
-                                                                    className="h-full w-full object-cover"
-                                                                    onError={(e) => {
-                                                                        const target = e.target as HTMLImageElement;
-                                                                        target.src = "/qr.png";
-                                                                    }}
-                                                                />
-                                                            ) : (
-                                                                <img
-                                                                    src="/qr.png"
-                                                                    alt="QR Code"
-                                                                    className="h-full w-full object-cover"
-                                                                    onError={(e) => {
-                                                                        const target = e.target as HTMLImageElement;
-                                                                        target.src = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=AMABAKERY_PAYMENT";
-                                                                    }}
-                                                                />
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                <Button
-                                                    className="w-full h-16 rounded-[1.5rem] font-black text-xl gradient-warm shadow-xl shadow-primary/20"
-                                                    onClick={handlePaymentSubmit}
-                                                    disabled={isPaying}
-                                                >
-                                                    {isPaying ? <Loader2 className="h-6 w-6 animate-spin" /> :
-                                                        (selectedOrder?.payment_status === 'WAITER RECEIVED' ? "Confirm & Finalize" : "Receive Payment")}
-                                                </Button>
-                                            </div>
-                                        );
-                                    })() : (
-                                        <div className="py-4 text-center space-y-3 bg-emerald-50 rounded-[1.5rem] border border-emerald-100 animate-in zoom-in-95">
-                                            <div className="h-10 w-10 bg-white rounded-full flex items-center justify-center mx-auto shadow-sm">
-                                                <CheckCircle2 className="h-6 w-6 text-emerald-500" />
-                                            </div>
-                                            <div className="px-4">
-                                                <p className="text-lg font-black text-emerald-800 leading-tight">Fully Paid</p>
-                                                <p className="text-xs text-emerald-600 font-medium">This order is fully paid by the customer.</p>
-
-                                                {/* Waiter confirmation UI removed */}
-                                            </div>
-                                        </div>
-                                    )}
+                                            );
+                                        })()}
+                                    </div>
+                                    <p className="text-xs text-slate-400 font-medium mt-0.5">#{selectedOrder?.invoice_number} · {selectedOrder?.customer_name || 'Walk-in'}</p>
                                 </div>
-                            ) : (
-                                <div className="space-y-4 animate-in fade-in slide-in-from-top-4">
-                                    <div className="space-y-3">
+                            </div>
+
+                            {/* Items Collapsible Section */}
+                            <div className="border rounded-2xl border-slate-200 overflow-hidden">
+                                <button
+                                    onClick={() => setActiveTab(activeTab === "items" ? "payment" : "items")}
+                                    className="w-full flex items-center justify-between p-4 bg-slate-50 hover:bg-slate-100 transition-colors"
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <FileText className="h-4 w-4 text-slate-600" />
+                                        <span className="font-bold text-slate-800">Order Items</span>
+                                        <span className="text-xs text-slate-400 font-medium">
+                                            ({selectedOrder?.items?.length || 0} items)
+                                        </span>
+                                    </div>
+                                    <ChevronDown className={cn(
+                                        "h-4 w-4 text-slate-400 transition-transform duration-200",
+                                        activeTab === "items" && "rotate-180"
+                                    )} />
+                                </button>
+                                
+                                {activeTab === "items" && (
+                                    <div className="p-4 space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar bg-white animate-in fade-in slide-in-from-top-2">
                                         {isFetchingDetail ? (
                                             <div className="flex flex-col items-center justify-center py-12 gap-3">
                                                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -1542,19 +1379,19 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                                         <div className="flex gap-2 mb-3">
                                                             <Button
                                                                 variant="outline"
-                                                                className="flex-1 h-12 rounded-xl font-bold border-dashed border-2 hover:border-primary hover:text-primary gap-1"
+                                                                className="flex-1 h-10 rounded-xl font-bold border-dashed border-2 hover:border-primary hover:text-primary gap-1 text-xs"
                                                                 onClick={() => {
                                                                     setTempAddedItems([]);
                                                                     setAddItemsSearch("");
                                                                     setShowAddItemsModal(true);
                                                                 }}
                                                             >
-                                                                <Plus className="h-4 w-4" />
+                                                                <Plus className="h-3.5 w-3.5" />
                                                                 Add Item
                                                             </Button>
                                                             <Button
                                                                 variant="outline"
-                                                                className="flex-1 h-12 rounded-xl font-bold border-dashed border-2 hover:border-primary hover:text-primary gap-1"
+                                                                className="flex-1 h-10 rounded-xl font-bold border-dashed border-2 hover:border-primary hover:text-primary gap-1 text-xs"
                                                                 onClick={() => {
                                                                     const tableMatch = (selectedOrder?.description || selectedOrder?.invoice_description || "").match(/Table (\d+)/);
                                                                     const tableNo = selectedOrder?.table_no || (tableMatch ? tableMatch[1] : "");
@@ -1562,7 +1399,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                                                     setShowTransferTableModal(true);
                                                                 }}
                                                             >
-                                                                <MoveRight className="h-4 w-4" />
+                                                                <MoveRight className="h-3.5 w-3.5" />
                                                                 Change Table
                                                             </Button>
                                                         </div>
@@ -1576,15 +1413,15 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                                     const isEditable = selectedOrder?.payment_status !== "PAID" && selectedOrder?.payment_status !== "CANCELLED";
 
                                                     return (
-                                                        <div key={idx} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                                            <div className="flex items-center gap-4 flex-1 min-w-0">
-                                                                <div className="h-10 w-10 shrink-0 rounded-xl bg-white flex items-center justify-center font-black text-primary border border-slate-100">
+                                                        <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                                <div className="h-8 w-8 shrink-0 rounded-lg bg-white flex items-center justify-center font-black text-primary text-xs border border-slate-100">
                                                                     {item.quantity}x
                                                                 </div>
-                                                                <div className="flex-1 min-w-0 pr-2">
-                                                                    <p className="font-bold text-slate-800 break-words whitespace-normal leading-tight">{productName}</p>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <p className="font-bold text-slate-800 text-sm break-words whitespace-normal leading-tight">{productName}</p>
                                                                     <div className="flex items-center gap-2">
-                                                                        <span className="text-[10px] text-slate-400 font-bold">Rs.{item.unit_price} / unit</span>
+                                                                        <span className="text-[9px] text-slate-400 font-bold">Rs.{item.unit_price} / unit</span>
                                                                         {item.status && (
                                                                             <span className={cn(
                                                                                 "text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider",
@@ -1596,32 +1433,32 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                                                     </div>
                                                                 </div>
                                                             </div>
-                                                            <div className="flex items-center gap-3">
+                                                            <div className="flex items-center gap-2">
                                                                 {isEditable && (
-                                                                    <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5 shadow-sm">
+                                                                    <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5">
                                                                         <Button
                                                                             variant="ghost"
                                                                             size="icon"
                                                                             disabled={disableDecrement || isUpdatingItem}
                                                                             onClick={() => handleUpdateQuantity(item.id, item.quantity - 1, item.status)}
-                                                                            className="h-7 w-7 rounded-md text-slate-500 hover:text-slate-700"
+                                                                            className="h-6 w-6 rounded-md text-slate-500 hover:text-slate-700"
                                                                         >
                                                                             <Minus className="h-3 w-3" />
                                                                         </Button>
-                                                                        <span className="w-5 text-center font-bold text-xs">{item.quantity}</span>
+                                                                        <span className="w-4 text-center font-bold text-xs">{item.quantity}</span>
                                                                         <Button
                                                                             variant="ghost"
                                                                             size="icon"
                                                                             disabled={isUpdatingItem}
                                                                             onClick={() => handleUpdateQuantity(item.id, item.quantity + 1, item.status)}
-                                                                            className="h-7 w-7 rounded-md text-slate-500 hover:text-slate-700"
+                                                                            className="h-6 w-6 rounded-md text-slate-500 hover:text-slate-700"
                                                                         >
                                                                             <Plus className="h-3 w-3" />
                                                                         </Button>
                                                                     </div>
                                                                 )}
-                                                                <div className="text-right min-w-[70px]">
-                                                                    <p className="font-black text-slate-900">Rs.{(parseFloat(item.unit_price) * item.quantity).toFixed(0)}</p>
+                                                                <div className="text-right min-w-[60px]">
+                                                                    <p className="font-black text-slate-900 text-sm">Rs.{(parseFloat(item.unit_price) * item.quantity).toFixed(0)}</p>
                                                                 </div>
                                                                 {isEditable && (
                                                                     <Button
@@ -1629,9 +1466,9 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                                                         size="icon"
                                                                         disabled={disableDecrement || isUpdatingItem}
                                                                         onClick={() => handleRemoveItem(item.id, item.status)}
-                                                                        className="h-8 w-8 text-slate-400 hover:text-destructive hover:bg-destructive/5 rounded-lg"
+                                                                        className="h-7 w-7 text-slate-400 hover:text-destructive hover:bg-destructive/5 rounded-lg"
                                                                     >
-                                                                        <Trash2 className="h-4 w-4" />
+                                                                        <Trash2 className="h-3.5 w-3.5" />
                                                                     </Button>
                                                                 )}
                                                             </div>
@@ -1639,47 +1476,230 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                                     );
                                                 })}
                                                 {(!selectedOrder?.items || selectedOrder.items.length === 0) && (
-                                                    <div className="text-center py-10 text-slate-300">
-                                                        <FileText className="h-12 w-12 mx-auto mb-2 opacity-20" />
-                                                        <p className="font-bold">No items found</p>
+                                                    <div className="text-center py-8 text-slate-300">
+                                                        <FileText className="h-10 w-10 mx-auto mb-2 opacity-20" />
+                                                        <p className="font-bold text-sm">No items found</p>
                                                     </div>
                                                 )}
                                             </>
                                         )}
                                     </div>
+                                )}
+                            </div>
 
-                                    <div className="pt-4 border-t border-dashed space-y-2">
-                                        <div className="flex justify-between text-sm">
-                                            <span className="text-slate-400 font-bold">Subtotal</span>
-                                            <span className="font-bold text-slate-600">Rs.{(parseFloat(selectedOrder?.total_amount || 0) - parseFloat(selectedOrder?.tax_amount || 0)).toFixed(2)}</span>
-                                        </div>
-                                        {parseFloat(selectedOrder?.tax_amount || 0) > 0 && (
-                                            <div className="flex justify-between text-sm">
-                                                <span className="text-slate-400 font-bold">Tax</span>
-                                                <span className="font-bold text-slate-600">Rs.{parseFloat(selectedOrder?.tax_amount || 0).toFixed(2)}</span>
-                                            </div>
-                                        )}
-                                        <div className="flex justify-between items-center pt-2">
-                                            <span className="text-lg font-black text-slate-800">Grand Total</span>
-                                            <span className="text-2xl font-black text-primary">Rs.{selectedOrder?.total_amount}</span>
-                                        </div>
+                            {/* Bill Summary - Always Visible */}
+                            <div className="border-t border-slate-200 pt-4 space-y-2">
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-slate-400 font-bold">Subtotal</span>
+                                    <span className="font-bold text-slate-600">Rs.{(parseFloat(selectedOrder?.total_amount || 0) - parseFloat(selectedOrder?.tax_amount || 0)).toFixed(2)}</span>
+                                </div>
+                                {parseFloat(selectedOrder?.tax_amount || 0) > 0 && (
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-slate-400 font-bold">Tax</span>
+                                        <span className="font-bold text-slate-600">Rs.{parseFloat(selectedOrder?.tax_amount || 0).toFixed(2)}</span>
                                     </div>
+                                )}
+                                <div className="flex justify-between items-center pt-2 border-t border-dashed border-slate-200">
+                                    <span className="text-lg font-black text-slate-800">Grand Total</span>
+                                    <span className="text-2xl font-black text-primary">Rs.{selectedOrder?.total_amount}</span>
+                                </div>
+                            </div>
 
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <Button variant="outline" className="h-14 rounded-2xl font-black gap-2 border-2" onClick={() => { setAutoPrint(true); setShowReceipt(true); }}>
-                                            <Printer className="h-5 w-5" />
-                                            POS Print
-                                        </Button>
-                                        <Button className="h-14 rounded-2xl font-black gap-2 gradient-warm" onClick={() => setShowReceipt(true)}>
-                                            <FileText className="h-5 w-5" />
-                                            View Bill
-                                        </Button>
+                            {/* Print Buttons */}
+                            <div className="grid grid-cols-2 gap-2">
+                                <Button variant="outline" className="h-12 rounded-xl font-bold gap-2 border-2 text-sm" onClick={() => { setAutoPrint(true); setShowReceipt(true); }}>
+                                    <Printer className="h-4 w-4" />
+                                    POS Print
+                                </Button>
+                                <Button className="h-12 rounded-xl font-bold gap-2 gradient-warm text-sm" onClick={() => setShowReceipt(true)}>
+                                    <FileText className="h-4 w-4" />
+                                    View Bill
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* Right Side: Payment Section */}
+                        <div className={cn(
+                            "w-full md:w-[320px] bg-slate-50 border-t md:border-l p-4 md:p-6 flex flex-col gap-4 overflow-y-auto custom-scrollbar",
+                            showKeypad && "pb-64 md:pb-40"
+                        )}>
+                            <div className="space-y-4">
+                                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Payment Status</Label>
+                                
+                                {/* Paid / Due Summary */}
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100">
+                                        <p className="text-[9px] text-emerald-600 font-bold uppercase mb-0.5">Paid</p>
+                                        <p className="text-lg font-black text-emerald-700">Rs.{selectedOrder?.paid_amount || 0}</p>
+                                    </div>
+                                    <div className="p-3 rounded-xl bg-white border border-slate-200">
+                                        <p className="text-[9px] text-slate-400 font-bold uppercase mb-0.5">Due</p>
+                                        <p className="text-lg font-black text-slate-900">Rs.{selectedOrder?.due_amount || (selectedOrder ? (selectedOrder.total_amount - (selectedOrder.paid_amount || 0)) : 0)}</p>
                                     </div>
                                 </div>
-                            )}
-                        </div>
-                        <div className="p-6 pt-0 flex gap-4">
-                            <Button variant="ghost" className="h-12 flex-1 rounded-xl font-bold text-slate-400" onClick={() => setShowDetailModal(false)}>Close</Button>
+
+                                {/* Receipt Log */}
+                                {isFetchingDetail ? (
+                                    <div className="flex justify-center py-4">
+                                        <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                                    </div>
+                                ) : (selectedOrder?.received_by_waiter_name || selectedOrder?.received_by_counter_name) && (
+                                    <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-1.5">
+                                        <p className="text-[9px] text-slate-400 font-bold uppercase">Receipt Log</p>
+                                        <div className="space-y-1 text-xs">
+                                            {selectedOrder?.received_by_waiter_name && (
+                                                <div className="flex justify-between">
+                                                    <span className="text-slate-400">Waiter:</span>
+                                                    <span className="font-bold text-slate-700">{selectedOrder.received_by_waiter_name}</span>
+                                                </div>
+                                            )}
+                                            {selectedOrder?.received_by_counter_name && (
+                                                <div className="flex justify-between">
+                                                    <span className="text-slate-400">Counter:</span>
+                                                    <span className="font-bold text-slate-700">{selectedOrder.received_by_counter_name}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Payment Details Section */}
+                                {selectedOrder?.payment_details && selectedOrder.payment_details.length > 0 && (
+                                    <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-2">
+                                        <p className="text-[9px] text-slate-400 font-bold uppercase">Payment Breakdown</p>
+                                        <div className="space-y-1.5">
+                                            {selectedOrder.payment_details.map((payment: any, idx: number) => (
+                                                <div key={payment.id || idx} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg border border-slate-100">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className={cn(
+                                                            "text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider",
+                                                            payment.payment_method === "CASH" ? "bg-green-100 text-green-700" :
+                                                                payment.payment_method === "QR" ? "bg-blue-100 text-blue-700" :
+                                                                    payment.payment_method === "ONLINE" ? "bg-purple-100 text-purple-700" :
+                                                                        payment.payment_method === "CARD" ? "bg-amber-100 text-amber-700" :
+                                                                            "bg-slate-100 text-slate-700"
+                                                        )}>
+                                                            {payment.payment_method}
+                                                        </span>
+                                                        <span className="text-[10px] text-slate-500">{payment.received_by_name || ''}</span>
+                                                    </div>
+                                                    <span className="font-black text-xs">Rs.{parseFloat(payment.amount).toFixed(2)}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Payment Form - Only if unpaid */}
+                                {(selectedOrder?.payment_status !== 'PAID' && parseFloat(selectedOrder?.due_amount || "0") > 0) ? (() => {
+                                    const currentDue = parseFloat(selectedOrder?.due_amount || (selectedOrder ? (selectedOrder.total_amount - (selectedOrder.paid_amount || 0)) : 0));
+                                    const changeAmount = Math.max(0, parseFloat(paymentAmount || "0") - currentDue);
+
+                                    return (
+                                        <div className="space-y-4 animate-in fade-in slide-in-from-right-2 pt-2 border-t border-slate-200">
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Amount to Pay</Label>
+                                                <div className="relative">
+                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg font-black text-slate-300">Rs.</span>
+                                                    <Input
+                                                        type="number"
+                                                        max="1000000"
+                                                        className="h-14 text-2xl font-black text-center border-2 border-primary/20 focus:border-primary rounded-xl pl-8"
+                                                        value={paymentAmount}
+                                                        onFocus={() => {
+                                                            setActiveKeypadField('payment');
+                                                            setShowKeypad(true);
+                                                        }}
+                                                        onChange={(e) => {
+                                                            const val = parseFloat(e.target.value);
+                                                            if (val > 1000000) return;
+                                                            setPaymentAmount(e.target.value);
+                                                        }}
+                                                    />
+                                                    {changeAmount > 0 && (
+                                                        <div className="absolute -bottom-4 right-2 text-emerald-600 font-black text-xs animate-in slide-in-from-top-1 fade-in">
+                                                            Return: Rs.{changeAmount.toLocaleString()}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Payment Method</Label>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    {[
+                                                        { id: 'CASH', icon: Banknote, label: 'Cash' },
+                                                        { id: 'QR', icon: QrCode, label: 'QR' },
+                                                        { id: 'ONLINE', icon: Wallet, label: 'Online' },
+                                                        { id: 'CARD', icon: CreditCard, label: 'Card' }
+                                                    ].map((method) => (
+                                                        <button
+                                                            key={method.id}
+                                                            onClick={() => setPaymentMethod(method.id as any)}
+                                                            className={cn(
+                                                                "flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all gap-1",
+                                                                paymentMethod === method.id ? "border-primary bg-primary/5 text-primary shadow-sm" : "border-slate-200 text-slate-400 hover:border-slate-300"
+                                                            )}
+                                                        >
+                                                            <method.icon className="h-5 w-5" />
+                                                            <span className="text-[9px] font-black uppercase tracking-tighter">{method.label}</span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            {/* QR Code Display */}
+                                            {paymentMethod === 'QR' && (
+                                                <div className="flex flex-col items-center gap-2">
+                                                    <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Scan QR Code</Label>
+                                                    <div className="bg-white p-2 rounded-xl shadow-md border border-slate-100 w-28 h-28 flex items-center justify-center overflow-hidden">
+                                                        {branchInfo?.image_url ? (
+                                                            <img
+                                                                src={branchInfo.image_url}
+                                                                alt="QR Code"
+                                                                className="h-full w-full object-cover"
+                                                                onError={(e) => {
+                                                                    const target = e.target as HTMLImageElement;
+                                                                    target.src = "/qr.png";
+                                                                }}
+                                                            />
+                                                        ) : (
+                                                            <img
+                                                                src="/qr.png"
+                                                                alt="QR Code"
+                                                                className="h-full w-full object-cover"
+                                                                onError={(e) => {
+                                                                    const target = e.target as HTMLImageElement;
+                                                                    target.src = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=AMABAKERY_PAYMENT";
+                                                                }}
+                                                            />
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <Button
+                                                className="w-full h-14 rounded-xl font-black text-base gradient-warm shadow-xl shadow-primary/20"
+                                                onClick={handlePaymentSubmit}
+                                                disabled={isPaying}
+                                            >
+                                                {isPaying ? <Loader2 className="h-5 w-5 animate-spin" /> :
+                                                    (selectedOrder?.payment_status === 'WAITER RECEIVED' ? "Confirm & Finalize" : "Receive Payment")}
+                                            </Button>
+                                        </div>
+                                    );
+                                })() : (
+                                    <div className="py-6 text-center space-y-3 bg-emerald-50 rounded-xl border border-emerald-100 animate-in zoom-in-95">
+                                        <div className="h-10 w-10 bg-white rounded-full flex items-center justify-center mx-auto shadow-sm">
+                                            <CheckCircle2 className="h-6 w-6 text-emerald-500" />
+                                        </div>
+                                        <div className="px-4">
+                                            <p className="text-base font-black text-emerald-800 leading-tight">Fully Paid</p>
+                                            <p className="text-xs text-emerald-600 font-medium">This order is fully paid by the customer.</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </DialogContent>
@@ -1947,15 +1967,6 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
             {/* Global Floating Virtual Keyboard */}
             {showKeypad && activeKeypadField && (
                 <>
-                    {/* Backdrop Layer to capture outside clicks and block background actions */}
-                    <div
-                        className="fixed inset-0 z-[999] bg-transparent pointer-events-auto keyboard-backdrop"
-                        onMouseDown={(e) => {
-                            e.stopPropagation();
-                            setShowKeypad(false);
-                            (document.activeElement as HTMLElement)?.blur();
-                        }}
-                    />
                     <div
                         ref={keyboardRef as any}
                         onMouseDown={(e) => e.stopPropagation()} // Prevent closing when clicking inside

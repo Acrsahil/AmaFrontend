@@ -323,12 +323,34 @@ export default function CounterPOS() {
         }
     }, [showReceipt, autoPrint]);
 
-    // Handle loading specific order if passed via state
+        // Handle loading specific order if passed via state
     useEffect(() => {
         if (location.state?.orderId && products.length > 0) {
             loadSpecificOrder(location.state.orderId);
         }
     }, [location.state?.orderId, products]);
+
+    // Close virtual keyboard when clicking/tapping outside of it and outside
+    // input fields that control it. Because there is no blocking backdrop overlay,
+    // the click also reaches the target element (e.g. a product button) — so one
+    // click both selects the product AND dismisses the keyboard.
+    useEffect(() => {
+        if (!showKeypad) return;
+        const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
+            const target = e.target as HTMLElement;
+            if (target?.closest('.global-keyboard')) return; // click inside keyboard
+            if (target?.closest('.keyboard-input')) return;   // click on a keyboard-controlled input
+            setShowKeypad(false);
+            setActiveKeypadField(null);
+            (document.activeElement as HTMLElement)?.blur();
+        };
+        document.addEventListener('mousedown', handleOutsideClick);
+        document.addEventListener('touchstart', handleOutsideClick);
+        return () => {
+            document.removeEventListener('mousedown', handleOutsideClick);
+            document.removeEventListener('touchstart', handleOutsideClick);
+        };
+    }, [showKeypad]);
 
     const loadSpecificOrder = async (orderId: number) => {
         try {
@@ -896,9 +918,9 @@ export default function CounterPOS() {
                         {/* Search Bar */}
                         <div className="relative flex-1 min-w-[150px] max-w-[300px]">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                            <Input
+                                                        <Input
                                 placeholder="Search products..."
-                                className="pl-9 pr-9 h-10 text-sm rounded-lg border border-slate-200 focus:border-primary bg-slate-50 transition-all shadow-sm focus:bg-white"
+                                className="pl-9 pr-9 h-10 text-sm rounded-lg border border-slate-200 focus:border-primary bg-slate-50 transition-all shadow-sm focus:bg-white keyboard-input"
                                 value={searchQuery}
                                 onFocus={() => {
                                     setActiveKeypadField('productSearch');
@@ -1045,6 +1067,13 @@ export default function CounterPOS() {
                             {filteredItems.map(item => (
                                 <button
                                     key={item.id}
+                                    onMouseDown={(e) => {
+                                        // Close keyboard immediately before adding to cart
+                                        if (showKeypad) {
+                                            setShowKeypad(false);
+                                            setActiveKeypadField(null);
+                                        }
+                                    }}
                                     onClick={() => addToCart(item)}
                                     className="group flex flex-col items-center justify-center bg-primary/20 rounded-md p-1.5 text-center border-2 border-primary/30 hover:border-primary hover:bg-primary/40 active:scale-95 transition-all shadow-sm h-[55px] shadow-primary/5"
                                 >
@@ -1121,9 +1150,9 @@ export default function CounterPOS() {
                 )}
                 <DialogContent
                     onInteractOutside={(e) => {
-                        // Prevent closing if interacting with the keyboard or its backdrop
+                        // Prevent closing if interacting with the keyboard
                         const target = e.target as HTMLElement;
-                        if (target?.closest('.global-keyboard') || target?.closest('.keyboard-backdrop')) {
+                        if (target?.closest('.global-keyboard')) {
                             e.preventDefault();
                         }
                     }}
@@ -1200,10 +1229,10 @@ export default function CounterPOS() {
                                             max="100"
                                             placeholder="0"
                                             value={discountPercent || ""}
-                                            onFocus={() => setActiveKeypadField('discount')}
+                                            onFocus={() => { setActiveKeypadField('discount'); setShowKeypad(true); }}
                                             onChange={(e) => setDiscountPercent(Math.min(100, Math.max(0, Number(e.target.value))))}
                                             className={cn(
-                                                "h-9 pl-3 pr-7 font-bold transition-all",
+                                                "h-9 pl-3 pr-7 font-bold transition-all keyboard-input",
                                                 activeKeypadField === 'discount' && "border-primary ring-2 ring-primary/10 shadow-sm"
                                             )}
                                         />
@@ -1297,12 +1326,13 @@ export default function CounterPOS() {
                                                 type="number"
                                                 placeholder="0.00"
                                                 className={cn(
-                                                    "h-11 text-xl font-black text-center border-2 transition-all",
+                                                                                                        "h-11 text-xl font-black text-center border-2 transition-all keyboard-input",
                                                     activeKeypadField === 'cash' ? "border-primary ring-2 ring-primary/5 shadow-inner" : "border-primary/10"
                                                 )}
                                                 value={cashReceived}
                                                 onFocus={() => {
                                                     setActiveKeypadField('cash');
+                                                    setShowKeypad(true);
                                                 }}
                                                 min="0"
                                                 max="100000"
@@ -1680,20 +1710,11 @@ export default function CounterPOS() {
                             Cancel
                         </Button>
                     </div>
-                </DialogContent>
+            </DialogContent>
             </Dialog>
             {/* Global Floating Virtual Keyboard */}
             {showKeypad && activeKeypadField && (
                 <>
-                    {/* Backdrop Layer to capture outside clicks and block background actions */}
-                    <div
-                        className="fixed inset-0 z-[999] bg-transparent pointer-events-auto keyboard-backdrop"
-                        onMouseDown={(e) => {
-                            e.stopPropagation();
-                            setShowKeypad(false);
-                            (document.activeElement as HTMLElement)?.blur();
-                        }}
-                    />
                     <div
                         ref={keyboardRef as any}
                         onMouseDown={(e) => e.stopPropagation()} // Prevent closing when clicking inside

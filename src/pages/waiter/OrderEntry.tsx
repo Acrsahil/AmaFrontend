@@ -41,6 +41,10 @@ export default function OrderEntry() {
   const [searchQuery, setSearchQuery] = useState("");
   const invoiceId = searchParams.get("invoiceId");
   const [removedItemIds, setRemovedItemIds] = useState<number[]>([]);
+  // Track whether the user intentionally proceeded (checkout / update sent).
+  // If false on unmount, the localStorage draft for this table is cleared so
+  // stale cart items don't reappear on the next visit.
+  const didProceedRef = useRef(false);
 
   useEffect(() => {
     loadData();
@@ -111,10 +115,23 @@ export default function OrderEntry() {
   };
 
   useEffect(() => {
-    if (tableNumber && cart.length > 0) {
+    // Only persist draft for new orders (no invoiceId). Editing an existing
+    // invoice doesn't need localStorage — it reloads from the API.
+    if (!invoiceId && tableNumber && cart.length > 0) {
       saveTableOrder(tableNumber, cart);
     }
-  }, [cart, tableNumber]);
+  }, [cart, tableNumber, invoiceId]);
+
+  // Clean up draft when unmounting without intentionally proceeding
+  useEffect(() => {
+    return () => {
+      if (!didProceedRef.current && !invoiceId && tableNumber) {
+        // User navigated back — discard the draft so a fresh visit starts empty
+        saveTableOrder(tableNumber, []);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filteredItems = useMemo(() => {
     let items = products.filter(p => p.available !== false);
@@ -287,6 +304,7 @@ export default function OrderEntry() {
       try {
         await patchInvoice(invoiceId, { add_items: addItems, remove_items: removedItemIds, update_items: updateItems });
         toast.success("Order updated successfully!");
+        didProceedRef.current = true;
         setIsCartOpen(false);
         setTimeout(() => navigate("/waiter/tables"), 1000);
       } catch (err: any) {
@@ -300,6 +318,7 @@ export default function OrderEntry() {
   };
 
   const proceedToCheckout = () => {
+    didProceedRef.current = true; // mark as intentional — don't clear draft
     navigate('/waiter/checkout', {
       state: { cart, tableNumber, floorId: searchParams.get('floorId') }
     });

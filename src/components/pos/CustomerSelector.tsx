@@ -155,7 +155,7 @@ export function CustomerSelector({
                             className="max-w-[400px] p-0 overflow-hidden border-none shadow-2xl rounded-2xl md:rounded-[2rem] z-[60]"
                             onInteractOutside={(e) => {
                                 const target = e.target as HTMLElement;
-                                if (target?.closest('.global-keyboard') || target?.closest('.keyboard-backdrop')) e.preventDefault();
+                                if (target?.closest('.global-keyboard')) e.preventDefault();
                             }}
                         >
                             <DialogHeader className="p-4 bg-slate-50 border-b flex flex-row items-center justify-between shrink-0">
@@ -214,7 +214,7 @@ export function CustomerSelector({
                                                 value={searchTerm}
                                                 onFocus={onFocus}
                                                 onChange={(e) => onSearchChange ? onSearchChange(e.target.value) : null}
-                                                className="pl-9 h-11 rounded-xl shadow-sm focus:shadow-md transition-shadow"
+                                                className="pl-9 h-11 rounded-xl shadow-sm focus:shadow-md transition-shadow keyboard-input"
                                             />
                                         </div>
 

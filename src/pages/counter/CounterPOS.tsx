@@ -159,10 +159,11 @@ export default function CounterPOS() {
 
     // Billing States
     const [paymentMethod, setPaymentMethod] = useState<"cash" | "qr" | "online" | "card" | "credit" | null>(null);
-    const [activeKeypadField, setActiveKeypadField] = useState<'cash' | 'discount' | 'customer' | 'productSearch' | 'table' | null>(null);
-    const [showKeypad, setShowKeypad] = useState(false);
-    const keyboardRef = useRef<HTMLDivElement>(null);
-    const backspaceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // Virtual keyboard disabled - using physical keyboard
+    // const [activeKeypadField, setActiveKeypadField] = useState<'cash' | 'discount' | 'customer' | 'productSearch' | 'table' | null>(null);
+    // const [showKeypad, setShowKeypad] = useState(false);
+    // const keyboardRef = useRef<HTMLDivElement>(null);
+    // const backspaceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const backspaceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const stopBackspace = () => {
@@ -332,14 +333,13 @@ export default function CounterPOS() {
 
     // Close virtual keyboard when clicking/tapping outside of it and outside
     // input fields that control it. Because there is no blocking backdrop overlay,
-    // the click also reaches the target element (e.g. a product button) — so one
-    // click both selects the product AND dismisses the keyboard.
-    useEffect(() => {
+    // Virtual keyboard removed - no outside click handler needed
+    /* useEffect(() => {
         if (!showKeypad) return;
         const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
             const target = e.target as HTMLElement;
-            if (target?.closest('.global-keyboard')) return; // click inside keyboard
-            if (target?.closest('.keyboard-input')) return;   // click on a keyboard-controlled input
+            if (target?.closest('.global-keyboard')) return;
+            if (target?.closest('.keyboard-input')) return;
             setShowKeypad(false);
             setActiveKeypadField(null);
             (document.activeElement as HTMLElement)?.blur();
@@ -350,7 +350,7 @@ export default function CounterPOS() {
             document.removeEventListener('mousedown', handleOutsideClick);
             document.removeEventListener('touchstart', handleOutsideClick);
         };
-    }, [showKeypad]);
+    }, [showKeypad]); */
 
     const loadSpecificOrder = async (orderId: number) => {
         try {
@@ -920,12 +920,8 @@ export default function CounterPOS() {
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                                                         <Input
                                 placeholder="Search products..."
-                                className="pl-9 pr-9 h-10 text-sm rounded-lg border border-slate-200 focus:border-primary bg-slate-50 transition-all shadow-sm focus:bg-white keyboard-input"
+                                className="pl-9 pr-9 h-10 text-sm rounded-lg border border-slate-200 focus:border-primary bg-slate-50 transition-all shadow-sm focus:bg-white"
                                 value={searchQuery}
-                                onFocus={() => {
-                                    setActiveKeypadField('productSearch');
-                                    setShowKeypad(true);
-                                }}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                             />
                             {searchQuery && (
@@ -1067,13 +1063,6 @@ export default function CounterPOS() {
                             {filteredItems.map(item => (
                                 <button
                                     key={item.id}
-                                    onMouseDown={(e) => {
-                                        // Close keyboard immediately before adding to cart
-                                        if (showKeypad) {
-                                            setShowKeypad(false);
-                                            setActiveKeypadField(null);
-                                        }
-                                    }}
                                     onClick={() => addToCart(item)}
                                     className="group flex flex-col items-center justify-center bg-primary/20 rounded-md p-1.5 text-center border-2 border-primary/30 hover:border-primary hover:bg-primary/40 active:scale-95 transition-all shadow-sm h-[55px] shadow-primary/5"
                                 >
@@ -1145,26 +1134,19 @@ export default function CounterPOS() {
                 {showCheckoutModal && (
                     <div
                         className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] z-[40] animate-in fade-in duration-300"
-                        onClick={() => !showKeypad && setShowCheckoutModal(false)}
+                        onClick={() => setShowCheckoutModal(false)}
                     />
                 )}
                 <DialogContent
                     onInteractOutside={(e) => {
-                        // Prevent closing if interacting with the keyboard
-                        const target = e.target as HTMLElement;
-                        if (target?.closest('.global-keyboard')) {
-                            e.preventDefault();
-                        }
+                        // Allow closing on outside click
                     }}
-                    className={cn(
-                        "max-w-[95vw] md:max-w-[750px] p-0 overflow-hidden border-none shadow-3xl rounded-2xl md:rounded-[2.5rem] z-[50] transition-all duration-300",
-                        showKeypad && "!top-[35%] md:!top-[40%]"
-                    )}
+                    className="max-w-[95vw] md:max-w-[750px] p-0 overflow-hidden border-none shadow-3xl rounded-2xl md:rounded-[2.5rem] z-[50] transition-all duration-300"
                 >
                     <DialogTitle className="sr-only">Checkout</DialogTitle>
-                    <div className={cn("flex flex-col md:flex-row h-auto md:h-[650px] transition-all", showKeypad ? "max-h-[60vh] md:max-h-[70vh]" : "max-h-[90vh]")}>
+                    <div className="flex flex-col md:flex-row h-auto md:h-[650px] transition-all max-h-[90vh]">
                         {/* Checkout Info */}
-                        <div className={cn("flex-1 p-5 md:p-7 space-y-4 overflow-y-auto custom-scrollbar", showKeypad && "pb-40 md:pb-8")}>
+                        <div className="flex-1 p-5 md:p-7 space-y-4 overflow-y-auto custom-scrollbar">
                             {/* Header - compact */}
                             <div className="flex items-center justify-between">
                                 <div>
@@ -1181,10 +1163,6 @@ export default function CounterPOS() {
                                     onSelect={(c) => setCustomer(c)}
                                     searchTerm={customerSearch}
                                     onSearchChange={(val) => setCustomerSearch(val)}
-                                    onFocus={() => {
-                                        setActiveKeypadField('customer');
-                                        setShowKeypad(true);
-                                    }}
                                 />
                             </div>
 
@@ -1229,12 +1207,8 @@ export default function CounterPOS() {
                                             max="100"
                                             placeholder="0"
                                             value={discountPercent || ""}
-                                            onFocus={() => { setActiveKeypadField('discount'); setShowKeypad(true); }}
                                             onChange={(e) => setDiscountPercent(Math.min(100, Math.max(0, Number(e.target.value))))}
-                                            className={cn(
-                                                "h-9 pl-3 pr-7 font-bold transition-all keyboard-input",
-                                                activeKeypadField === 'discount' && "border-primary ring-2 ring-primary/10 shadow-sm"
-                                            )}
+                                            className="h-9 pl-3 pr-7 font-bold transition-all"
                                         />
                                         <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">%</span>
                                     </div>
@@ -1298,10 +1272,7 @@ export default function CounterPOS() {
                         </div>
 
                         {/* Payment Processing */}
-                        <div className={cn(
-                            "w-full md:w-[320px] bg-slate-50 border-t md:border-l p-4 md:p-6 flex flex-col gap-4 overflow-y-auto custom-scrollbar",
-                            showKeypad && "pb-64 md:pb-40"
-                        )}>
+                        <div className="w-full md:w-[320px] bg-slate-50 border-t md:border-l p-4 md:p-6 flex flex-col gap-4 overflow-y-auto custom-scrollbar">
                             {paymentMethod ? (
                                 <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
                                     {/* Common Amount Input */}
@@ -1325,15 +1296,8 @@ export default function CounterPOS() {
                                             <Input
                                                 type="number"
                                                 placeholder="0.00"
-                                                className={cn(
-                                                                                                        "h-11 text-xl font-black text-center border-2 transition-all keyboard-input",
-                                                    activeKeypadField === 'cash' ? "border-primary ring-2 ring-primary/5 shadow-inner" : "border-primary/10"
-                                                )}
+                                                className="h-11 text-xl font-black text-center border-2 transition-all border-primary/10"
                                                 value={cashReceived}
-                                                onFocus={() => {
-                                                    setActiveKeypadField('cash');
-                                                    setShowKeypad(true);
-                                                }}
                                                 min="0"
                                                 max="100000"
                                                 onKeyDown={(e) => {
@@ -1712,203 +1676,8 @@ export default function CounterPOS() {
                     </div>
             </DialogContent>
             </Dialog>
-            {/* Global Floating Virtual Keyboard */}
-            {showKeypad && activeKeypadField && (
-                <>
-                    <div
-                        ref={keyboardRef as any}
-                        onMouseDown={(e) => e.stopPropagation()} // Prevent closing when clicking inside
-                        className="global-keyboard fixed bottom-0 left-0 lg:left-[350px] right-0 z-[1000] bg-white/95 backdrop-blur-md border-[3px] border-primary/20 lg:border-l-[3px] shadow-[0_-15px_40px_-10px_rgba(0,0,0,0.15)] animate-in slide-in-from-bottom-full duration-300 p-2 md:p-4 pointer-events-auto"
-                    >
-                        <div className="max-w-7xl mx-auto">
-                            <div className="flex items-center justify-between mb-2 px-1">
-                                <div className="flex items-center gap-2">
-                                    <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-                                    <span className="text-[10px] font-black uppercase tracking-[0.15em] text-primary">
-                                        {activeKeypadField === 'cash' ? 'Cash Received' :
-                                            activeKeypadField === 'discount' ? 'Discount %' :
-                                                activeKeypadField === 'customer' ? 'Customer Search' :
-                                                    activeKeypadField === 'productSearch' ? 'Product Search' :
-                                                        activeKeypadField === 'table' ? 'Table Number' : 'Virtual Keyboard'}
-                                    </span>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onMouseDown={(e) => e.preventDefault()}
-                                        onClick={() => {
-                                            if (activeKeypadField === 'customer') setCustomerSearch("");
-                                            else if (activeKeypadField === 'productSearch') setSearchQuery("");
-                                            else if (activeKeypadField === 'cash') setCashReceived("");
-                                            else if (activeKeypadField === 'discount') setDiscountPercent(0);
-                                            else if (activeKeypadField === 'table') setTableNo("1");
-                                        }}
-                                        className="h-7 px-2 text-[9px] font-black uppercase text-slate-400 hover:text-destructive"
-                                    >
-                                        Clear
-                                    </Button>
-                                    <Button
-                                        variant="secondary"
-                                        size="icon"
-                                        onMouseDown={(e) => e.preventDefault()}
-                                        onClick={() => {
-                                            setShowKeypad(false);
-                                            (document.activeElement as HTMLElement)?.blur();
-                                        }}
-                                        className="h-6 w-6 rounded-full shadow-inner"
-                                    >
-                                        <X className="h-3 w-3" />
-                                    </Button>
-                                </div>
-                            </div>
-
-                            {/* Keyboard Layouts */}
-                            {(activeKeypadField === 'customer' || activeKeypadField === 'productSearch') ? (
-                                <div className="space-y-1 select-none">
-                                    {[
-                                        '1234567890',
-                                        'QWERTYUIOP',
-                                        'ASDFGHJKL',
-                                        'ZXCVBNM'
-                                    ].map((row, rIdx) => (
-                                        <div key={rIdx} className="flex justify-center gap-1">
-                                            {row.split('').map(char => (
-                                                <Button
-                                                    key={char}
-                                                    variant="outline"
-                                                    onMouseDown={(e) => e.preventDefault()}
-                                                    className="h-12 md:h-16 min-w-[40px] md:min-w-[85px] flex-1 md:flex-none text-sm md:text-xl font-black rounded-xl border shadow-sm active:scale-95 bg-white hover:border-primary/40 transition-all p-0"
-                                                    onClick={() => {
-                                                        const setter = activeKeypadField === 'customer' ? setCustomerSearch : setSearchQuery;
-                                                        setter(prev => prev + char);
-                                                    }}
-                                                >
-                                                    {char}
-                                                </Button>
-                                            ))}
-                                            {rIdx === 3 && (
-                                                <Button
-                                                    variant="outline"
-                                                    className="h-12 md:h-16 px-6 md:px-12 text-sm md:text-xl font-black rounded-xl border-2 border-primary/20 bg-primary/5 text-primary active:scale-95"
-                                                    onMouseDown={(e) => {
-                                                        e.preventDefault();
-                                                        e.stopPropagation();
-                                                        // Initial character delete
-                                                        const setter = activeKeypadField === 'customer' || activeKeypadField === 'productSearch' ? (activeKeypadField === 'customer' ? setCustomerSearch : setSearchQuery) : null;
-                                                        if (setter) {
-                                                            setter(prev => prev.slice(0, -1));
-
-                                                            stopBackspace();
-                                                            backspaceTimeoutRef.current = setTimeout(() => {
-                                                                backspaceIntervalRef.current = setInterval(() => {
-                                                                    setter(prev => deleteWord(prev));
-                                                                }, 150);
-                                                            }, 400);
-                                                        }
-                                                    }}
-                                                    onMouseUp={stopBackspace}
-                                                    onMouseLeave={stopBackspace}
-                                                    onTouchEnd={stopBackspace}
-                                                >
-                                                    ⌫
-                                                </Button>
-                                            )}
-                                        </div>
-                                    ))}
-                                    <div className="flex justify-center gap-1.5 mt-1">
-                                        <Button
-                                            variant="outline"
-                                            onMouseDown={(e) => e.preventDefault()}
-                                            className="h-12 md:h-16 flex-1 max-w-[800px] text-xs md:text-sm font-black rounded-xl border bg-slate-50 active:scale-95 uppercase tracking-widest shadow-inner"
-                                            onClick={() => {
-                                                const setter = activeKeypadField === 'customer' || activeKeypadField === 'productSearch' ? setCustomerSearch : setSearchQuery;
-                                                setter(prev => prev + " ");
-                                            }}
-                                        >
-                                            Space
-                                        </Button>
-                                        <Button
-                                            onMouseDown={(e) => e.preventDefault()}
-                                            className="h-12 md:h-16 px-10 md:px-20 text-xs md:text-sm font-black rounded-xl bg-primary text-white shadow-lg active:scale-95 uppercase tracking-widest"
-                                            onClick={() => {
-                                                setShowKeypad(false);
-                                                (document.activeElement as HTMLElement)?.blur();
-                                            }}
-                                        >
-                                            Done
-                                        </Button>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="max-w-[360px] md:max-w-md mx-auto grid grid-cols-3 gap-3 md:gap-4">
-                                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, "00", 0, "⌫"].map((key) => (
-                                        <Button
-                                            key={key.toString()}
-                                            variant="outline"
-                                            onMouseDown={(e) => e.stopPropagation()}
-                                            className={cn(
-                                                "h-14 md:h-16 text-xl md:text-3xl font-black rounded-2xl transition-all active:scale-90 bg-white hover:bg-slate-50 border-2 shadow-sm p-0",
-                                                key === "⌫" ? "text-destructive border-destructive/20 bg-destructive/5" : "hover:border-primary/40"
-                                            )}
-                                            onClick={() => {
-                                                if (activeKeypadField === 'cash') {
-                                                    if (key === "⌫") setCashReceived(prev => (prev.toString().length > 0 ? prev.toString().slice(0, -1) : ""));
-                                                    else if (key === "00") setCashReceived(prev => {
-                                                        const newVal = `${prev}00`;
-                                                        return parseFloat(newVal) <= 100000 ? newVal : prev;
-                                                    });
-                                                    else setCashReceived(prev => {
-                                                        const current = prev.toString();
-                                                        const newVal = current === "0" ? key.toString() : `${current}${key}`;
-                                                        return parseFloat(newVal) <= 100000 ? newVal : prev;
-                                                    });
-                                                } else if (activeKeypadField === 'discount') {
-                                                    if (key === "⌫") setDiscountPercent(prev => {
-                                                        const current = prev.toString();
-                                                        const newVal = current.length > 1 ? parseInt(current.slice(0, -1)) : 0;
-                                                        return isNaN(newVal) ? 0 : newVal;
-                                                    });
-                                                    else if (key === "00") setDiscountPercent(prev => {
-                                                        const newVal = parseInt(`${prev}00`);
-                                                        return isNaN(newVal) ? 0 : Math.min(100, newVal);
-                                                    });
-                                                    else setDiscountPercent(prev => {
-                                                        const current = prev.toString();
-                                                        const newVal = parseInt(current === "0" ? key.toString() : `${current}${key}`);
-                                                        return isNaN(newVal) ? 0 : Math.min(100, newVal);
-                                                    });
-                                                } else if (activeKeypadField === 'table') {
-                                                    if (key === "⌫") setTableNo(prev => (prev.toString().length > 1 ? prev.toString().slice(0, -1) : "1"));
-                                                    else if (key === "00") return; // Table no shouldn't have 00 usually
-                                                    else setTableNo(prev => {
-                                                        const current = prev.toString();
-                                                        const newVal = current === "1" ? key.toString() : `${current}${key}`;
-                                                        const max = selectedFloor?.table_count || 100;
-                                                        return !isNaN(parseInt(newVal)) && parseInt(newVal) <= max ? newVal : prev;
-                                                    });
-                                                }
-                                            }}
-                                        >
-                                            {key}
-                                        </Button>
-                                    ))}
-                                    <Button
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                        className="col-span-3 h-14 md:h-16 text-base md:text-xl font-black rounded-2xl bg-primary text-white shadow-xl active:scale-95 uppercase tracking-widest mt-2"
-                                        onClick={() => {
-                                            setShowKeypad(false);
-                                            (document.activeElement as HTMLElement)?.blur();
-                                        }}
-                                    >
-                                        Confirm
-                                    </Button>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </>
-            )}
+            {/* Global Floating Virtual Keyboard - DISABLED */}
+            {/* Virtual keyboard removed - using physical keyboard only */}
         </div>
     );
 }

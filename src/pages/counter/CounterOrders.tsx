@@ -1315,8 +1315,8 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                         <div className={cn("flex-1 p-5 md:p-7 space-y-4 overflow-y-auto custom-scrollbar", showKeypad && "pb-40 md:pb-8")}>
                             {/* Header - compact */}
                             <div className="flex items-center justify-between">
-                                <div>
-                                    <div className="flex items-center gap-2">
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-2 flex-wrap">
                                         <h2 className="text-2xl font-black text-slate-800 leading-none">Order Details</h2>
                                         {(() => {
                                             const tableMatch = (selectedOrder?.description || selectedOrder?.invoice_description || "").match(/Table (\d+)/);
@@ -1341,7 +1341,19 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                             );
                                         })()}
                                     </div>
-                                    <p className="text-xs text-slate-400 font-medium mt-0.5">#{selectedOrder?.invoice_number} · {selectedOrder?.customer_name || 'Walk-in'}</p>
+                                    <div className="flex items-center gap-3 mt-1 flex-wrap">
+                                        <p className="text-xs text-slate-400 font-medium">
+                                            #{selectedOrder?.invoice_number} · {selectedOrder?.customer_name || 'Walk-in'}
+                                        </p>
+                                        {selectedOrder?.created_by_name && (
+                                            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-blue-50 border border-blue-100">
+                                                <User className="h-3 w-3 text-blue-600" />
+                                                <span className="text-[10px] font-bold text-blue-700">
+                                                    Placed by {selectedOrder.created_by_name}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 

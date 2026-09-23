@@ -340,11 +340,16 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
     }, [viewMode, floors.length, loadFloors]);
 
     // Build a map: tableNo -> list of ACTIVE (unpaid) orders only for Table View
+    // Filtered by the selected floor so tables only show orders for that floor
     const tableOrdersMap = useMemo(() => {
         const map = new Map<number, any[]>();
         orders.forEach(o => {
             const tNo = o.table_no ? Number(o.table_no) : null;
             if (!tNo) return;
+            // Filter by selected floor — skip orders that don't belong to this floor
+            if (selectedFloor && o.floor_name && o.floor_name !== selectedFloor.name) return;
+            // If order has no floor_name and a floor is selected, skip it
+            if (selectedFloor && !o.floor_name) return;
             // Only include active orders: not fully paid by counter
             const isFullyPaid = o.payment_status === 'PAID' && o.received_by_counter;
             if (isFullyPaid) return;
@@ -355,7 +360,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
             map.get(tNo)!.push(o);
         });
         return map;
-    }, [orders]);
+    }, [orders, selectedFloor]);
 
     const handleTableBoxClick = (tableNumber: number) => {
         const tableInvoices = tableOrdersMap.get(tableNumber) || [];
@@ -826,7 +831,17 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                 ) : (
                                     floors.map(floor => {
                                         const floorTables = Array.from({ length: floor.table_count || 0 }, (_, i) => i + 1);
-                                        const occupiedCount = floorTables.filter(t => tableOrdersMap.has(t)).length;
+                                        // Count occupied tables for THIS floor by checking orders with matching floor_name
+                                        const floorActiveOrders = orders.filter(o => {
+                                            if (!o.table_no || o.floor_name !== floor.name) return false;
+                                            const isFullyPaid = o.payment_status === 'PAID' && o.received_by_counter;
+                                            if (isFullyPaid) return false;
+                                            const isPaidNoDue = o.payment_status === 'PAID' && parseFloat(o.due_amount || 0) <= 0;
+                                            if (isPaidNoDue) return false;
+                                            return true;
+                                        });
+                                        const occupiedTableNos = new Set(floorActiveOrders.map(o => Number(o.table_no)));
+                                        const occupiedCount = floorTables.filter(t => occupiedTableNos.has(t)).length;
                                         return (
                                             <button
                                                 key={floor.id}

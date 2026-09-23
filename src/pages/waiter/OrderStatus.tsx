@@ -311,18 +311,38 @@ export default function OrderStatus() {
     navigate(`/waiter/order/${tableNo}?invoiceId=${order.id}&floorId=${order.floor}`);
   };
 
-  const handleTableTap = (tableNum: number) => {
+  const handleTableTap = async (tableNum: number) => {
     const orders = tableOrderMap[tableNum];
+    console.log('🔍 Table', tableNum, 'tapped - all orders:', orders);
     if (orders && orders.length > 0) {
-      if (orders.length === 1) {
-        setModalOrder(orders[0]);
-        setShowOrderModal(true);
+      // Filter to only show UNPAID orders in the modal (waiter can only act on these)
+      const unpaidOrders = orders.filter((o: any) => o.payment_status !== 'PAID');
+      console.log('💰 Unpaid orders for table', tableNum, ':', unpaidOrders);
+      
+      if (unpaidOrders.length === 0) {
+        // All orders are paid - table is available, start new order
+        console.log('✅ All orders paid - starting new order');
+        if (selectedFloor) navigate(`/waiter/order/${tableNum}?floorId=${selectedFloor.id}`);
+      } else if (unpaidOrders.length === 1) {
+        console.log('📋 Single unpaid order - fetching full details:', unpaidOrders[0].id);
+        try {
+          // Fetch full invoice details with items
+          const fullOrder = await fetchInvoiceDetail(unpaidOrders[0].id);
+          console.log('✅ Full order loaded:', fullOrder);
+          setModalOrder(fullOrder);
+          setShowOrderModal(true);
+        } catch (err) {
+          console.error('❌ Failed to load order details:', err);
+          toast.error('Failed to load order details');
+        }
       } else {
-        setModalTableOrders(orders);
+        console.log('📋 Multiple unpaid orders - showing selector:', unpaidOrders);
+        setModalTableOrders(unpaidOrders);
         setShowTableOrdersModal(true);
       }
     } else {
       // Start fresh order on this table
+      console.log('🆕 No orders - starting new order');
       if (selectedFloor) navigate(`/waiter/order/${tableNum}?floorId=${selectedFloor.id}`);
     }
   };
@@ -503,7 +523,11 @@ export default function OrderStatus() {
                   );
                   
                   const isReady = orders.some((o: any) => o.invoice_status === "READY");
-                  const totalAmount = orders.reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
+                  
+                  // Only sum amounts from UNPAID orders
+                  const totalAmount = orders
+                    .filter((o: any) => o.payment_status !== 'PAID')
+                    .reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
 
                   return (
                     <button
@@ -796,10 +820,17 @@ export default function OrderStatus() {
               const isMine = String(order.created_by) === String(currentUser?.id);
               return (
                 <Button key={order.id} variant="outline" className={cn("w-full h-auto py-3 justify-between flex-col items-start gap-1.5", isReady && "border-[#30D158] bg-[#30D158]/10")}
-                  onClick={() => {
+                  onClick={async () => {
                     setShowTableOrdersModal(false);
-                    setModalOrder(order);
-                    setShowOrderModal(true);
+                    try {
+                      // Fetch full invoice details with items
+                      const fullOrder = await fetchInvoiceDetail(order.id);
+                      setModalOrder(fullOrder);
+                      setShowOrderModal(true);
+                    } catch (err) {
+                      console.error('Failed to load order details:', err);
+                      toast.error('Failed to load order details');
+                    }
                   }}>
                   <div className="flex w-full items-center justify-between">
                     <div className="flex items-center gap-2">

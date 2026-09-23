@@ -82,7 +82,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
     const [selectedOrder, setSelectedOrder] = useState<any>(null);
     const [branchInfo, setBranchInfo] = useState<any>(null);
     const [paymentAmount, setPaymentAmount] = useState("");
-    const [paymentMethod, setPaymentMethod] = useState<"CASH" | "ONLINE" | "QR" | "CARD">("CASH");
+    const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CREDIT" | "QR" | "CARD">("CASH");
     const [paymentNotes, setPaymentNotes] = useState("");
     const [isPaying, setIsPaying] = useState(false);
     const [productsMap, setProductsMap] = useState<Record<string, any>>({});
@@ -268,7 +268,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
         try {
             const params: any = {
                 page: pageNumber,
-                page_size: 200,  // Load more orders to include old pending orders from today
+                page_size: 1000,  // Load more orders to include old pending orders from today
                 date: dateFilter
             };
             const response = await fetchInvoices(params);
@@ -364,8 +364,10 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
 
     const handleTableBoxClick = (tableNumber: number) => {
         const tableInvoices = tableOrdersMap.get(tableNumber) || [];
+        // Filter to only show UNPAID orders (for payment collection)
+        const unpaidOrders = tableInvoices.filter((o: any) => o.payment_status !== 'PAID');
         setTableViewSelectedTable(tableNumber);
-        setTableOrders(tableInvoices);
+        setTableOrders(unpaidOrders);
         setShowTableOrdersModal(true);
     };
 
@@ -929,7 +931,13 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                             (o: any) => o.payment_status !== 'PAID'
                                         );
                                         
-                                        const totalDue = tableInvs.reduce((sum: number, o: any) => sum + parseFloat(o.due_amount || o.total_amount || 0), 0);
+                                        // Only sum due amounts from UNPAID orders
+                                        const totalDue = tableInvs
+                                            .filter((o: any) => o.payment_status !== 'PAID')
+                                            .reduce((sum: number, o: any) => sum + parseFloat(o.due_amount || o.total_amount || 0), 0);
+                                        
+                                        // Count only unpaid orders
+                                        const unpaidOrderCount = tableInvs.filter((o: any) => o.payment_status !== 'PAID').length;
                                         const totalOrders = tableInvs.length;
 
                                         // Green = available (no orders or all paid), Yellow = occupied (has unpaid orders)
@@ -979,7 +987,9 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
 
                                                 {hasAnyOrders && (
                                                     <div className="mt-2 pt-2 border-t border-white/20 w-full">
-                                                        <p className={cn("text-[10px] font-semibold", hasUnpaidOrders ? "text-amber-100" : "text-emerald-100")}>{totalOrders} order{totalOrders > 1 ? 's' : ''}</p>
+                                                        <p className={cn("text-[10px] font-semibold", hasUnpaidOrders ? "text-amber-100" : "text-emerald-100")}>
+                                                            {hasUnpaidOrders ? `${unpaidOrderCount} order${unpaidOrderCount > 1 ? 's' : ''}` : `${totalOrders} order${totalOrders > 1 ? 's' : ''}`}
+                                                        </p>
                                                         <p className="text-[11px] font-black text-white">{hasUnpaidOrders ? `Rs.${totalDue.toFixed(0)} due` : 'All Paid ✓'}</p>
                                                     </div>
                                                 )}
@@ -1575,7 +1585,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                                             "text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider",
                                                             payment.payment_method === "CASH" ? "bg-green-100 text-green-700" :
                                                                 payment.payment_method === "QR" ? "bg-blue-100 text-blue-700" :
-                                                                    payment.payment_method === "ONLINE" ? "bg-purple-100 text-purple-700" :
+                                                                    payment.payment_method === "CREDIT" ? "bg-purple-100 text-purple-700" :
                                                                         payment.payment_method === "CARD" ? "bg-amber-100 text-amber-700" :
                                                                             "bg-slate-100 text-slate-700"
                                                         )}>
@@ -1629,8 +1639,8 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                                 <div className="grid grid-cols-2 gap-2">
                                                     {[
                                                         { id: 'CASH', icon: Banknote, label: 'Cash' },
+                                                        { id: 'CREDIT', icon: Wallet, label: 'Credit' },
                                                         { id: 'QR', icon: QrCode, label: 'QR' },
-                                                        { id: 'ONLINE', icon: Wallet, label: 'Online' },
                                                         { id: 'CARD', icon: CreditCard, label: 'Card' }
                                                     ].map((method) => (
                                                         <button

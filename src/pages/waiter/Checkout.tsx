@@ -198,7 +198,6 @@ export default function Checkout() {
     };
 
     const finalizeOrder = async () => {
-        setCashReceived(total.toFixed(2));
         if (paymentTiming === "later") {
             try {
                 const result = await submitInvoice(false, 0);
@@ -214,6 +213,9 @@ export default function Checkout() {
                 navigate('/waiter/tables');
             } catch (err) { }
         } else {
+            // Prefill the payment amount with total amount before showing modals
+            setCashReceived(total.toFixed(2));
+            
             // Pay Now flow - show appropriate modal
             if (paymentMethod === "cod") {
                 setShowCashModal(true);

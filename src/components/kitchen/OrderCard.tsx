@@ -175,19 +175,24 @@ export function OrderCard({ order, onStatusChange, onItemStatusChange }: OrderCa
 
                       return (
                         <div key={item.id || index} className="flex flex-col group bg-white/60 p-2.5 rounded-lg border border-slate-100">
-                          <div className="flex justify-between items-center gap-3">
-                            <p className="text-base font-black text-slate-800 leading-tight tracking-tight capitalize flex-1">
-                              {item.menuItem.name}
-                            </p>
-                            <div className="flex items-center gap-2">
-                              <div className="flex-shrink-0 min-w-[36px] h-8 px-2 rounded-md bg-white border-2 border-slate-200 flex items-center justify-center text-lg font-black text-slate-900 shadow-sm">
-                                x{item.quantity}
+                          <div className="flex justify-between items-start gap-3 min-h-[44px]">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-base font-black text-slate-800 leading-tight tracking-tight capitalize break-words">
+                                {item.menuItem.name}
+                              </p>
+                              {/* Show quantity below name if needed */}
+                              <div className="flex items-center gap-2 mt-1">
+                                <div className="flex-shrink-0 min-w-[36px] h-6 px-2 rounded-md bg-white border-2 border-slate-200 flex items-center justify-center text-sm font-black text-slate-900 shadow-sm">
+                                  x{item.quantity}
+                                </div>
                               </div>
-                              {/* Individual item action buttons */}
+                            </div>
+                            <div className="flex flex-col gap-1 flex-shrink-0 ml-2">
+                              {/* Individual item action buttons - Stack vertically for better space */}
                               {onItemStatusChange && status === 'PENDING' && (
                                 <Button
                                   size="sm"
-                                  className="h-7 px-2 text-[10px] font-black bg-emerald-600 hover:bg-emerald-700 text-white rounded-md shadow-sm"
+                                  className="h-7 px-2 text-[10px] font-black bg-emerald-600 hover:bg-emerald-700 text-white rounded-md shadow-sm whitespace-nowrap"
                                   onClick={() => onItemStatusChange(order.id, itemId, 'READY')}
                                   title="Mark this item as Ready"
                                 >
@@ -198,7 +203,7 @@ export function OrderCard({ order, onStatusChange, onItemStatusChange }: OrderCa
                               {onItemStatusChange && status === 'READY' && (
                                 <Button
                                   size="sm"
-                                  className="h-7 px-2 text-[10px] font-black bg-slate-600 hover:bg-slate-700 text-white rounded-md shadow-sm"
+                                  className="h-7 px-2 text-[10px] font-black bg-slate-600 hover:bg-slate-700 text-white rounded-md shadow-sm whitespace-nowrap"
                                   onClick={() => onItemStatusChange(order.id, itemId, 'COMPLETED')}
                                   title="Mark this item as Completed"
                                 >
@@ -209,9 +214,9 @@ export function OrderCard({ order, onStatusChange, onItemStatusChange }: OrderCa
                             </div>
                           </div>
                           {item.notes && (
-                            <div className="mt-1.5 flex items-start gap-1.5 bg-amber-50 px-2 py-1 rounded-md border border-amber-100">
-                              <span className="text-amber-600 text-[9px] font-black uppercase mt-0.5 tracking-tighter">NOTE:</span>
-                              <p className="text-[11px] text-amber-700 font-bold italic leading-tight">
+                            <div className="mt-2 flex items-start gap-1.5 bg-amber-50 px-2 py-1 rounded-md border border-amber-100">
+                              <span className="text-amber-600 text-[9px] font-black uppercase mt-0.5 tracking-tighter flex-shrink-0">NOTE:</span>
+                              <p className="text-[11px] text-amber-700 font-bold italic leading-tight break-words">
                                 {item.notes}
                               </p>
                             </div>

@@ -323,6 +323,32 @@ export default function CounterPOS() {
         }
     }, [showCheckoutModal, showQtyDialog, showReceipt]);
 
+    // Clear search results when clicking on cart or other non-search/non-product areas
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            const target = e.target as HTMLElement;
+            
+            // Allow clicks on search input and search clear button
+            if (target?.closest('.search-container')) {
+                return;
+            }
+            
+            // Allow clicks on product items (they handle their own clearing)
+            if (target?.closest('.product-item-button')) {
+                return;
+            }
+            
+            // Clear both search states when clicking on cart or other areas
+            if (searchQuery || lastSearchQuery) {
+                setSearchQuery("");
+                setLastSearchQuery("");
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [searchQuery, lastSearchQuery]);
+
     useEffect(() => {
         if (showReceipt && autoPrint) {
             const timer = setTimeout(() => {
@@ -948,7 +974,7 @@ export default function CounterPOS() {
                         </div>
 
                         {/* Search Bar */}
-                        <div className="relative flex-1 min-w-[150px] max-w-[300px]">
+                        <div className="relative flex-1 min-w-[150px] max-w-[300px] search-container">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                             <Input
                                 ref={searchInputRef}
@@ -1108,7 +1134,7 @@ export default function CounterPOS() {
                                 <button
                                     key={item.id}
                                     onClick={() => addToCart(item)}
-                                    className="group flex flex-col items-center justify-center bg-primary/20 rounded-md p-1.5 text-center border-2 border-primary/30 hover:border-primary hover:bg-primary/40 active:scale-95 transition-all shadow-sm h-[55px] shadow-primary/5"
+                                    className="product-item-button group flex flex-col items-center justify-center bg-primary/20 rounded-md p-1.5 text-center border-2 border-primary/30 hover:border-primary hover:bg-primary/40 active:scale-95 transition-all shadow-sm h-[55px] shadow-primary/5"
                                 >
                                     <h3 className="font-bold text-slate-800 text-[10px] sm:text-[11px] leading-tight line-clamp-2 group-hover:text-primary transition-colors tracking-tight uppercase">{item.name}</h3>
                                 </button>
@@ -1746,7 +1772,7 @@ function CartContent({
             </div>
 
             {/* Cart Items */}
-            <div className="flex-1 overflow-y-auto p-2 space-y-1.5 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto pl-3 pr-2 py-2 space-y-1.5 custom-scrollbar">
                 {cart.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-slate-300 opacity-60 px-8 text-center min-h-[150px]">
                         <div className="h-14 w-14 rounded-full bg-slate-50 mb-3 flex items-center justify-center">
@@ -1805,7 +1831,7 @@ function CartContent({
             </div>
 
             {/* Totals & Actions */}
-            <div className="p-2.5 bg-slate-50 border-t space-y-2 shrink-0 shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.05)]">
+            <div className="px-3 py-2.5 bg-slate-50 border-t space-y-2 shrink-0 shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.05)]">
                 <div className="space-y-1.5">
                     <div className="flex justify-between text-xs font-medium text-slate-500">
                         <span>Subtotal</span>

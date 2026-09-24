@@ -76,6 +76,7 @@ interface CartItemData {
 export default function CounterPOS() {
     const navigate = useNavigate();
     const location = useLocation();
+    const searchInputRef = useRef<HTMLInputElement>(null);
     const [operator, setOperator] = useState<UserType | null>(null);
     const [products, setProducts] = useState<MenuItem[]>([]);
     const [categories, setCategories] = useState<string[]>([]);
@@ -87,6 +88,7 @@ export default function CounterPOS() {
     const [selectedCategory, setSelectedCategory] = useState("All");
     const [showChangePassword, setShowChangePassword] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
+    const [lastSearchQuery, setLastSearchQuery] = useState(""); // Keep track of last search for display
     const [tabs, setTabs] = useState([{
         id: "1",
         cart: [] as CartItemData[],
@@ -314,6 +316,13 @@ export default function CounterPOS() {
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, [showQtyDialog, qtyInput, qtyEditItem]);
 
+    // Auto-focus search input when page loads and after modals close
+    useEffect(() => {
+        if (!showCheckoutModal && !showQtyDialog && !showReceipt) {
+            searchInputRef.current?.focus();
+        }
+    }, [showCheckoutModal, showQtyDialog, showReceipt]);
+
     useEffect(() => {
         if (showReceipt && autoPrint) {
             const timer = setTimeout(() => {
@@ -411,23 +420,31 @@ export default function CounterPOS() {
 
     const filteredItems = useMemo(() => {
         let items = products;
-        // Filter by supercategory first
-        if (selectedSuperCategory) {
-            const catNamesInSC = rawCategories
-                .filter((c: any) => c.supercategory === selectedSuperCategory)
-                .map((c: any) => c.name);
-            items = items.filter(item => catNamesInSC.includes(item.category));
-        }
-        if (selectedCategory && selectedCategory !== "All") {
-            items = items.filter(item => item.category === selectedCategory);
-        }
-        if (searchQuery.trim()) {
+        
+        // Use lastSearchQuery for filtering (keeps results visible even when input is cleared)
+        const activeSearchQuery = searchQuery || lastSearchQuery;
+        
+        // If search query exists, search across ALL products (ignore category filters)
+        if (activeSearchQuery.trim()) {
             items = items.filter(item =>
-                item.name.toLowerCase().includes(searchQuery.toLowerCase())
+                item.name.toLowerCase().includes(activeSearchQuery.toLowerCase())
             );
+        } else {
+            // Only apply category filters when there's NO search query
+            // Filter by supercategory first
+            if (selectedSuperCategory) {
+                const catNamesInSC = rawCategories
+                    .filter((c: any) => c.supercategory === selectedSuperCategory)
+                    .map((c: any) => c.name);
+                items = items.filter(item => catNamesInSC.includes(item.category));
+            }
+            if (selectedCategory && selectedCategory !== "All") {
+                items = items.filter(item => item.category === selectedCategory);
+            }
         }
+        
         return items.sort((a, b) => a.name.localeCompare(b.name));
-    }, [products, rawCategories, selectedSuperCategory, selectedCategory, searchQuery]);
+    }, [products, rawCategories, selectedSuperCategory, selectedCategory, searchQuery, lastSearchQuery]);
 
     const subtotal = useMemo(() =>
         cart.reduce((sum, c) => sum + (c.item.price * c.quantity), 0),
@@ -456,6 +473,17 @@ export default function CounterPOS() {
             }
             return [...prev, { item, quantity: 1 }];
         });
+        
+        // Save current search query before clearing
+        if (searchQuery.trim()) {
+            setLastSearchQuery(searchQuery);
+        }
+        
+        // Clear search input but keep results visible
+        setSearchQuery("");
+        setTimeout(() => {
+            searchInputRef.current?.focus();
+        }, 0);
     };
 
     const updateQuantity = (itemId: string, delta: number) => {
@@ -604,32 +632,35 @@ export default function CounterPOS() {
     const removeTab = (id: string, e?: React.MouseEvent) => {
         if (e) e.stopPropagation();
 
-        if (tabs.length === 1) {
-            // Only one tab: reset it in-place instead of replacing the entire array.
-            // Replacing the array creates a new id, which breaks stale closures.
-            setTabs(prev => prev.map(t => t.id === id ? {
-                ...t,
-                cart: [],
-                customer: null,
-                selectedFloor: null,
-                tableNo: "",
-                taxEnabled: false,
-                taxRate: 5,
-                discountPercent: 0
-            } : t));
-            // Keep the same tab id active
-            return;
-        }
+        setTabs(prev => {
+            if (prev.length === 1) {
+                // Only one tab: reset it in-place instead of replacing the entire array.
+                // Replacing the array creates a new id, which breaks stale closures.
+                return prev.map(t => t.id === id ? {
+                    ...t,
+                    cart: [],
+                    customer: null,
+                    selectedFloor: null,
+                    tableNo: "",
+                    taxEnabled: false,
+                    taxRate: 5,
+                    discountPercent: 0
+                } : t);
+            }
 
-        const filtered = tabs.filter(t => t.id !== id);
-        if (activeTabId === id) {
-            const idx = tabs.findIndex(t => t.id === id);
-            const nextIdx = idx >= filtered.length ? filtered.length - 1 : idx;
-            const nextId = filtered[nextIdx].id;
-            setActiveTabId(nextId);
-            activeTabIdRef.current = nextId;
-        }
-        setTabs(filtered);
+            const filtered = prev.filter(t => t.id !== id);
+            
+            // Update active tab if we're removing the current one
+            if (activeTabIdRef.current === id) {
+                const idx = prev.findIndex(t => t.id === id);
+                const nextIdx = idx >= filtered.length ? filtered.length - 1 : idx;
+                const nextId = filtered[nextIdx].id;
+                setActiveTabId(nextId);
+                activeTabIdRef.current = nextId;
+            }
+            
+            return filtered;
+        });
     };
 
     const handlePrintKOT = () => {
@@ -919,15 +950,27 @@ export default function CounterPOS() {
                         {/* Search Bar */}
                         <div className="relative flex-1 min-w-[150px] max-w-[300px]">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                                                        <Input
+                            <Input
+                                ref={searchInputRef}
+                                autoFocus
                                 placeholder="Search products..."
                                 className="pl-9 pr-9 h-10 text-sm rounded-lg border border-slate-200 focus:border-primary bg-slate-50 transition-all shadow-sm focus:bg-white"
                                 value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onChange={(e) => {
+                                    setSearchQuery(e.target.value);
+                                    // Clear lastSearchQuery when user starts typing new search
+                                    if (e.target.value.trim()) {
+                                        setLastSearchQuery("");
+                                    }
+                                }}
                             />
-                            {searchQuery && (
+                            {(searchQuery || lastSearchQuery) && (
                                 <button
-                                    onClick={() => setSearchQuery("")}
+                                    onClick={() => {
+                                        setSearchQuery("");
+                                        setLastSearchQuery("");
+                                        searchInputRef.current?.focus();
+                                    }}
                                     className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors"
                                 >
                                     <X className="h-3 w-3" />
@@ -1703,57 +1746,57 @@ function CartContent({
             </div>
 
             {/* Cart Items */}
-            <div className="flex-1 overflow-y-auto p-2 md:p-3 space-y-2 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-2 space-y-1.5 custom-scrollbar">
                 {cart.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-slate-300 opacity-60 px-8 text-center min-h-[200px]">
-                        <div className="h-16 w-16 md:h-20 md:w-20 rounded-full bg-slate-50 mb-4 flex items-center justify-center">
-                            <ShoppingCart className="h-8 w-8 md:h-10 md:w-10" />
+                    <div className="h-full flex flex-col items-center justify-center text-slate-300 opacity-60 px-8 text-center min-h-[150px]">
+                        <div className="h-14 w-14 rounded-full bg-slate-50 mb-3 flex items-center justify-center">
+                            <ShoppingCart className="h-7 w-7" />
                         </div>
-                        <p className="font-bold text-base md:text-lg">Empty cart</p>
-                        <p className="text-xs md:text-sm">Add items to start billing</p>
+                        <p className="font-bold text-sm">Empty cart</p>
+                        <p className="text-xs">Add items to start billing</p>
                     </div>
                 ) : (
                     cart.map((cartItem: any) => (
-                        <div key={cartItem.item.id} className="group bg-slate-50 rounded-xl md:rounded-2xl p-3 border border-slate-100 hover:border-primary/20 transition-all">
-                            <div className="flex justify-between items-start mb-2">
-                                <div className="max-w-[150px] md:max-w-[180px]">
-                                    <h4 className="font-bold text-xs md:text-sm text-slate-800 leading-tight">{cartItem.item.name}</h4>
-                                    <p className="text-[9px] md:text-[10px] text-slate-400 mt-1 font-bold">Rs.{cartItem.item.price}</p>
+                        <div key={cartItem.item.id} className="group bg-slate-50 rounded-lg p-2 border border-slate-100 hover:border-primary/20 transition-all">
+                            <div className="flex justify-between items-start mb-1.5">
+                                <div className="max-w-[150px]">
+                                    <h4 className="font-bold text-xs text-slate-800 leading-tight">{cartItem.item.name}</h4>
+                                    <p className="text-[9px] text-slate-400 mt-0.5 font-bold">Rs.{cartItem.item.price}</p>
                                 </div>
-                                <span className="font-black text-slate-900 text-sm md:text-base">Rs.{(cartItem.item.price * cartItem.quantity).toFixed(2)}</span>
+                                <span className="font-black text-slate-900 text-xs">Rs.{(cartItem.item.price * cartItem.quantity).toFixed(2)}</span>
                             </div>
                             <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2 md:gap-3">
-                                    <div className="flex items-center bg-white rounded-lg border border-slate-200 overflow-hidden h-7 md:h-8">
+                                <div className="flex items-center gap-2">
+                                    <div className="flex items-center bg-white rounded-lg border border-slate-200 overflow-hidden h-6">
                                         <button
                                             onClick={() => updateQuantity(cartItem.item.id, -1)}
-                                            className="p-1 px-2 hover:bg-slate-50 text-slate-500"
+                                            className="p-1 px-1.5 hover:bg-slate-50 text-slate-500"
                                         >
-                                            <Minus className="h-2.5 w-2.5 md:h-3 md:w-3" />
+                                            <Minus className="h-2.5 w-2.5" />
                                         </button>
-                                        <span className="w-6 md:w-8 text-center text-[10px] md:text-xs font-black text-slate-700">
+                                        <span className="w-6 text-center text-[10px] font-black text-slate-700">
                                             {cartItem.quantity}
                                         </span>
                                         <button
                                             onClick={() => updateQuantity(cartItem.item.id, 1)}
-                                            className="p-1 px-2 hover:bg-slate-50 text-slate-500"
+                                            className="p-1 px-1.5 hover:bg-slate-50 text-slate-500"
                                         >
-                                            <Plus className="h-2.5 w-2.5 md:h-3 md:w-3" />
+                                            <Plus className="h-2.5 w-2.5" />
                                         </button>
                                     </div>
                                     <button
                                         onClick={() => handleQtyEditOpen(cartItem)}
-                                        className="h-7 w-7 md:h-8 md:w-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-white transition-all active:scale-90"
+                                        className="h-6 w-6 rounded-lg bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-white transition-all active:scale-90"
                                         title="Edit quantity"
                                     >
-                                        <Pencil className="h-3 w-3 md:h-3.5 md:w-3.5" />
+                                        <Pencil className="h-3 w-3" />
                                     </button>
                                 </div>
                                 <button
                                     onClick={() => deleteFromCart(cartItem.item.id)}
                                     className="text-slate-300 hover:text-destructive transition-colors md:opacity-0 md:group-hover:opacity-100"
                                 >
-                                    <Trash2 className="h-4 w-4" />
+                                    <Trash2 className="h-3.5 w-3.5" />
                                 </button>
                             </div>
                         </div>
@@ -1762,14 +1805,14 @@ function CartContent({
             </div>
 
             {/* Totals & Actions */}
-            <div className="p-4 md:p-6 bg-slate-50 border-t space-y-4 shrink-0 shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.05)]">
-                <div className="space-y-2">
-                    <div className="flex justify-between text-xs md:text-sm font-medium text-slate-500">
+            <div className="p-2.5 bg-slate-50 border-t space-y-2 shrink-0 shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.05)]">
+                <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs font-medium text-slate-500">
                         <span>Subtotal</span>
                         <span>Rs.{subtotal.toFixed(2)}</span>
                     </div>
-                    <div className="flex flex-col gap-2 py-1">
-                        <div className="flex justify-between items-center text-xs md:text-sm font-medium text-slate-500">
+                    <div className="flex flex-col gap-1.5">
+                        <div className="flex justify-between items-center text-xs font-medium text-slate-500">
                             <div className="flex items-center gap-2">
                                 <span>Tax</span>
                                 <Switch
@@ -1780,19 +1823,19 @@ function CartContent({
                             </div>
                             {taxEnabled ? (
                                 <div className="flex items-center gap-2">
-                                    <div className="flex items-center bg-white rounded-lg px-2 border w-16 md:w-20">
+                                    <div className="flex items-center bg-white rounded-lg px-2 border w-16">
                                         <Input
                                             type="number"
                                             value={taxRate}
                                             onChange={(e) => setTaxRate(Number(e.target.value))}
-                                            className="w-10 md:w-12 h-6 md:h-7 p-0 text-center border-none bg-transparent text-[10px] md:text-xs font-bold focus-visible:ring-0"
+                                            className="w-10 h-6 p-0 text-center border-none bg-transparent text-[10px] font-bold focus-visible:ring-0"
                                         />
-                                        <span className="text-[9px] md:text-[10px] font-bold text-slate-400">%</span>
+                                        <span className="text-[9px] font-bold text-slate-400">%</span>
                                     </div>
-                                    <span className="font-bold text-slate-700">Rs.{taxAmount.toFixed(2)}</span>
+                                    <span className="font-bold text-slate-700 text-xs">Rs.{taxAmount.toFixed(2)}</span>
                                 </div>
                             ) : (
-                                <span className="text-[10px] md:text-xs font-medium text-slate-300">Disabled</span>
+                                <span className="text-[10px] font-medium text-slate-300">Disabled</span>
                             )}
                         </div>
 
@@ -1803,7 +1846,7 @@ function CartContent({
                                         key={rate}
                                         onClick={() => setTaxRate(rate)}
                                         className={cn(
-                                            "px-2 py-0.5 md:py-1 rounded text-[9px] md:text-[10px] font-bold transition-all",
+                                            "px-2 py-0.5 rounded text-[9px] font-bold transition-all",
                                             taxRate === rate
                                                 ? "bg-primary text-white"
                                                 : "bg-white text-slate-500 border border-slate-100"
@@ -1816,35 +1859,35 @@ function CartContent({
                         )}
                     </div>
 
-                    <div className="space-y-2 pb-1">
-                        <div className="flex items-center justify-between text-xs md:text-sm font-medium text-slate-500">
+                    <div className="space-y-1.5">
+                        <div className="flex items-center justify-between text-xs font-medium text-slate-500">
                             <div className="flex items-center gap-2">
-                                <Percent className="h-3 w-3 md:h-4 md:w-4" />
+                                <Percent className="h-3 w-3" />
                                 <span>Discount</span>
                             </div>
                             <div className="flex items-center gap-2">
-                                <div className="flex items-center bg-white rounded-lg px-2 border w-20 md:w-24">
+                                <div className="flex items-center bg-white rounded-lg px-2 border w-16">
                                     <Input
                                         type="number"
                                         value={discountPercent || ""}
                                         onChange={(e) => setDiscountPercent(Math.min(100, Math.max(0, Number(e.target.value))))}
-                                        className="w-10 md:w-12 h-6 md:h-7 p-0 text-center border-none bg-transparent text-[10px] md:text-xs font-bold focus-visible:ring-0"
+                                        className="w-10 h-6 p-0 text-center border-none bg-transparent text-[10px] font-bold focus-visible:ring-0"
                                         placeholder="0"
                                     />
-                                    <span className="text-[9px] md:text-[10px] font-bold text-slate-400">%</span>
+                                    <span className="text-[9px] font-bold text-slate-400">%</span>
                                 </div>
-                                <span className="font-bold text-emerald-600">
+                                <span className="font-bold text-emerald-600 text-xs">
                                     {discountAmount > 0 && `-Rs.${discountAmount.toFixed(2)}`}
                                 </span>
                             </div>
                         </div>
                         <div className="flex gap-1 justify-end">
-                            {[0, 5, 10].map((percent) => (
+                            {[0, 5, 10, 30].map((percent) => (
                                 <button
                                     key={percent}
                                     onClick={() => setDiscountPercent(percent)}
                                     className={cn(
-                                        "px-2 py-0.5 md:py-1 rounded text-[9px] md:text-[10px] font-bold transition-all",
+                                        "px-2 py-0.5 rounded text-[9px] font-bold transition-all",
                                         discountPercent === percent
                                             ? "bg-emerald-500 text-white"
                                             : "bg-white text-slate-500 border border-slate-100"
@@ -1857,18 +1900,18 @@ function CartContent({
                     </div>
 
                     <Separator />
-                    <div className="flex justify-between items-center pt-1 md:pt-2">
-                        <span className="text-base md:text-lg font-black text-slate-800">Total</span>
-                        <span className="text-2xl md:text-3xl font-black text-primary">Rs.{total.toFixed(2)}</span>
+                    <div className="flex justify-between items-center pt-1">
+                        <span className="text-sm font-black text-slate-800">Total</span>
+                        <span className="text-xl font-black text-primary">Rs.{total.toFixed(2)}</span>
                     </div>
                 </div>
 
                 <Button
-                    className="w-full h-12 md:h-16 text-lg md:text-xl font-black rounded-xl md:rounded-2xl shadow-xl shadow-primary/20 gradient-warm transition-all active:scale-95"
+                    className="w-full h-11 text-base font-black rounded-xl shadow-xl shadow-primary/20 gradient-warm transition-all active:scale-95"
                     disabled={cart.length === 0}
                     onClick={handleCheckout}
                 >
-                    <Receipt className="h-5 w-5 md:h-6 md:w-6 mr-2 md:mr-3" />
+                    <Receipt className="h-4 w-4 mr-2" />
                     Checkout
                 </Button>
             </div>

@@ -368,6 +368,8 @@ export default function KitchenDisplay() {
                 id: item.id, // Store the actual database ID
                 quantity: item.quantity || 0,
                 status: item.status || 'PENDING',
+                created_at: item.created_at, // Timestamp when item was first added
+                updated_at: item.updated_at, // Timestamp when item was last modified
                 menuItem: {
                   name: product?.name || `Product #${item.product}`,
                   category: product?.category_name || 'Uncategorized',
@@ -556,6 +558,8 @@ export default function KitchenDisplay() {
             id: item.id, // Preserve the database ID
             quantity: item.quantity || 0,
             status: item.status || 'PENDING',
+            created_at: item.created_at, // Timestamp when item was first added
+            updated_at: item.updated_at, // Timestamp when item was last modified
             menuItem: {
               name: product?.name || `Product #${item.product}`,
               category: product?.category_name || 'Uncategorized',
@@ -702,6 +706,8 @@ export default function KitchenDisplay() {
                 id: item.id, // Preserve database ID
                 quantity: item.quantity || 0,
                 status: item.status || backendStatus,
+                created_at: item.created_at, // Timestamp when item was first added
+                updated_at: item.updated_at, // Timestamp when item was last modified
                 menuItem: {
                   name: product?.name || `Product #${item.product}`,
                   category: product?.category_name || 'Uncategorized',

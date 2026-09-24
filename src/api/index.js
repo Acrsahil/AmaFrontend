@@ -714,7 +714,7 @@ export async function addPayment(invoiceId, paymentData) {
 export async function deleteInvoice(invoiceId, reason) {
   const res = await apiFetch(`/api/invoice/${invoiceId}/`, {
     method: "DELETE",
-    body: JSON.stringify({ reason })
+    body: JSON.stringify({ deleted_reason: reason })
   });
   const data = await safeJson(res);
   if (!res.ok) {

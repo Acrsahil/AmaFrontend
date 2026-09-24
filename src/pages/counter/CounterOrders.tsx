@@ -85,7 +85,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
     const [branchInfo, setBranchInfo] = useState<any>(null);
     const [paymentAmount, setPaymentAmount] = useState("");
     const [discountAmount, setDiscountAmount] = useState("");
-    const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CREDIT" | "QR">("CASH");
+    const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CREDIT" | "QR" | "CARD">("CASH");
     const [paymentNotes, setPaymentNotes] = useState("");
     const [isPaying, setIsPaying] = useState(false);
     const [productsMap, setProductsMap] = useState<Record<string, any>>({});
@@ -105,6 +105,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [deleteReason, setDeleteReason] = useState("");
     const [isDeleting, setIsDeleting] = useState(false);
+    const [showQRModal, setShowQRModal] = useState(false);
 
     // Global Keyboard State
     const [showKeypad, setShowKeypad] = useState(false);
@@ -1541,146 +1542,137 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                 </div>
                             </div>
 
-                            {/* Items Collapsible Section */}
-                            <div className="border rounded-2xl border-slate-200 overflow-hidden">
-                                <button
-                                    onClick={() => setActiveTab(activeTab === "items" ? "payment" : "items")}
-                                    className="w-full flex items-center justify-between p-4 bg-slate-50 hover:bg-slate-100 transition-colors"
-                                >
-                                    <div className="flex items-center gap-2">
-                                        <FileText className="h-4 w-4 text-slate-600" />
-                                        <span className="font-bold text-slate-800">Order Items</span>
-                                        <span className="text-xs text-slate-400 font-medium">
-                                            ({selectedOrder?.items?.length || 0} items)
-                                        </span>
+                            {/* Items Section - Always Visible & Compact */}
+                            <div className="border rounded-xl border-slate-200 overflow-hidden bg-slate-50/50">
+                                <div className="px-3 py-2 bg-white border-b border-slate-100">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <FileText className="h-3.5 w-3.5 text-slate-400" />
+                                            <span className="font-black text-xs text-slate-700 uppercase tracking-wider">Order Items</span>
+                                            <span className="text-[10px] text-slate-400 font-bold">
+                                                ({selectedOrder?.items?.length || 0})
+                                            </span>
+                                        </div>
+                                        {(() => {
+                                            const isEditable = selectedOrder?.payment_status !== "PAID" && selectedOrder?.payment_status !== "CANCELLED";
+                                            return isEditable && (
+                                                <div className="flex gap-1.5">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-7 px-2 text-[10px] font-black hover:text-primary gap-1"
+                                                        onClick={() => {
+                                                            setTempAddedItems([]);
+                                                            setAddItemsSearch("");
+                                                            setShowAddItemsModal(true);
+                                                        }}
+                                                    >
+                                                        <Plus className="h-3 w-3" />
+                                                        Add
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-7 px-2 text-[10px] font-black hover:text-primary gap-1"
+                                                        onClick={() => {
+                                                            const tableMatch = (selectedOrder?.description || selectedOrder?.invoice_description || "").match(/Table (\d+)/);
+                                                            const tableNo = selectedOrder?.table_no || (tableMatch ? tableMatch[1] : "");
+                                                            setNewTableNo(tableNo ? String(tableNo) : "");
+                                                            setShowTransferTableModal(true);
+                                                        }}
+                                                    >
+                                                        <MoveRight className="h-3 w-3" />
+                                                        Table
+                                                    </Button>
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
-                                    <ChevronDown className={cn(
-                                        "h-4 w-4 text-slate-400 transition-transform duration-200",
-                                        activeTab === "items" && "rotate-180"
-                                    )} />
-                                </button>
+                                </div>
                                 
-                                {activeTab === "items" && (
-                                    <div className="p-4 space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar bg-white animate-in fade-in slide-in-from-top-2">
-                                        {isFetchingDetail ? (
-                                            <div className="flex flex-col items-center justify-center py-12 gap-3">
-                                                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                                                <p className="text-xs font-bold text-slate-400">Loading full details...</p>
-                                            </div>
-                                        ) : (
-                                            <>
-                                                {(() => {
-                                                    const isEditable = selectedOrder?.payment_status !== "PAID" && selectedOrder?.payment_status !== "CANCELLED";
-                                                    return isEditable && (
-                                                        <div className="flex gap-2 mb-3">
-                                                            <Button
-                                                                variant="outline"
-                                                                className="flex-1 h-10 rounded-xl font-bold border-dashed border-2 hover:border-primary hover:text-primary gap-1 text-xs"
-                                                                onClick={() => {
-                                                                    setTempAddedItems([]);
-                                                                    setAddItemsSearch("");
-                                                                    setShowAddItemsModal(true);
-                                                                }}
-                                                            >
-                                                                <Plus className="h-3.5 w-3.5" />
-                                                                Add Item
-                                                            </Button>
-                                                            <Button
-                                                                variant="outline"
-                                                                className="flex-1 h-10 rounded-xl font-bold border-dashed border-2 hover:border-primary hover:text-primary gap-1 text-xs"
-                                                                onClick={() => {
-                                                                    const tableMatch = (selectedOrder?.description || selectedOrder?.invoice_description || "").match(/Table (\d+)/);
-                                                                    const tableNo = selectedOrder?.table_no || (tableMatch ? tableMatch[1] : "");
-                                                                    setNewTableNo(tableNo ? String(tableNo) : "");
-                                                                    setShowTransferTableModal(true);
-                                                                }}
-                                                            >
-                                                                <MoveRight className="h-3.5 w-3.5" />
-                                                                Change Table
-                                                            </Button>
-                                                        </div>
-                                                    );
-                                                })()}
-                                                {selectedOrder?.items?.map((item: any, idx: number) => {
-                                                    const productName = item.product_name || productsMap[String(item.product)]?.name || `Product #${item.product}`;
-                                                    const isPrepared = item.status === "READY" || item.status === "COMPLETED";
-                                                    const isAdmin = currentUser?.role === "ADMIN" || currentUser?.role === "SUPER_ADMIN" || currentUser?.is_superuser;
-                                                    const disableDecrement = isPrepared && !isAdmin;
-                                                    const isEditable = selectedOrder?.payment_status !== "PAID" && selectedOrder?.payment_status !== "CANCELLED";
+                                <div className="max-h-[200px] overflow-y-auto custom-scrollbar bg-white">
+                                    {isFetchingDetail ? (
+                                        <div className="flex flex-col items-center justify-center py-8 gap-2">
+                                            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Loading...</p>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            {selectedOrder?.items?.map((item: any, idx: number) => {
+                                                const productName = item.product_name || productsMap[String(item.product)]?.name || `Product #${item.product}`;
+                                                const isPrepared = item.status === "READY" || item.status === "COMPLETED";
+                                                const isAdmin = currentUser?.role === "ADMIN" || currentUser?.role === "SUPER_ADMIN" || currentUser?.is_superuser;
+                                                const disableDecrement = isPrepared && !isAdmin;
+                                                const isEditable = selectedOrder?.payment_status !== "PAID" && selectedOrder?.payment_status !== "CANCELLED";
 
-                                                    return (
-                                                        <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                                                            <div className="flex items-center gap-3 flex-1 min-w-0">
-                                                                <div className="h-8 w-8 shrink-0 rounded-lg bg-white flex items-center justify-center font-black text-primary text-xs border border-slate-100">
-                                                                    {item.quantity}x
-                                                                </div>
-                                                                <div className="flex-1 min-w-0">
-                                                                    <p className="font-bold text-slate-800 text-sm break-words whitespace-normal leading-tight">{productName}</p>
-                                                                    <div className="flex items-center gap-2">
-                                                                        <span className="text-[9px] text-slate-400 font-bold">Rs.{item.unit_price} / unit</span>
-                                                                        {item.status && (
-                                                                            <span className={cn(
-                                                                                "text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider",
-                                                                                isPrepared ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"
-                                                                            )}>
-                                                                                {item.status}
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex items-center gap-2">
-                                                                {isEditable && (
-                                                                    <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5">
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon"
-                                                                            disabled={disableDecrement || isUpdatingItem}
-                                                                            onClick={() => handleUpdateQuantity(item.id, item.quantity - 1, item.status)}
-                                                                            className="h-6 w-6 rounded-md text-slate-500 hover:text-slate-700"
-                                                                        >
-                                                                            <Minus className="h-3 w-3" />
-                                                                        </Button>
-                                                                        <span className="w-4 text-center font-bold text-xs">{item.quantity}</span>
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon"
-                                                                            disabled={isUpdatingItem}
-                                                                            onClick={() => handleUpdateQuantity(item.id, item.quantity + 1, item.status)}
-                                                                            className="h-6 w-6 rounded-md text-slate-500 hover:text-slate-700"
-                                                                        >
-                                                                            <Plus className="h-3 w-3" />
-                                                                        </Button>
-                                                                    </div>
-                                                                )}
-                                                                <div className="text-right min-w-[60px]">
-                                                                    <p className="font-black text-slate-900 text-sm">Rs.{(parseFloat(item.unit_price) * item.quantity).toFixed(0)}</p>
-                                                                </div>
-                                                                {isEditable && (
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                        disabled={disableDecrement || isUpdatingItem}
-                                                                        onClick={() => handleRemoveItem(item.id, item.status)}
-                                                                        className="h-7 w-7 text-slate-400 hover:text-destructive hover:bg-destructive/5 rounded-lg"
-                                                                    >
-                                                                        <Trash2 className="h-3.5 w-3.5" />
-                                                                    </Button>
+                                                return (
+                                                    <div key={idx} className="flex items-center gap-2 px-3 py-2 border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
+                                                        <div className="h-6 w-6 shrink-0 rounded-md bg-slate-100 flex items-center justify-center font-black text-slate-600 text-[10px]">
+                                                            {item.quantity}×
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-bold text-slate-800 text-xs leading-tight truncate">{productName}</p>
+                                                            <div className="flex items-center gap-1.5 mt-0.5">
+                                                                <span className="text-[9px] text-slate-400 font-bold">₹{item.unit_price}</span>
+                                                                {item.status && (
+                                                                    <span className={cn(
+                                                                        "text-[8px] font-black px-1 py-0.5 rounded uppercase",
+                                                                        isPrepared ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"
+                                                                    )}>
+                                                                        {item.status}
+                                                                    </span>
                                                                 )}
                                                             </div>
                                                         </div>
-                                                    );
-                                                })}
-                                                {(!selectedOrder?.items || selectedOrder.items.length === 0) && (
-                                                    <div className="text-center py-8 text-slate-300">
-                                                        <FileText className="h-10 w-10 mx-auto mb-2 opacity-20" />
-                                                        <p className="font-bold text-sm">No items found</p>
+                                                        {isEditable && (
+                                                            <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-md p-0.5">
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    disabled={disableDecrement || isUpdatingItem}
+                                                                    onClick={() => handleUpdateQuantity(item.id, item.quantity - 1, item.status)}
+                                                                    className="h-5 w-5 rounded text-slate-500 hover:text-slate-700 hover:bg-white"
+                                                                >
+                                                                    <Minus className="h-2.5 w-2.5" />
+                                                                </Button>
+                                                                <span className="w-4 text-center font-black text-[10px]">{item.quantity}</span>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    disabled={isUpdatingItem}
+                                                                    onClick={() => handleUpdateQuantity(item.id, item.quantity + 1, item.status)}
+                                                                    className="h-5 w-5 rounded text-slate-500 hover:text-slate-700 hover:bg-white"
+                                                                >
+                                                                    <Plus className="h-2.5 w-2.5" />
+                                                                </Button>
+                                                            </div>
+                                                        )}
+                                                        <div className="text-right min-w-[50px]">
+                                                            <p className="font-black text-slate-900 text-xs">₹{(parseFloat(item.unit_price) * item.quantity).toFixed(0)}</p>
+                                                        </div>
+                                                        {isEditable && (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                disabled={disableDecrement || isUpdatingItem}
+                                                                onClick={() => handleRemoveItem(item.id, item.status)}
+                                                                className="h-6 w-6 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded"
+                                                            >
+                                                                <Trash2 className="h-3 w-3" />
+                                                            </Button>
+                                                        )}
                                                     </div>
-                                                )}
-                                            </>
-                                        )}
-                                    </div>
-                                )}
+                                                );
+                                            })}
+                                            {(!selectedOrder?.items || selectedOrder.items.length === 0) && (
+                                                <div className="text-center py-8 text-slate-200">
+                                                    <FileText className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                                                    <p className="font-bold text-xs">No items</p>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
+                                </div>
                             </div>
 
                             {/* Bill Summary - Always Visible */}
@@ -1729,12 +1721,8 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                 </div>
                             </div>
 
-                            {/* Print Buttons */}
-                            <div className="grid grid-cols-3 gap-2">
-                                <Button variant="outline" className="h-12 rounded-xl font-bold gap-2 border-2 text-sm" onClick={() => { setAutoPrint(true); setShowReceipt(true); }}>
-                                    <Printer className="h-4 w-4" />
-                                    POS Print
-                                </Button>
+                            {/* Action Buttons */}
+                            <div className="grid grid-cols-2 gap-2">
                                 <Button className="h-12 rounded-xl font-bold gap-2 gradient-warm text-sm" onClick={() => setShowReceipt(true)}>
                                     <FileText className="h-4 w-4" />
                                     View Bill
@@ -1914,63 +1902,40 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
 
                                             <div className="space-y-2">
                                                 <Label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Payment Method</Label>
-                                                <div className="grid grid-cols-3 gap-2">
+                                                <div className="grid grid-cols-4 gap-2">
                                                     {[
                                                         { id: 'CASH', icon: Banknote, label: 'Cash' },
-                                                        { id: 'CREDIT', icon: Wallet, label: 'Credit' },
-                                                        { id: 'QR', icon: QrCode, label: 'QR' }
+                                                        { id: 'QR', icon: QrCode, label: 'QR' },
+                                                        { id: 'CARD', icon: CreditCard, label: 'Card' },
+                                                        { id: 'CREDIT', icon: Wallet, label: 'Credit' }
                                                     ].map((method) => (
                                                         <button
                                                             key={method.id}
-                                                            onClick={() => setPaymentMethod(method.id as any)}
+                                                            onClick={() => {
+                                                                setPaymentMethod(method.id as any);
+                                                                if (method.id === 'QR') {
+                                                                    setShowQRModal(true);
+                                                                }
+                                                            }}
                                                             className={cn(
-                                                                "flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all gap-1",
+                                                                "flex flex-col items-center justify-center p-2.5 rounded-xl border-2 transition-all gap-1",
                                                                 paymentMethod === method.id ? "border-primary bg-primary/5 text-primary shadow-sm" : "border-slate-200 text-slate-400 hover:border-slate-300"
                                                             )}
                                                         >
-                                                            <method.icon className="h-5 w-5" />
-                                                            <span className="text-[9px] font-black uppercase tracking-tighter">{method.label}</span>
+                                                            <method.icon className="h-4 w-4" />
+                                                            <span className="text-[8px] font-black uppercase tracking-tighter">{method.label}</span>
                                                         </button>
                                                     ))}
                                                 </div>
                                             </div>
 
-                                            {/* QR Code Display */}
-                                            {paymentMethod === 'QR' && (
-                                                <div className="flex flex-col items-center gap-1 py-2">
-                                                    <Label className="text-[8px] font-black uppercase tracking-widest text-slate-400">QR</Label>
-                                                    <div className="bg-white p-1.5 rounded-lg shadow-md border border-slate-100 w-20 h-20 flex items-center justify-center overflow-hidden">
-                                                        {branchInfo?.image_url ? (
-                                                            <img
-                                                                src={branchInfo.image_url}
-                                                                alt="QR Code"
-                                                                className="h-full w-full object-cover"
-                                                                onError={(e) => {
-                                                                    const target = e.target as HTMLImageElement;
-                                                                    target.src = "/qr.png";
-                                                                }}
-                                                            />
-                                                        ) : (
-                                                            <img
-                                                                src="/qr.png"
-                                                                alt="QR Code"
-                                                                className="h-full w-full object-cover"
-                                                                onError={(e) => {
-                                                                    const target = e.target as HTMLImageElement;
-                                                                    target.src = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=AMABAKERY_PAYMENT";
-                                                                }}
-                                                            />
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            )}
-
                                             <Button
                                                 className="w-full h-14 rounded-xl font-black text-base gradient-warm shadow-xl shadow-primary/20"
                                                 onClick={handlePaymentSubmit}
-                                                disabled={isPaying}
+                                                disabled={isPaying || paymentMethod === 'QR'}
                                             >
                                                 {isPaying ? <Loader2 className="h-5 w-5 animate-spin" /> :
+                                                    paymentMethod === 'QR' ? "Use QR Button Above" :
                                                     (selectedOrder?.payment_status === 'WAITER RECEIVED' ? "Confirm & Finalize" : "Receive Payment")}
                                             </Button>
                                         </div>
@@ -1987,6 +1952,73 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                     </div>
                                 )}
                             </div>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* QR Code Enlarged Modal */}
+            <Dialog open={showQRModal} onOpenChange={setShowQRModal}>
+                <DialogContent 
+                    className="max-w-[400px] p-0 border-none bg-white rounded-2xl shadow-2xl [&>button]:hidden"
+                >
+                    <DialogTitle className="sr-only">QR Code Payment</DialogTitle>
+                    <div className="relative">
+                        <button
+                            onClick={() => setShowQRModal(false)}
+                            className="absolute -top-3 -right-3 z-50 h-10 w-10 flex items-center justify-center rounded-full bg-slate-900 text-white shadow-xl transition-all active:scale-95 hover:bg-slate-800"
+                        >
+                            <X className="h-5 w-5" />
+                        </button>
+                        <div className="p-8 flex flex-col items-center gap-6">
+                            {/* Header */}
+                            <div className="text-center">
+                                <h3 className="text-2xl font-black text-slate-900">Scan to Pay</h3>
+                                <p className="text-sm text-slate-500 mt-1">Use any UPI app to scan and pay</p>
+                            </div>
+
+                            {/* QR Code */}
+                            <div className="bg-gradient-to-br from-slate-50 to-white p-6 rounded-2xl shadow-inner border-2 border-slate-100">
+                                {branchInfo?.image_url ? (
+                                    <img
+                                        src={branchInfo.image_url}
+                                        alt="Payment QR Code"
+                                        className="w-64 h-64 object-contain"
+                                        onError={(e) => {
+                                            const target = e.target as HTMLImageElement;
+                                            target.src = "/qr.png";
+                                        }}
+                                    />
+                                ) : (
+                                    <img
+                                        src="/qr.png"
+                                        alt="Payment QR Code"
+                                        className="w-64 h-64 object-contain"
+                                        onError={(e) => {
+                                            const target = e.target as HTMLImageElement;
+                                            target.src = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=AMABAKERY_PAYMENT";
+                                        }}
+                                    />
+                                )}
+                            </div>
+
+                            {/* Amount Display */}
+                            <div className="text-center w-full bg-slate-50 rounded-xl p-4 border border-slate-200">
+                                <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Amount to Pay</p>
+                                <p className="text-3xl font-black text-primary">₹{paymentAmount || '0'}</p>
+                            </div>
+
+                            {/* Receive Payment Button */}
+                            <Button
+                                className="w-full h-14 rounded-xl font-black text-base gradient-warm shadow-xl shadow-primary/20"
+                                onClick={() => {
+                                    setShowQRModal(false);
+                                    handlePaymentSubmit();
+                                }}
+                                disabled={isPaying}
+                            >
+                                {isPaying ? <Loader2 className="h-5 w-5 animate-spin" /> : "Receive Payment"}
+                            </Button>
                         </div>
                     </div>
                 </DialogContent>

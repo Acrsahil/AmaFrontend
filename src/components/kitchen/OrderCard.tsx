@@ -1,8 +1,8 @@
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, Clock, Layers, AlertCircle, CheckCircle2, ChefHat } from "lucide-react";
+import { RotateCcw, Clock, Layers, AlertCircle, CheckCircle2, ChefHat, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, differenceInMinutes, parseISO } from "date-fns";
 import { useState, useEffect } from "react";
 
 interface OrderCardProps {
@@ -31,6 +31,35 @@ export function OrderCard({ order, onStatusChange, onItemStatusChange }: OrderCa
   };
 
   const nextStatus = getNextStatus();
+
+  // Helper function to check if an item was added later (newly added)
+  const isNewlyAddedItem = (item: any): boolean => {
+    if (!item.created_at || !order.createdAt) return false;
+    
+    try {
+      const itemCreatedAt = new Date(item.created_at);
+      const orderCreatedAt = new Date(order.createdAt);
+      
+      // If item was created more than 2 minutes after the order, it's newly added
+      const minutesDiff = differenceInMinutes(itemCreatedAt, orderCreatedAt);
+      return minutesDiff > 2;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  // Helper function to get time since item was added/updated
+  const getItemTimeAgo = (item: any): string => {
+    try {
+      // Prefer updated_at to show when the item was last modified
+      const timestamp = item.updated_at || item.created_at;
+      if (!timestamp) return "";
+      
+      return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
+    } catch (e) {
+      return "";
+    }
+  };
   const [timeAgo, setTimeAgo] = useState<string>("");
 
   useEffect(() => {
@@ -172,20 +201,46 @@ export function OrderCard({ order, onStatusChange, onItemStatusChange }: OrderCa
                     {items.map((item: any, index: number) => {
                       // Use the actual database ID for the item
                       const itemId = String(item.id || `${order.id}-${index}`);
+                      const isNewItem = isNewlyAddedItem(item);
+                      const itemTimeAgo = getItemTimeAgo(item);
 
                       return (
-                        <div key={item.id || index} className="flex items-start justify-between gap-2 group bg-white/60 p-2.5 rounded-lg border border-slate-100">
+                        <div key={item.id || index} className={cn(
+                          "flex items-start justify-between gap-2 group p-2.5 rounded-lg border transition-all",
+                          isNewItem ? "bg-gradient-to-r from-blue-50 to-blue-100/50 border-blue-300 shadow-md" : "bg-white/60 border-slate-100"
+                        )}>
                           <div className="flex-1 min-w-0 flex items-start gap-2">
                             {/* Quantity badge - fixed width */}
-                            <div className="flex-shrink-0 min-w-[32px] h-6 px-2 rounded-md bg-white border-2 border-slate-200 flex items-center justify-center text-sm font-black text-slate-900 shadow-sm">
+                            <div className={cn(
+                              "flex-shrink-0 min-w-[32px] h-6 px-2 rounded-md flex items-center justify-center text-sm font-black shadow-sm",
+                              isNewItem ? "bg-blue-600 text-white border-2 border-blue-700" : "bg-white border-2 border-slate-200 text-slate-900"
+                            )}>
                               x{item.quantity}
                             </div>
                             
                             {/* Item name and notes */}
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-black text-slate-800 leading-tight tracking-tight capitalize break-words">
-                                {item.menuItem.name}
-                              </p>
+                              <div className="flex items-start gap-2 flex-wrap">
+                                <p className="text-sm font-black text-slate-800 leading-tight tracking-tight capitalize break-words">
+                                  {item.menuItem.name}
+                                </p>
+                                {/* NEW badge for newly added items */}
+                                {isNewItem && (
+                                  <div className="inline-flex items-center gap-1 bg-blue-600 text-white px-2 py-0.5 rounded-full animate-pulse shadow-lg">
+                                    <Sparkles className="h-3 w-3" />
+                                    <span className="text-[9px] font-black uppercase tracking-wider">NEW</span>
+                                  </div>
+                                )}
+                              </div>
+                              
+                              {/* Show timestamp for newly added items */}
+                              {isNewItem && itemTimeAgo && (
+                                <div className="mt-1 flex items-center gap-1 text-[10px] font-bold text-blue-700">
+                                  <Clock className="h-3 w-3" />
+                                  <span>Added {itemTimeAgo}</span>
+                                </div>
+                              )}
+                              
                               {item.notes && (
                                 <div className="mt-1.5 flex items-start gap-1 bg-amber-50 px-1.5 py-1 rounded border border-amber-100">
                                   <span className="text-amber-600 text-[9px] font-black uppercase mt-0.5 tracking-tighter flex-shrink-0">NOTE:</span>

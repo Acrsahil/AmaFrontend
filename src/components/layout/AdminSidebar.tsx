@@ -12,7 +12,8 @@ import {
   ChefHat,
   Monitor,
   Shield,
-  BarChart3
+  BarChart3,
+  Trash2
 } from "lucide-react";
 import { getCurrentUser, logout } from "../../auth/auth";
 import { useState } from "react";
@@ -30,6 +31,7 @@ const allNavItems = [
   { icon: BarChart3, label: "Daily Stats", path: "/admin/dashboard/daily-stats" },
   { icon: BarChart3, label: "Global Analytics", path: "/admin/dashboard/global-analytics" },
   { icon: UtensilsCrossed, label: "Table Management", path: "/admin/dashboard/tables" },
+  { icon: Trash2, label: "Deleted Invoices", path: "/admin/dashboard/deleted-invoices" },
   { icon: Settings, label: "Settings", path: "/admin/dashboard/settings" },
 ];
 

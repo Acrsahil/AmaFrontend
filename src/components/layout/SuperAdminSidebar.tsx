@@ -7,7 +7,8 @@ import {
     Users,
     Settings,
     LogOut,
-    Monitor
+    Monitor,
+    Trash2
 } from "lucide-react";
 import { logout } from "../../auth/auth";
 import { useState } from "react";
@@ -20,6 +21,7 @@ const navItems = [
     { icon: Store, label: "All Branches", path: "/super-admin/branches" },
     { icon: BarChart3, label: "Global Analytics", path: "/super-admin/analytics" },
     { icon: Users, label: "Admin Access", path: "/super-admin/access" },
+    { icon: Trash2, label: "Deleted Invoices", path: "/super-admin/deleted-invoices" },
 ];
 
 interface SuperAdminSidebarProps {

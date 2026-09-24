@@ -103,6 +103,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
     const [tempAddedItems, setTempAddedItems] = useState<{ product: any, quantity: number }[]>([]);
     const [addItemsSearch, setAddItemsSearch] = useState("");
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [deleteReason, setDeleteReason] = useState("");
     const [isDeleting, setIsDeleting] = useState(false);
 
     // Global Keyboard State
@@ -611,6 +612,12 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
     const handleDeleteInvoice = async () => {
         if (!selectedOrder) return;
         
+        // Validate delete reason
+        if (!deleteReason.trim()) {
+            toast.error("Please provide a reason for deleting this invoice");
+            return;
+        }
+        
         // Only allow delete for UNPAID invoices
         if (selectedOrder.payment_status === 'PAID') {
             toast.error("Cannot delete a paid invoice");
@@ -619,10 +626,11 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
 
         setIsDeleting(true);
         try {
-            await deleteInvoice(selectedOrder.id);
+            await deleteInvoice(selectedOrder.id, deleteReason.trim());
             toast.success("Invoice deleted successfully");
             setShowDetailModal(false);
             setShowDeleteConfirm(false);
+            setDeleteReason(""); // Clear reason
             loadInvoices(1, true); // Refresh list
         } catch (err: any) {
             toast.error(err.message || "Failed to delete invoice");
@@ -2253,13 +2261,33 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                         <p className="text-sm text-slate-600">
                             Are you sure you want to delete invoice <span className="font-bold">#{selectedOrder?.invoice_number}</span>? 
                             <br />
-                            <span className="text-xs">This action cannot be undone.</span>
+                            <span className="text-xs text-red-600">This action cannot be undone.</span>
                         </p>
+                        
+                        {/* Delete Reason Input */}
+                        <div className="space-y-2">
+                            <Label htmlFor="deleteReason" className="text-xs font-bold text-slate-700">
+                                Reason for deletion <span className="text-red-500">*</span>
+                            </Label>
+                            <Input
+                                id="deleteReason"
+                                placeholder="e.g., Customer walked out, Wrong order, Duplicate entry..."
+                                value={deleteReason}
+                                onChange={(e) => setDeleteReason(e.target.value)}
+                                className="h-10 text-sm"
+                                disabled={isDeleting}
+                                autoFocus
+                            />
+                        </div>
+                        
                         <div className="flex gap-2">
                             <Button
                                 variant="outline"
                                 className="flex-1 h-10 rounded-xl font-bold"
-                                onClick={() => setShowDeleteConfirm(false)}
+                                onClick={() => {
+                                    setShowDeleteConfirm(false);
+                                    setDeleteReason("");
+                                }}
                                 disabled={isDeleting}
                             >
                                 Cancel
@@ -2268,7 +2296,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                 variant="destructive"
                                 className="flex-1 h-10 rounded-xl font-bold"
                                 onClick={handleDeleteInvoice}
-                                disabled={isDeleting}
+                                disabled={isDeleting || !deleteReason.trim()}
                             >
                                 {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
                             </Button>

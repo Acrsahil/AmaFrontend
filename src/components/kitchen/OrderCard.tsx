@@ -174,53 +174,54 @@ export function OrderCard({ order, onStatusChange, onItemStatusChange }: OrderCa
                       const itemId = String(item.id || `${order.id}-${index}`);
 
                       return (
-                        <div key={item.id || index} className="flex flex-col group bg-white/60 p-2.5 rounded-lg border border-slate-100">
-                          <div className="flex justify-between items-start gap-3 min-h-[44px]">
+                        <div key={item.id || index} className="flex items-start justify-between gap-2 group bg-white/60 p-2.5 rounded-lg border border-slate-100">
+                          <div className="flex-1 min-w-0 flex items-start gap-2">
+                            {/* Quantity badge - fixed width */}
+                            <div className="flex-shrink-0 min-w-[32px] h-6 px-2 rounded-md bg-white border-2 border-slate-200 flex items-center justify-center text-sm font-black text-slate-900 shadow-sm">
+                              x{item.quantity}
+                            </div>
+                            
+                            {/* Item name and notes */}
                             <div className="flex-1 min-w-0">
-                              <p className="text-base font-black text-slate-800 leading-tight tracking-tight capitalize break-words">
+                              <p className="text-sm font-black text-slate-800 leading-tight tracking-tight capitalize break-words">
                                 {item.menuItem.name}
                               </p>
-                              {/* Show quantity below name if needed */}
-                              <div className="flex items-center gap-2 mt-1">
-                                <div className="flex-shrink-0 min-w-[36px] h-6 px-2 rounded-md bg-white border-2 border-slate-200 flex items-center justify-center text-sm font-black text-slate-900 shadow-sm">
-                                  x{item.quantity}
+                              {item.notes && (
+                                <div className="mt-1.5 flex items-start gap-1 bg-amber-50 px-1.5 py-1 rounded border border-amber-100">
+                                  <span className="text-amber-600 text-[9px] font-black uppercase mt-0.5 tracking-tighter flex-shrink-0">NOTE:</span>
+                                  <p className="text-[10px] text-amber-700 font-bold italic leading-tight break-words">
+                                    {item.notes}
+                                  </p>
                                 </div>
-                              </div>
-                            </div>
-                            <div className="flex flex-col gap-1 flex-shrink-0 ml-2">
-                              {/* Individual item action buttons - Stack vertically for better space */}
-                              {onItemStatusChange && status === 'PENDING' && (
-                                <Button
-                                  size="sm"
-                                  className="h-7 px-2 text-[10px] font-black bg-emerald-600 hover:bg-emerald-700 text-white rounded-md shadow-sm whitespace-nowrap"
-                                  onClick={() => onItemStatusChange(order.id, itemId, 'READY')}
-                                  title="Mark this item as Ready"
-                                >
-                                  <CheckCircle2 className="h-3 w-3 mr-1" />
-                                  Ready
-                                </Button>
-                              )}
-                              {onItemStatusChange && status === 'READY' && (
-                                <Button
-                                  size="sm"
-                                  className="h-7 px-2 text-[10px] font-black bg-slate-600 hover:bg-slate-700 text-white rounded-md shadow-sm whitespace-nowrap"
-                                  onClick={() => onItemStatusChange(order.id, itemId, 'COMPLETED')}
-                                  title="Mark this item as Completed"
-                                >
-                                  <CheckCircle2 className="h-3 w-3 mr-1" />
-                                  Done
-                                </Button>
                               )}
                             </div>
                           </div>
-                          {item.notes && (
-                            <div className="mt-2 flex items-start gap-1.5 bg-amber-50 px-2 py-1 rounded-md border border-amber-100">
-                              <span className="text-amber-600 text-[9px] font-black uppercase mt-0.5 tracking-tighter flex-shrink-0">NOTE:</span>
-                              <p className="text-[11px] text-amber-700 font-bold italic leading-tight break-words">
-                                {item.notes}
-                              </p>
-                            </div>
-                          )}
+                          
+                          {/* Action buttons - always visible, fixed width */}
+                          <div className="flex-shrink-0">
+                            {onItemStatusChange && status === 'PENDING' && (
+                              <Button
+                                size="sm"
+                                className="h-7 w-16 text-[10px] font-black bg-emerald-600 hover:bg-emerald-700 text-white rounded-md shadow-sm"
+                                onClick={() => onItemStatusChange(order.id, itemId, 'READY')}
+                                title="Mark this item as Ready"
+                              >
+                                <CheckCircle2 className="h-3 w-3 mr-0.5" />
+                                Ready
+                              </Button>
+                            )}
+                            {onItemStatusChange && status === 'READY' && (
+                              <Button
+                                size="sm"
+                                className="h-7 w-16 text-[10px] font-black bg-slate-600 hover:bg-slate-700 text-white rounded-md shadow-sm"
+                                onClick={() => onItemStatusChange(order.id, itemId, 'COMPLETED')}
+                                title="Mark this item as Completed"
+                              >
+                                <CheckCircle2 className="h-3 w-3 mr-0.5" />
+                                Done
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       );
                     })}

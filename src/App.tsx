@@ -21,6 +21,7 @@ import CounterOrders from "./pages/counter/CounterOrders";
 import CounterDashboard from "./pages/counter/CounterDashboard";
 import CounterReports from "./pages/counter/CounterReports";
 import CounterWaiterPayments from "./pages/counter/CounterWaiterPayments";
+import DeletedInvoices from "./pages/counter/DeletedInvoices";
 
 // Kitchen Pages
 import KitchenDisplay from "./pages/kitchen/KitchenDisplay";
@@ -159,6 +160,7 @@ const App = () => {
               <Route path="/super-admin/branches" element={<SuperAdminBranches />} />
               <Route path="/super-admin/analytics" element={<SuperAdminAnalytics />} />
               <Route path="/super-admin/access" element={<SuperAdminAccess />} />
+              <Route path="/super-admin/deleted-invoices" element={<DeletedInvoices />} />
             </Route>
 
             {/* ✅ WAITER PROTECTED */}
@@ -232,6 +234,14 @@ const App = () => {
               <Route path="/counter/daily-sales" element={<AdminDailyStats />} />
               <Route path="/counter/reports" element={<CounterReports />} />
               <Route path="/counter/waiter-payments" element={<CounterWaiterPayments />} />
+              <Route 
+                path="/counter/deleted-invoices" 
+                element={
+                  <ProtectedRoute allowedRoles={["COUNTER", "ADMIN", "BRANCH_MANAGER"]}>
+                    <DeletedInvoices />
+                  </ProtectedRoute>
+                } 
+              />
             </Route>
 
             {/* ✅ KITCHEN PROTECTED */}
@@ -265,6 +275,7 @@ const App = () => {
               <Route path="global-analytics" element={<SuperAdminAnalytics />} />
               <Route path="tables" element={<AdminTables />} />
               <Route path="settings" element={<AdminSettings />} />
+              <Route path="deleted-invoices" element={<DeletedInvoices />} />
             </Route>
 
             {/* Optional: redirect base role paths */}

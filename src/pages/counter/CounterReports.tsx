@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { fetchReportDashboard, fetchStaffReport } from "@/api/index.js";
+import { fetchDashboardDetails, fetchStaffReport, fetchReportDashboard } from "@/api/index.js";
 import { getCurrentUser } from "../../auth/auth";
 import { toast } from "sonner";
 import {
@@ -8,7 +8,8 @@ import {
   Filter,
   CalendarDays,
   ChevronDown,
-  Calendar as CalendarIcon
+  Calendar as CalendarIcon,
+  Calculator
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -25,6 +26,9 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   BarChart,
   Bar,
@@ -57,6 +61,20 @@ export default function CounterReports() {
     to: undefined
   });
 
+  // Cash Calculator states
+  const [showCashCalculator, setShowCashCalculator] = useState(false);
+  const [denominations, setDenominations] = useState({
+    1000: 0,
+    500: 0,
+    100: 0,
+    50: 0,
+    20: 0,
+    10: 0,
+    5: 0,
+    2: 0,
+    1: 0
+  });
+
   useEffect(() => {
     loadReportData();
     loadStaffData();
@@ -71,6 +89,90 @@ export default function CounterReports() {
     return params;
   };
 
+  // Cash calculator functions
+  const updateDenomination = (value: number, count: string) => {
+    setDenominations(prev => ({
+      ...prev,
+      [value]: parseInt(count) || 0
+    }));
+  };
+
+  const calculateTotalCash = () => {
+    return Object.entries(denominations).reduce((total, [value, count]) => {
+      return total + (parseInt(value) * count);
+    }, 0);
+  };
+
+  const clearCalculator = () => {
+    setDenominations({
+      1000: 0,
+      500: 0,
+      100: 0,
+      50: 0,
+      20: 0,
+      10: 0,
+      5: 0,
+      2: 0,
+      1: 0
+    });
+  };
+
+  // Get system cash amount from reports
+  const getSystemCashAmount = () => {
+    // Try sales_by_payment_method first (this is what the API actually returns)
+    const salesByPayment = reportData?.sales_by_payment_method || [];
+    
+    const cashPayment = salesByPayment.find((pm: any) => 
+      pm.payment_method?.toUpperCase() === 'CASH' || 
+      pm.method?.toUpperCase() === 'CASH' ||
+      pm.type?.toUpperCase() === 'CASH'
+    );
+    
+    // Try different possible field names for amount
+    const amount = parseFloat(
+      cashPayment?.total_amount || 
+      cashPayment?.amount || 
+      cashPayment?.total || 
+      cashPayment?.value ||
+      0
+    );
+    return amount;
+  };
+
+  // Calculate total orders and avg order value if not provided by API
+  const getTotalOrders = () => {
+    // Check various possible field names for total orders
+    if (reportData?.total_orders) return reportData.total_orders;
+    if (reportData?.total_month_orders) return reportData.total_month_orders; // API returns this
+    if (reportData?.orders_count) return reportData.orders_count;
+    
+    // Calculate from sales_by_payment_method if order counts are available
+    const salesByPayment = reportData?.sales_by_payment_method || [];
+    const totalFromPayments = salesByPayment.reduce((sum: number, pm: any) => {
+      const orderCount = pm.order_count || pm.orders_count || pm.count || 0;
+      return sum + orderCount;
+    }, 0);
+    
+    return totalFromPayments;
+  };
+
+  const getAverageOrderValue = () => {
+    // Check various possible field names for average order value
+    if (reportData?.average_order_value) return parseFloat(reportData.average_order_value);
+    if (reportData?.avg_order) return parseFloat(reportData.avg_order); // API returns this
+    if (reportData?.avg_order_value) return parseFloat(reportData.avg_order_value);
+    
+    // Calculate manually if needed
+    const totalSales = reportData?.total_sales || 
+                      reportData?.total_month_sales ||
+                      reportData?.sales_by_payment_method?.reduce((sum: number, pm: any) => 
+                        sum + (parseFloat(pm.total_amount || pm.amount || pm.total || 0)), 0) || 0;
+    const totalOrders = getTotalOrders();
+    
+    const avgValue = totalOrders > 0 ? totalSales / totalOrders : 0;
+    return avgValue;
+  };
+
   const loadReportData = async () => {
     setLoading(true);
     setMissingBranch(false);
@@ -81,6 +183,7 @@ export default function CounterReports() {
         setLoading(false);
         return;
       }
+      
       const data = await fetchReportDashboard(branchId, getFilters());
       setReportData(data);
     } catch (error) {
@@ -99,6 +202,7 @@ export default function CounterReports() {
         setStaffLoading(false);
         return;
       }
+      
       const data = await fetchStaffReport(branchId, getFilters());
       setStaffData(data?.staff_performance || []);
     } catch (error) {
@@ -128,6 +232,14 @@ export default function CounterReports() {
           <p className="text-muted-foreground">Analytics and performance insights</p>
         </div>
         <div className="flex items-center gap-3">
+          <Button
+            onClick={() => setShowCashCalculator(true)}
+            className="h-11 rounded-xl font-bold px-4 gap-2 bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg"
+          >
+            <Calculator className="h-4 w-4" />
+            Cash Calculator
+          </Button>
+          
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="h-11 rounded-xl border-2 font-bold px-4 hover:bg-slate-50 transition-all border-slate-100 shadow-sm gap-2 hover:text-primary">
@@ -189,11 +301,11 @@ export default function CounterReports() {
         </Card>
         <Card className="p-6 rounded-2xl border-none shadow-lg">
           <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Total Orders</p>
-          <p className="text-2xl font-black text-slate-900 mt-2">{reportData?.total_orders || 0}</p>
+          <p className="text-2xl font-black text-slate-900 mt-2">{getTotalOrders()}</p>
         </Card>
         <Card className="p-6 rounded-2xl border-none shadow-lg">
           <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Avg. Order Value</p>
-          <p className="text-2xl font-black text-slate-900 mt-2">Rs.{Number(reportData?.average_order_value || 0).toLocaleString()}</p>
+          <p className="text-2xl font-black text-slate-900 mt-2">Rs.{Number(getAverageOrderValue() || 0).toLocaleString()}</p>
         </Card>
       </div>
 
@@ -215,24 +327,31 @@ export default function CounterReports() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {(reportData?.sales_by_payment_method || []).map((pm: any, idx: number) => (
-                <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-6 py-4">
-                    <span className={cn(
-                      "text-[11px] font-black px-2.5 py-1 rounded uppercase tracking-tight",
-                      pm.payment_method === "CASH" ? "bg-green-100 text-green-700" :
-                      pm.payment_method === "QR" ? "bg-blue-100 text-blue-700" :
-                      pm.payment_method === "CREDIT" ? "bg-purple-100 text-purple-700" :
-                      pm.payment_method === "CARD" ? "bg-amber-100 text-amber-700" :
-                      "bg-slate-100 text-slate-700"
-                    )}>
-                      {pm.payment_method}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right font-bold text-sm text-slate-900">{pm.order_count || 0}</td>
-                  <td className="px-6 py-4 text-right font-bold text-sm text-slate-900">Rs.{Number(pm.total_amount || 0).toLocaleString()}</td>
-                </tr>
-              ))}
+              {(reportData?.sales_by_payment_method || []).map((pm: any, idx: number) => {
+                const orderCount = pm.order_count || pm.orders_count || pm.count || pm.orders || 0;
+                const totalAmount = pm.total_amount || pm.amount || pm.total || 0;
+                
+                return (
+                  <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-6 py-4">
+                      <span className={cn(
+                        "text-[11px] font-black px-2.5 py-1 rounded uppercase tracking-tight",
+                        pm.payment_method === "CASH" ? "bg-green-100 text-green-700" :
+                        pm.payment_method === "QR" ? "bg-blue-100 text-blue-700" :
+                        pm.payment_method === "CREDIT" ? "bg-purple-100 text-purple-700" :
+                        pm.payment_method === "CARD" ? "bg-amber-100 text-amber-700" :
+                        "bg-slate-100 text-slate-700"
+                      )}>
+                        {pm.payment_method}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right font-bold text-sm text-slate-500">
+                      {orderCount > 0 ? orderCount : '-'}
+                    </td>
+                    <td className="px-6 py-4 text-right font-bold text-sm text-slate-900">Rs.{Number(totalAmount).toLocaleString()}</td>
+                  </tr>
+                );
+              })}
               {(reportData?.sales_by_payment_method || []).length === 0 && (
                 <tr>
                   <td colSpan={3} className="px-6 py-12 text-center text-muted-foreground">
@@ -355,8 +474,15 @@ export default function CounterReports() {
         <TabsContent value="staff" className="space-y-4">
           <Card className="rounded-2xl border-none shadow-lg overflow-hidden">
             <div className="p-6 border-b border-slate-100">
-              <h3 className="text-base font-black uppercase tracking-tight">Staff Performance</h3>
-              <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Orders and sales by staff member</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-black uppercase tracking-tight">Staff Performance</h3>
+                  <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Orders and sales by staff member</p>
+                </div>
+                <div className="bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg">
+                  <p className="text-[10px] font-black text-amber-700 uppercase tracking-wide">⚠️ All-Time Data</p>
+                </div>
+              </div>
             </div>
             {staffLoading ? (
               <div className="flex justify-center py-12">
@@ -377,11 +503,11 @@ export default function CounterReports() {
                   <tbody className="divide-y divide-slate-100">
                     {staffData.map((staff: any, idx: number) => (
                       <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="px-6 py-4 font-bold text-sm text-slate-800">{staff.user_name || staff.username || 'Unknown'}</td>
+                        <td className="px-6 py-4 font-bold text-sm text-slate-800">{staff.user_name || staff.username || staff.name || 'Unknown'}</td>
                         <td className="px-6 py-4 text-sm text-slate-600 capitalize">{staff.role || 'N/A'}</td>
-                        <td className="px-6 py-4 text-right font-bold text-sm text-slate-900">{staff.order_count || 0}</td>
-                        <td className="px-6 py-4 text-right font-bold text-sm text-slate-900">Rs.{Number(staff.total_sales || 0).toLocaleString()}</td>
-                        <td className="px-6 py-4 text-right font-bold text-sm text-emerald-600">Rs.{Number(staff.cash_in_hand || 0).toLocaleString()}</td>
+                        <td className="px-6 py-4 text-right font-bold text-sm text-slate-900">{staff.orders || staff.order_count || 0}</td>
+                        <td className="px-6 py-4 text-right font-bold text-sm text-slate-900">Rs.{Number(staff.sales || staff.total_sales || 0).toLocaleString()}</td>
+                        <td className="px-6 py-4 text-right font-bold text-sm text-emerald-600">Rs.{Number(staff.cash_in_hand || staff.cash || 0).toLocaleString()}</td>
                       </tr>
                     ))}
                     {staffData.length === 0 && (
@@ -398,6 +524,182 @@ export default function CounterReports() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Cash Calculator Modal - Professional Monochrome Design */}
+      <Dialog open={showCashCalculator} onOpenChange={setShowCashCalculator}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden p-0 bg-white rounded-2xl shadow-2xl">
+          {/* Header */}
+          <DialogHeader className="px-6 py-4 border-b border-slate-200">
+            <DialogTitle className="flex items-center gap-3 text-xl font-black text-slate-900">
+              <div className="h-10 w-10 rounded-xl bg-slate-900 flex items-center justify-center">
+                <Calculator className="h-5 w-5 text-white" />
+              </div>
+              Cash Drawer Calculator
+            </DialogTitle>
+            <p className="text-xs text-slate-500 ml-13">Count physical cash and verify against system</p>
+          </DialogHeader>
+
+          <div className="overflow-y-auto max-h-[calc(85vh-80px)] p-6 space-y-5">
+            {/* Summary Cards Row */}
+            <div className="grid grid-cols-3 gap-4">
+              {/* Your Count */}
+              <div className="bg-slate-50 border-2 border-slate-200 p-4 rounded-xl">
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-wide">Your Count</p>
+                <p className="text-2xl font-black text-slate-900 mt-1">₹{calculateTotalCash().toLocaleString()}</p>
+              </div>
+
+              {/* System */}
+              <div className="bg-slate-50 border-2 border-slate-200 p-4 rounded-xl">
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-wide">System Cash</p>
+                <p className="text-2xl font-black text-slate-900 mt-1">₹{getSystemCashAmount().toLocaleString()}</p>
+              </div>
+
+              {/* Difference */}
+              <div className={cn(
+                "p-4 rounded-xl border-2",
+                calculateTotalCash() === getSystemCashAmount() 
+                  ? "bg-slate-900 border-slate-900" 
+                  : "bg-amber-50 border-amber-300"
+              )}>
+                <p className={cn(
+                  "text-[10px] font-black uppercase tracking-wide",
+                  calculateTotalCash() === getSystemCashAmount() ? "text-white/80" : "text-amber-700"
+                )}>
+                  {calculateTotalCash() === getSystemCashAmount() ? "Status" : "Difference"}
+                </p>
+                <p className={cn(
+                  "text-2xl font-black mt-1",
+                  calculateTotalCash() === getSystemCashAmount() ? "text-white" : "text-amber-900"
+                )}>
+                  {calculateTotalCash() === getSystemCashAmount() 
+                    ? "✓ Match" 
+                    : `${calculateTotalCash() > getSystemCashAmount() ? '+' : ''}₹${Math.abs(calculateTotalCash() - getSystemCashAmount()).toLocaleString()}`
+                  }
+                </p>
+              </div>
+            </div>
+
+            {/* Denomination Grid */}
+            <div className="space-y-3">
+              <h3 className="text-xs font-black text-slate-600 uppercase tracking-wider">Count Notes & Coins</h3>
+              
+              {/* Large Notes (1000, 500) */}
+              <div className="grid grid-cols-2 gap-3">
+                {['1000', '500'].map((value) => (
+                  <div key={value} className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border-2 border-slate-200">
+                    <div className="w-16 h-10 rounded-lg bg-slate-900 flex items-center justify-center">
+                      <span className="text-white font-black text-sm">₹{value}</span>
+                    </div>
+                    <span className="text-slate-400 font-bold">×</span>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={denominations[value] || ''}
+                      onChange={(e) => updateDenomination(parseInt(value), e.target.value)}
+                      className="w-20 h-10 text-center font-bold text-base border-2 border-slate-300 focus:border-slate-900 rounded-lg"
+                      placeholder="0"
+                    />
+                    <span className="text-sm font-black text-slate-900 ml-auto">₹{(parseInt(value) * (denominations[value] || 0)).toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Medium Notes (100, 50) */}
+              <div className="grid grid-cols-2 gap-3">
+                {['100', '50'].map((value) => (
+                  <div key={value} className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border-2 border-slate-200">
+                    <div className="w-16 h-10 rounded-lg bg-slate-700 flex items-center justify-center">
+                      <span className="text-white font-black text-sm">₹{value}</span>
+                    </div>
+                    <span className="text-slate-400 font-bold">×</span>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={denominations[value] || ''}
+                      onChange={(e) => updateDenomination(parseInt(value), e.target.value)}
+                      className="w-20 h-10 text-center font-bold text-base border-2 border-slate-300 focus:border-slate-700 rounded-lg"
+                      placeholder="0"
+                    />
+                    <span className="text-sm font-black text-slate-900 ml-auto">₹{(parseInt(value) * (denominations[value] || 0)).toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Small Notes (20, 10) */}
+              <div className="grid grid-cols-2 gap-3">
+                {['20', '10'].map((value) => (
+                  <div key={value} className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border-2 border-slate-200">
+                    <div className="w-16 h-10 rounded-lg bg-slate-600 flex items-center justify-center">
+                      <span className="text-white font-black text-sm">₹{value}</span>
+                    </div>
+                    <span className="text-slate-400 font-bold">×</span>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={denominations[value] || ''}
+                      onChange={(e) => updateDenomination(parseInt(value), e.target.value)}
+                      className="w-20 h-10 text-center font-bold text-base border-2 border-slate-300 focus:border-slate-600 rounded-lg"
+                      placeholder="0"
+                    />
+                    <span className="text-sm font-black text-slate-900 ml-auto">₹{(parseInt(value) * (denominations[value] || 0)).toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Coins (5, 2, 1) */}
+              <div className="grid grid-cols-3 gap-3">
+                {['5', '2', '1'].map((value) => (
+                  <div key={value} className="flex flex-col items-center gap-2 bg-slate-50 p-3 rounded-xl border-2 border-slate-200">
+                    <div className="w-12 h-12 rounded-full bg-slate-500 flex items-center justify-center">
+                      <span className="text-white font-black text-xs">₹{value}</span>
+                    </div>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={denominations[value] || ''}
+                      onChange={(e) => updateDenomination(parseInt(value), e.target.value)}
+                      className="w-16 h-9 text-center font-bold text-sm border-2 border-slate-300 focus:border-slate-500 rounded-lg"
+                      placeholder="0"
+                    />
+                    <span className="text-xs font-black text-slate-700">₹{(parseInt(value) * (denominations[value] || 0)).toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Summary */}
+            {Object.entries(denominations).some(([_, count]) => count > 0) && (
+              <div className="bg-slate-100 p-4 rounded-xl border-2 border-slate-200">
+                <p className="text-xs font-black text-slate-600 uppercase tracking-wide mb-3">Breakdown</p>
+                <div className="space-y-2">
+                  {Object.entries(denominations)
+                    .filter(([_, count]) => count > 0)
+                    .sort(([a], [b]) => parseInt(b) - parseInt(a))
+                    .map(([value, count]) => (
+                      <div key={value} className="flex justify-between items-center text-sm">
+                        <span className="text-slate-600 font-medium">₹{value} × {count}</span>
+                        <span className="font-bold text-slate-900">₹{(parseInt(value) * count).toLocaleString()}</span>
+                      </div>
+                    ))}
+                  <div className="border-t-2 border-slate-300 pt-2 mt-2 flex justify-between items-center">
+                    <span className="text-slate-900 font-black text-base">Total Count</span>
+                    <span className="font-black text-xl text-slate-900">₹{calculateTotalCash().toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Clear Button */}
+            <Button
+              variant="outline"
+              onClick={clearCalculator}
+              className="w-full h-11 rounded-xl text-sm font-bold border-2 border-slate-300 hover:bg-slate-100 hover:border-slate-400 text-slate-700"
+            >
+              Clear All
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

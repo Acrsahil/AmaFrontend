@@ -711,15 +711,46 @@ export async function addPayment(invoiceId, paymentData) {
   return data;
 }
 
-export async function deleteInvoice(invoiceId) {
+export async function deleteInvoice(invoiceId, reason) {
   const res = await apiFetch(`/api/invoice/${invoiceId}/`, {
-    method: "DELETE"
+    method: "DELETE",
+    body: JSON.stringify({ reason })
   });
   const data = await safeJson(res);
   if (!res.ok) {
     const errorMsg = data?.error || data?.message || "Failed to delete invoice";
     throw new Error(errorMsg);
   }
+  return data;
+}
+
+// Fetch deleted invoices (with optional date filter)
+export async function fetchDeletedInvoices(params = {}) {
+  const queryParams = new URLSearchParams();
+  if (params.date) queryParams.append('date', params.date);
+  if (params.page) queryParams.append('page', params.page);
+  if (params.page_size) queryParams.append('page_size', params.page_size);
+  
+  const url = `/api/deleted-invoice/${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
+  console.log("🗑️ Fetching deleted invoices from:", url);
+  
+  const res = await apiFetch(url);
+  const data = await safeJson(res);
+  
+  console.log("🗑️ Deleted invoices response:", { status: res.status, ok: res.ok, data });
+  
+  if (!res.ok) {
+    console.error("❌ Deleted invoices API error:", res.status, data);
+    throw new Error(data?.error || `HTTP ${res.status}: Failed to fetch deleted invoices`);
+  }
+  return data;
+}
+
+// Fetch single deleted invoice
+export async function fetchDeletedInvoice(invoiceId) {
+  const res = await apiFetch(`/api/deleted-invoice/${invoiceId}/`);
+  const data = await safeJson(res);
+  if (!res.ok) throw new Error(data?.error || "Failed to fetch deleted invoice");
   return data;
 }
 

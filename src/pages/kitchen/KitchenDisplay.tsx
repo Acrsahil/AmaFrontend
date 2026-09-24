@@ -146,10 +146,11 @@ export default function KitchenDisplay() {
   // WebSocket message handler
   const wsRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleWebSocketMessage = useCallback((data: any) => {
+  const handleWebSocketMessage = useCallback(async (data: any) => {
+    // Removed setTimeout delay - process immediately for instant updates
     if (wsRefreshTimerRef.current) clearTimeout(wsRefreshTimerRef.current);
-    wsRefreshTimerRef.current = setTimeout(async () => {
-      console.log("[WS] Message received:", data.type, data.invoice_id);
+    
+    console.log("[WS] Message received:", data.type, data.invoice_id);
 
       // Skip WebSocket merge if we're in the middle of a manual reload
       // This prevents the race condition where WebSocket overwrites our updates
@@ -264,7 +265,6 @@ export default function KitchenDisplay() {
         console.log("[WS] General update received, reloading...");
         loadDataRef.current?.();
       }
-    }, 500);
   }, [orders]);
 
   // Get current user and branch
@@ -638,25 +638,11 @@ export default function KitchenDisplay() {
 
       toast.success(`Item marked as ${newStatus.toLowerCase()}`);
 
-      // Disable WebSocket merge temporarily to prevent stale data from overwriting our update
-      // The WebSocket will fire with old data, but we'll ignore it and do a clean reload
-      isManualReloadRef.current = true;
-
-      // Wait a bit to ensure the API call completes and WebSocket event arrives
-      await new Promise(resolve => setTimeout(resolve, 300));
-
-      // Force a complete reload to get the true state from the server
-      await loadData();
-
-      // Keep flag true for a bit longer to ensure WebSocket doesn't merge stale data
-      // WebSocket has 500ms delay, so we need to keep it disabled for at least that long
-      setTimeout(() => {
-        isManualReloadRef.current = false;
-      }, 1500);
+      // Apply optimistic update immediately - no delay
+      handleInvoiceUpdate(invoiceId);
     } catch (err: any) {
       console.error("Item status update error:", err);
       toast.error(err.message || "Failed to update item status");
-      isManualReloadRef.current = false;
     }
   };
 
@@ -761,25 +747,11 @@ export default function KitchenDisplay() {
         });
       }
 
-      // Disable WebSocket merge temporarily to prevent stale data from overwriting our update
-      // The WebSocket will fire with old data, but we'll ignore it and do a clean reload
-      isManualReloadRef.current = true;
-
-      // Wait a bit to ensure the API call completes and WebSocket event arrives
-      await new Promise(resolve => setTimeout(resolve, 300));
-
-      // Force a complete reload to get the true state from the server
-      await loadData();
-
-      // Keep flag true for a bit longer to ensure WebSocket doesn't merge stale data
-      // WebSocket has 500ms delay, so we need to keep it disabled for at least that long
-      setTimeout(() => {
-        isManualReloadRef.current = false;
-      }, 1500);
+      // Apply optimistic update immediately - no delay
+      handleInvoiceUpdate(invoiceId);
     } catch (err: any) {
       console.error("Status update error:", err);
       toast.error(err.message || "Failed to update order status");
-      isManualReloadRef.current = false;
     }
   };
 
@@ -1023,7 +995,7 @@ export default function KitchenDisplay() {
                   <div className="w-12 h-1 border-2 border-slate-200 rounded-full opacity-50" />
                 </div>
               ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 content-start">
+                <div className="grid grid-cols-1 gap-3 content-start">
                   {filteredOrders
                     .filter(o => o.status === 'ready')
                     .map(order => (

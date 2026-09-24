@@ -7,10 +7,13 @@ import {
     Shield,
     BarChart3,
     FileText,
-    LayoutGrid
+    LayoutGrid,
+    Trash2
 } from "lucide-react";
 import { getCurrentUser } from "../../auth/auth";
 import { HandCoins, Menu } from "lucide-react";
+import { useState, useEffect } from "react";
+import { fetchDeletedInvoices } from "../../api/index.js";
 
 const navItems = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/counter/dashboard" },
@@ -20,6 +23,7 @@ const navItems = [
     { icon: BarChart3, label: "Daily Sales", path: "/counter/daily-sales" },
     { icon: FileText, label: "Reports", path: "/counter/reports" },
     { icon: HandCoins, label: "Waiter Payments", path: "/counter/waiter-payments" },
+    { icon: Trash2, label: "Deleted Invoices", path: "/counter/deleted-invoices" },
 ];
 
 interface CounterSidebarProps {

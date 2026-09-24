@@ -1890,10 +1890,6 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                                         max="1000000"
                                                         className="h-14 text-2xl font-black text-center border-2 border-primary/20 focus:border-primary rounded-xl pl-8"
                                                         value={paymentAmount}
-                                                        onFocus={() => {
-                                                            setActiveKeypadField('payment');
-                                                            setShowKeypad(true);
-                                                        }}
                                                         onChange={(e) => {
                                                             const val = parseFloat(e.target.value);
                                                             if (val > 1000000) return;
@@ -1901,7 +1897,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                                         }}
                                                     />
                                                     {changeAmount > 0 && (
-                                                        <div className="absolute -bottom-4 right-2 text-emerald-600 font-black text-xs animate-in slide-in-from-top-1 fade-in">
+                                                        <div className="absolute -bottom-7 right-2 text-emerald-600 font-black text-sm animate-in slide-in-from-top-1 fade-in">
                                                             Return: Rs.{changeAmount.toLocaleString()}
                                                         </div>
                                                     )}

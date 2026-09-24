@@ -434,6 +434,7 @@ export default function PaymentCollection() {
         <div class="thermal-title">${branchInfo?.receipt_header || "AMA BAKERY"}</div>
         <div class="thermal-subtitle">Tel: ${branchInfo?.phone || "9816020731"}</div>
         ${branchInfo?.location ? `<div class="thermal-subtitle">${branchInfo.location.toUpperCase()}</div>` : ""}
+        ${branchInfo?.Vat_No ? `<div class="thermal-subtitle">VAT: ${branchInfo.Vat_No}</div>` : ""}
     </div>
     
     <div class="thermal-divider"></div>
@@ -1382,6 +1383,7 @@ export default function PaymentCollection() {
                 <h1 className="thermal-title font-bold text-center">{branchInfo?.receipt_header || "AMA BAKERY"}</h1>
                 <div className="thermal-subtitle text-center">Tel: {branchInfo?.phone || "9816020731"}</div>
                 {branchInfo?.location && <div className="thermal-subtitle text-center">{branchInfo.location.toUpperCase()}</div>}
+                {branchInfo?.Vat_No && <div className="thermal-subtitle text-center">VAT: {branchInfo.Vat_No}</div>}
               </div>
 
               <div className="thermal-divider my-4 border-t border-dashed border-black"></div>

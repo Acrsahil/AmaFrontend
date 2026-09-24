@@ -90,7 +90,8 @@ export default function AdminSettings() {
         email: branchData.email,
         address: branchData.address,
         receipt_header: branchData.receipt_header,
-        receipt_footer: branchData.receipt_footer
+        receipt_footer: branchData.receipt_footer,
+        Vat_No: branchData.Vat_No
       }
     });
 
@@ -103,7 +104,8 @@ export default function AdminSettings() {
         email: branchData.email,
         address: branchData.address,
         receipt_header: branchData.receipt_header,
-        receipt_footer: branchData.receipt_footer
+        receipt_footer: branchData.receipt_footer,
+        Vat_No: branchData.Vat_No
       });
       console.log("✅ Update Branch Response:", response);
       toast.success("Settings updated successfully");
@@ -197,6 +199,29 @@ export default function AdminSettings() {
                       onChange={(e) => setBranchData({ ...branchData, location: e.target.value })}
                     />
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-black uppercase tracking-widest text-slate-400">VAT Number</Label>
+                  <div className="relative">
+                    <FileText className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <Input
+                      className="h-12 pl-12 rounded-xl font-bold bg-slate-50 border-transparent focus:bg-white transition-all"
+                      value={branchData?.Vat_No || ""}
+                      onChange={(e) => setBranchData({ ...branchData, Vat_No: e.target.value })}
+                      placeholder="e.g. 234234234234"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Branch Manager</Label>
+                  <div className="relative">
+                    <div className="h-12 pl-4 pr-4 rounded-xl font-bold bg-slate-100 border-transparent flex items-center text-slate-600">
+                      {branchData?.branch_manager?.username || "No manager assigned"}
+                    </div>
+                  </div>
+                  <p className="text-[10px] font-bold text-slate-400">
+                    {branchData?.branch_manager?.email || "Manager info will appear here"}
+                  </p>
                 </div>
               </div>
 
@@ -315,6 +340,7 @@ export default function AdminSettings() {
                   <p className="text-[14px] font-black uppercase">{branchData?.receipt_header || "AMA BAKERY"}</p>
                   <p>Tel: {branchData?.phone || "Ph no here"}</p>
                   {branchData?.location && <p>{branchData.location.toUpperCase()}</p>}
+                  {branchData?.Vat_No && <p>VAT: {branchData.Vat_No}</p>}
                 </div>
 
                 <div className="border-y border-dashed py-2 space-y-1">

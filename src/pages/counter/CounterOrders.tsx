@@ -707,6 +707,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
         <div class="thermal-title">${branchInfo?.receipt_header || "AMA BAKERY"}</div>
         <div class="thermal-subtitle">Tel: ${branchInfo?.phone || "9816020731"}</div>
         ${branchInfo?.location ? `<div class="thermal-subtitle">${branchInfo.location.toUpperCase()}</div>` : ""}
+        ${branchInfo?.Vat_No ? `<div class="thermal-subtitle">VAT: ${branchInfo.Vat_No}</div>` : ""}
     </div>
     
     <div class="thermal-divider"></div>
@@ -2050,6 +2051,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                 <h1 className="thermal-title">{branchInfo?.receipt_header || "AMA BAKERY"}</h1>
                                 <div className="thermal-subtitle">Tel: {branchInfo?.phone || "9816020731"}</div>
                                 {branchInfo?.location && <div className="thermal-subtitle">{branchInfo.location.toUpperCase()}</div>}
+                                {branchInfo?.Vat_No && <div className="thermal-subtitle">VAT: {branchInfo.Vat_No}</div>}
                             </div>
 
                             <div className="thermal-divider"></div>

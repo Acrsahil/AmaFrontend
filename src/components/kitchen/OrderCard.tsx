@@ -34,34 +34,15 @@ export function OrderCard({ order, onStatusChange, onItemStatusChange }: OrderCa
 
   const nextStatus = getNextStatus();
 
-  // Check if order has any recently updated items
+  // Determine if any items have an updated_at timestamp (newly added)
+  const hasNewItems = order.items?.some((item: any) => !!item.updated_at) || false;
+  // For backward compatibility, consider items with recent updates (if isRecentlyUpdated flag exists)
   const hasUpdatedItems = order.items?.some((item: any) => item.isRecentlyUpdated) || false;
-  const hasNewItems = order.items?.some((item: any) => {
-    if (!item.created_at || !order.createdAt) return false;
-    try {
-      const itemCreatedAt = new Date(item.created_at);
-      const orderCreatedAt = new Date(order.createdAt);
-      const minutesDiff = differenceInMinutes(itemCreatedAt, orderCreatedAt);
-      return minutesDiff > 2;
-    } catch (e) {
-      return false;
-    }
-  }) || false;
 
-  // Helper function to check if an item was added later (newly added)
+  // Helper function to check if an item was newly added (based on updated_at)
   const isNewlyAddedItem = (item: any): boolean => {
-    if (!item.created_at || !order.createdAt) return false;
-    
-    try {
-      const itemCreatedAt = new Date(item.created_at);
-      const orderCreatedAt = new Date(order.createdAt);
-      
-      // If item was created more than 2 minutes after the order, it's newly added
-      const minutesDiff = differenceInMinutes(itemCreatedAt, orderCreatedAt);
-      return minutesDiff > 2;
-    } catch (e) {
-      return false;
-    }
+    // If updated_at exists, consider it newly added
+    return !!item.updated_at;
   };
 
   // Helper function to get time since item was added/updated
@@ -70,7 +51,7 @@ export function OrderCard({ order, onStatusChange, onItemStatusChange }: OrderCa
       // Prefer updated_at to show when the item was last modified
       const timestamp = item.updated_at || item.created_at;
       if (!timestamp) return "";
-      
+
       return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
     } catch (e) {
       return "";
@@ -142,8 +123,8 @@ export function OrderCard({ order, onStatusChange, onItemStatusChange }: OrderCa
     <div className={cn(
       "bg-white rounded-xl shadow-sm border overflow-hidden flex flex-col h-full transition-all duration-300",
       hasNewItems ? "border-blue-400 shadow-blue-200 shadow-lg ring-2 ring-blue-400/50" :
-      hasUpdatedItems ? "border-amber-400 shadow-amber-200 shadow-lg ring-2 ring-amber-400/50" :
-      "border-slate-200 hover:shadow-lg"
+        hasUpdatedItems ? "border-amber-400 shadow-amber-200 shadow-lg ring-2 ring-amber-400/50" :
+          "border-slate-200 hover:shadow-lg"
     )}>
       {/* Status Header Strip */}
       <div className={cn(
@@ -235,70 +216,70 @@ export function OrderCard({ order, onStatusChange, onItemStatusChange }: OrderCa
                       const itemTimeAgo = getItemTimeAgo(item);
 
                       return (
-                                                        <div key={item.id || index} className={cn(
-                                                            "flex items-start justify-between gap-2 group p-2.5 rounded-lg border transition-all",
-                                                            isNewItem ? "bg-gradient-to-r from-blue-50 to-blue-100/50 border-blue-300 shadow-md animate-pulse" : 
-                                                            item.isRecentlyUpdated ? "bg-gradient-to-r from-amber-50 to-amber-100/50 border-amber-300 shadow-md" :
-                                                            "bg-white/60 border-slate-100"
-                                                        )}>
-                                                          <div className="flex-1 min-w-0 flex items-start gap-2">
-                                                            {/* Quantity badge - fixed width */}
-                                                            <div className={cn(
-                                                              "flex-shrink-0 min-w-[32px] h-6 px-2 rounded-md flex items-center justify-center text-sm font-black shadow-sm",
-                                                              isNewItem ? "bg-blue-600 text-white border-2 border-blue-700" :
-                                                              item.isRecentlyUpdated ? "bg-amber-500 text-white border-2 border-amber-600" :
-                                                              "bg-white border-2 border-slate-200 text-slate-900"
-                                                            )}>
-                                                              x{item.quantity}
-                                                            </div>
-                                                            
-                                                            {/* Item name and notes */}
-                                                            <div className="flex-1 min-w-0">
-                                                              <div className="flex items-start gap-2 flex-wrap">
-                                                                <p className="text-sm font-black text-slate-800 leading-tight tracking-tight capitalize break-words">
-                                                                  {item.menuItem.name}
-                                                                </p>
-                                                                {/* NEW badge for newly added items */}
-                                                                {isNewItem && (
-                                                                  <div className="inline-flex items-center gap-1 bg-blue-600 text-white px-2 py-0.5 rounded-full shadow-lg">
-                                                                    <Sparkles className="h-3 w-3" />
-                                                                    <span className="text-[9px] font-black uppercase tracking-wider">NEW</span>
-                                                                  </div>
-                                                                )}
-                                                                {/* UPDATED badge for modified items */}
-                                                                {!isNewItem && item.isRecentlyUpdated && (
-                                                                  <div className="inline-flex items-center gap-1 bg-amber-500 text-white px-2 py-0.5 rounded-full shadow-lg">
-                                                                    <AlertCircle className="h-3 w-3" />
-                                                                    <span className="text-[9px] font-black uppercase tracking-wider">UPDATED</span>
-                                                                  </div>
-                                                                )}
-                                                              </div>
-                                                              
-                                                              {/* Show timestamp and who updated for updated items */}
-                                                              {(isNewItem || item.isRecentlyUpdated) && itemTimeAgo && (
-                                                                <div className={cn(
-                                                                  "mt-1 flex items-center gap-1 text-[10px] font-bold",
-                                                                  isNewItem ? "text-blue-700" : "text-amber-700"
-                                                                )}>
-                                                                  <Clock className="h-3 w-3" />
-                                                                  <span>{isNewItem ? 'Added' : 'Updated'} {itemTimeAgo}</span>
-                                                                  {item.updated_by_name && (
-                                                                    <span className="ml-1">by {item.updated_by_name}</span>
-                                                                  )}
-                                                                </div>
-                                                              )}
-                                                              
-                                                              {item.notes && (
-                                                                <div className="mt-1.5 flex items-start gap-1 bg-amber-50 px-1.5 py-1 rounded border border-amber-100">
-                                                                  <span className="text-amber-600 text-[9px] font-black uppercase mt-0.5 tracking-tighter flex-shrink-0">NOTE:</span>
-                                                                  <p className="text-[10px] text-amber-700 font-bold italic leading-tight break-words">
-                                                                    {item.notes}
-                                                                  </p>
-                                                                </div>
-                                                              )}
-                                                            </div>
-                                                          </div>
-                          
+                        <div key={item.id || index} className={cn(
+                          "flex items-start justify-between gap-2 group p-2.5 rounded-lg border transition-all",
+                          isNewItem ? "bg-gradient-to-r from-blue-50 to-blue-100/50 border-blue-300 shadow-md animate-pulse" :
+                            item.isRecentlyUpdated ? "bg-gradient-to-r from-amber-50 to-amber-100/50 border-amber-300 shadow-md" :
+                              "bg-white/60 border-slate-100"
+                        )}>
+                          <div className="flex-1 min-w-0 flex items-start gap-2">
+                            {/* Quantity badge - fixed width */}
+                            <div className={cn(
+                              "flex-shrink-0 min-w-[32px] h-6 px-2 rounded-md flex items-center justify-center text-sm font-black shadow-sm",
+                              isNewItem ? "bg-blue-600 text-white border-2 border-blue-700" :
+                                item.isRecentlyUpdated ? "bg-amber-500 text-white border-2 border-amber-600" :
+                                  "bg-white border-2 border-slate-200 text-slate-900"
+                            )}>
+                              x{item.quantity}
+                            </div>
+
+                            {/* Item name and notes */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start gap-2 flex-wrap">
+                                <p className="text-sm font-black text-slate-800 leading-tight tracking-tight capitalize break-words">
+                                  {item.menuItem.name}
+                                </p>
+                                {/* NEW badge for newly added items */}
+                                {isNewItem && (
+                                  <div className="inline-flex items-center gap-1 bg-blue-600 text-white px-2 py-0.5 rounded-full shadow-lg">
+                                    <Sparkles className="h-3 w-3" />
+                                    <span className="text-[9px] font-black uppercase tracking-wider">NEW</span>
+                                  </div>
+                                )}
+                                {/* UPDATED badge for modified items */}
+                                {!isNewItem && item.isRecentlyUpdated && (
+                                  <div className="inline-flex items-center gap-1 bg-amber-500 text-white px-2 py-0.5 rounded-full shadow-lg">
+                                    <AlertCircle className="h-3 w-3" />
+                                    <span className="text-[9px] font-black uppercase tracking-wider">UPDATED</span>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Show timestamp and who updated for updated items */}
+                              {(isNewItem || item.isRecentlyUpdated) && itemTimeAgo && (
+                                <div className={cn(
+                                  "mt-1 flex items-center gap-1 text-[10px] font-bold",
+                                  isNewItem ? "text-blue-700" : "text-amber-700"
+                                )}>
+                                  <Clock className="h-3 w-3" />
+                                  <span>{isNewItem ? 'Added' : 'Updated'} {itemTimeAgo}</span>
+                                  {item.updated_by_name && (
+                                    <span className="ml-1">by {item.updated_by_name}</span>
+                                  )}
+                                </div>
+                              )}
+
+                              {item.notes && (
+                                <div className="mt-1.5 flex items-start gap-1 bg-amber-50 px-1.5 py-1 rounded border border-amber-100">
+                                  <span className="text-amber-600 text-[9px] font-black uppercase mt-0.5 tracking-tighter flex-shrink-0">NOTE:</span>
+                                  <p className="text-[10px] text-amber-700 font-bold italic leading-tight break-words">
+                                    {item.notes}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
                           {/* Action buttons - always visible, fixed width */}
                           <div className="flex-shrink-0">
                             {onItemStatusChange && status === 'PENDING' && (

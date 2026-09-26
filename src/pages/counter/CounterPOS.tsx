@@ -327,17 +327,17 @@ export default function CounterPOS() {
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
             const target = e.target as HTMLElement;
-            
+
             // Allow clicks on search input and search clear button
             if (target?.closest('.search-container')) {
                 return;
             }
-            
+
             // Allow clicks on product items (they handle their own clearing)
             if (target?.closest('.product-item-button')) {
                 return;
             }
-            
+
             // Clear both search states when clicking on cart or other areas
             if (searchQuery || lastSearchQuery) {
                 setSearchQuery("");
@@ -359,7 +359,7 @@ export default function CounterPOS() {
         }
     }, [showReceipt, autoPrint]);
 
-        // Handle loading specific order if passed via state
+    // Handle loading specific order if passed via state
     useEffect(() => {
         if (location.state?.orderId && products.length > 0) {
             loadSpecificOrder(location.state.orderId);
@@ -446,10 +446,10 @@ export default function CounterPOS() {
 
     const filteredItems = useMemo(() => {
         let items = products;
-        
+
         // Use lastSearchQuery for filtering (keeps results visible even when input is cleared)
         const activeSearchQuery = searchQuery || lastSearchQuery;
-        
+
         // If search query exists, search across ALL products (ignore category filters)
         if (activeSearchQuery.trim()) {
             items = items.filter(item =>
@@ -468,7 +468,7 @@ export default function CounterPOS() {
                 items = items.filter(item => item.category === selectedCategory);
             }
         }
-        
+
         return items.sort((a, b) => a.name.localeCompare(b.name));
     }, [products, rawCategories, selectedSuperCategory, selectedCategory, searchQuery, lastSearchQuery]);
 
@@ -499,12 +499,12 @@ export default function CounterPOS() {
             }
             return [...prev, { item, quantity: 1 }];
         });
-        
+
         // Save current search query before clearing
         if (searchQuery.trim()) {
             setLastSearchQuery(searchQuery);
         }
-        
+
         // Clear search input but keep results visible
         setSearchQuery("");
         setTimeout(() => {
@@ -675,7 +675,7 @@ export default function CounterPOS() {
             }
 
             const filtered = prev.filter(t => t.id !== id);
-            
+
             // Update active tab if we're removing the current one
             if (activeTabIdRef.current === id) {
                 const idx = prev.findIndex(t => t.id === id);
@@ -684,7 +684,7 @@ export default function CounterPOS() {
                 setActiveTabId(nextId);
                 activeTabIdRef.current = nextId;
             }
-            
+
             return filtered;
         });
     };
@@ -1729,7 +1729,7 @@ export default function CounterPOS() {
                             Cancel
                         </Button>
                     </div>
-            </DialogContent>
+                </DialogContent>
             </Dialog>
             {/* Global Floating Virtual Keyboard - DISABLED */}
             {/* Virtual keyboard removed - using physical keyboard only */}
@@ -1811,22 +1811,37 @@ function CartContent({
                                         >
                                             <Plus className="h-2.5 w-2.5" />
                                         </button>
+                                        <div className="flex gap-1 ml-1">
+                                            <button
+                                                onClick={() => updateQuantity(cartItem.item.id, 5)}
+                                                className="px-2 py-0.5 text-sm bg-primary/10 text-primary rounded"
+                                            >+5</button>
+                                            <button
+                                                onClick={() => updateQuantity(cartItem.item.id, 10)}
+                                                className="px-2 py-0.5 text-sm bg-primary/10 text-primary rounded"
+                                            >+10</button>
+                                            <button
+                                                onClick={() => updateQuantity(cartItem.item.id, 20)}
+                                                className="px-2 py-0.5 text-sm bg-primary/10 text-primary rounded"
+                                            >+20</button>
+                                        </div>
                                     </div>
-                                    <button
-                                        onClick={() => handleQtyEditOpen(cartItem)}
-                                        className="h-6 w-6 rounded-lg bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-white transition-all active:scale-90"
-                                        title="Edit quantity"
-                                    >
-                                        <Pencil className="h-3 w-3" />
-                                    </button>
+
                                 </div>
                                 <button
-                                    onClick={() => deleteFromCart(cartItem.item.id)}
-                                    className="text-slate-300 hover:text-destructive transition-colors md:opacity-0 md:group-hover:opacity-100"
+                                    onClick={() => handleQtyEditOpen(cartItem)}
+                                    className="h-6 w-6 rounded-lg bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-white transition-all active:scale-90"
+                                    title="Edit quantity"
                                 >
-                                    <Trash2 className="h-3.5 w-3.5" />
+                                    <Pencil className="h-3 w-3" />
                                 </button>
                             </div>
+                            <button
+                                onClick={() => deleteFromCart(cartItem.item.id)}
+                                className="text-slate-300 hover:text-destructive transition-colors md:opacity-0 md:group-hover:opacity-100"
+                            >
+                                <Trash2 className="h-3.5 w-3.5" />
+                            </button>
                         </div>
                     ))
                 )}
@@ -1943,6 +1958,6 @@ function CartContent({
                     Checkout
                 </Button>
             </div>
-        </div>
+        </div >
     );
 }

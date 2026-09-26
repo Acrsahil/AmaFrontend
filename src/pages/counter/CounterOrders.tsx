@@ -378,10 +378,10 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                 const matchByName = !matchById && o.floor_name && o.floor_name === selectedFloor.name;
                 if (!matchById && !matchByName) return;
             }
-            
+
             // Exclude CREADIT status orders - they are settled and table is free
             if (o.payment_status === 'CREADIT') return;
-            
+
             // Exclude orders with CREDIT payment method - table should not be occupied
             const hasCreditPayment = (
                 (o.payment_methods_list || o.payment_methods || []).some((m: string) => m?.toUpperCase() === 'CREDIT') ||
@@ -389,14 +389,14 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                 o.payment_method?.toUpperCase() === 'CREDIT'
             );
             if (hasCreditPayment) return;
-            
+
             // Only include active orders: not fully paid by counter
             const isFullyPaid = o.payment_status === 'PAID' && o.received_by_counter;
             if (isFullyPaid) return;
             // Exclude PAID orders where due_amount is 0 (settled)
             const isPaidNoDue = o.payment_status === 'PAID' && parseFloat(o.due_amount || 0) <= 0;
             if (isPaidNoDue) return;
-            
+
             if (!map.has(tNo)) map.set(tNo, []);
             map.get(tNo)!.push(o);
         });
@@ -410,18 +410,18 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
         const unpaidOrders = tableInvoices.filter((o: any) => {
             // Exclude fully paid
             if (o.payment_status === 'PAID') return false;
-            
+
             // Exclude CREDIT/ONLINE paid with no due amount
             const paymentMethods = o.payment_methods_list || o.payment_methods || [];
             const isPaidWithCredit = paymentMethods.includes('CREDIT') || paymentMethods.includes('ONLINE');
             const hasDueAmount = parseFloat(o.due_amount || 0) > 0;
-            
+
             if (isPaidWithCredit && !hasDueAmount) return false;
-            
+
             // Include all other unpaid orders
             return true;
         });
-        
+
         setTableViewSelectedTable(tableNumber);
         setTableOrders(unpaidOrders);
         setShowTableOrdersModal(true);
@@ -570,11 +570,11 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                 // Calculate discount amount in Rs. from percentage
                 const subtotal = parseFloat(selectedOrder?.total_amount || 0) - parseFloat(selectedOrder?.tax_amount || 0) + parseFloat(selectedOrder?.discount || 0);
                 const discountRs = (subtotal * discountPercent) / 100;
-                
+
                 const discountResponse = await patchInvoice(selectedOrder.id, {
                     discount: discountRs.toFixed(2)
                 });
-                
+
                 // Update selected order with response from server (backend recalculates totals)
                 updatedOrder = discountResponse.data || discountResponse;
                 setSelectedOrder(updatedOrder);
@@ -595,11 +595,11 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
             };
 
             await addPayment(updatedOrder.id, paymentData);
-            
-            const successMsg = discountPercent > 0 ? 
-                `Payment processed! Discount of Rs.${(discountRsForNotes).toFixed(2)} applied to invoice.` : 
+
+            const successMsg = discountPercent > 0 ?
+                `Payment processed! Discount of Rs.${(discountRsForNotes).toFixed(2)} applied to invoice.` :
                 "Payment added successfully";
-            
+
             toast.success(successMsg);
             setShowDetailModal(false);
             loadInvoices(1, true); // Refresh list
@@ -612,13 +612,13 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
 
     const handleDeleteInvoice = async () => {
         if (!selectedOrder) return;
-        
+
         // Validate delete reason
         if (!deleteReason.trim()) {
             toast.error("Please provide a reason for deleting this invoice");
             return;
         }
-        
+
         // Only allow delete for UNPAID invoices
         if (selectedOrder.payment_status === 'PAID') {
             toast.error("Cannot delete a paid invoice");
@@ -947,7 +947,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                 <DropdownMenuItem className="h-10 rounded-lg text-red-600" onClick={() => setStatusFilter("UNPAID")}>
                                     Unpaid
                                 </DropdownMenuItem>
-                                
+
                                 <DropdownMenuSeparator />
                                 <DropdownMenuLabel className="text-[10px] text-slate-400 uppercase tracking-widest px-2">Payment Method</DropdownMenuLabel>
                                 <DropdownMenuItem className="h-10 rounded-lg" onClick={() => setPaymentMethodFilter("ALL")}>
@@ -1080,24 +1080,24 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                         const tableNum = i + 1;
                                         const tableInvs = tableOrdersMap.get(tableNum) || [];
                                         const hasAnyOrders = tableInvs.length > 0;
-                                        
+
                                         // A table is OCCUPIED if it has any unpaid orders
                                         // Treat CREDIT payments as paid (no due amount)
                                         const hasUnpaidOrders = hasAnyOrders && tableInvs.some((o: any) => {
                                             // If paid in full, not occupied
                                             if (o.payment_status === 'PAID') return false;
-                                            
+
                                             // If paid with CREDIT and no due amount, consider as paid
                                             const paymentMethods = o.payment_methods_list || o.payment_methods || [];
                                             const isPaidWithCredit = paymentMethods.includes('CREDIT') || paymentMethods.includes('ONLINE');
                                             const hasDueAmount = parseFloat(o.due_amount || 0) > 0;
-                                            
+
                                             if (isPaidWithCredit && !hasDueAmount) return false;
-                                            
+
                                             // Otherwise, it's unpaid
                                             return true;
                                         });
-                                        
+
                                         // Only sum due amounts from UNPAID orders (excluding CREDIT with no due)
                                         const totalDue = tableInvs
                                             .filter((o: any) => {
@@ -1109,7 +1109,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                                 return true;
                                             })
                                             .reduce((sum: number, o: any) => sum + parseFloat(o.due_amount || o.total_amount || 0), 0);
-                                        
+
                                         // Count only unpaid orders (excluding CREDIT with no due)
                                         const unpaidOrderCount = tableInvs.filter((o: any) => {
                                             if (o.payment_status === 'PAID') return false;
@@ -1312,11 +1312,11 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                                             status={getDisplayStatus(order)}
                                                             className="text-[11px] px-2.5 py-1"
                                                             label={
-                                                                getDisplayStatus(order) === 'creadit' 
-                                                                    ? `Credited by ${order.received_by_counter_name || order.received_by_waiter_name || order.created_by_name || 'User'}` 
-                                                                    : getDisplayStatus(order) === 'waiter-paid' 
-                                                                    ? `Received by ${order.received_by_waiter_name || 'Waiter'}` 
-                                                                    : undefined
+                                                                getDisplayStatus(order) === 'creadit'
+                                                                    ? `Credited by ${order.received_by_counter_name || order.received_by_waiter_name || order.created_by_name || 'User'}`
+                                                                    : getDisplayStatus(order) === 'waiter-paid'
+                                                                        ? `Received by ${order.received_by_waiter_name || 'Waiter'}`
+                                                                        : undefined
                                                             }
                                                         />
                                                         {order.payment_status === 'PAID' && (
@@ -1327,7 +1327,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-5">
-                                                    <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <div className="flex items-center gap-1.5 transition-opacity">
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
@@ -1435,15 +1435,15 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-sm font-bold text-slate-800 font-mono">#{order.invoice_number?.slice(-6) || order.id}</span>
-                                                        <StatusBadge 
-                                                            status={getDisplayStatus(order)} 
+                                                        <StatusBadge
+                                                            status={getDisplayStatus(order)}
                                                             className="text-[10px] px-2 py-0.5"
                                                             label={
-                                                                getDisplayStatus(order) === 'creadit' 
-                                                                    ? `Credited by ${order.received_by_counter_name || order.received_by_waiter_name || order.created_by_name || 'User'}` 
-                                                                    : getDisplayStatus(order) === 'waiter-paid' 
-                                                                    ? `Received by ${order.received_by_waiter_name || 'Waiter'}` 
-                                                                    : undefined
+                                                                getDisplayStatus(order) === 'creadit'
+                                                                    ? `Credited by ${order.received_by_counter_name || order.received_by_waiter_name || order.created_by_name || 'User'}`
+                                                                    : getDisplayStatus(order) === 'waiter-paid'
+                                                                        ? `Received by ${order.received_by_waiter_name || 'Waiter'}`
+                                                                        : undefined
                                                             }
                                                         />
                                                     </div>
@@ -1590,7 +1590,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                         })()}
                                     </div>
                                 </div>
-                                
+
                                 <div className="max-h-[200px] overflow-y-auto custom-scrollbar bg-white">
                                     {isFetchingDetail ? (
                                         <div className="flex flex-col items-center justify-center py-8 gap-2">
@@ -1729,9 +1729,9 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                     View Bill
                                 </Button>
                                 {selectedOrder?.payment_status !== 'PAID' && (
-                                    <Button 
-                                        variant="destructive" 
-                                        className="h-12 rounded-xl font-bold gap-2 text-sm" 
+                                    <Button
+                                        variant="destructive"
+                                        className="h-12 rounded-xl font-bold gap-2 text-sm"
                                         onClick={() => setShowDeleteConfirm(true)}
                                     >
                                         <Trash2 className="h-4 w-4" />
@@ -1748,7 +1748,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                         )}>
                             <div className="space-y-4">
                                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Payment Status</Label>
-                                
+
                                 {/* Paid / Due Summary */}
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100">
@@ -1835,14 +1835,14 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                 {(selectedOrder?.payment_status !== 'PAID' && parseFloat(selectedOrder?.due_amount || "0") > 0) ? (() => {
                                     const originalDue = parseFloat(selectedOrder?.due_amount || (selectedOrder ? (selectedOrder.total_amount - (selectedOrder.paid_amount || 0)) : 0));
                                     const discountPercent = parseFloat(discountAmount || "0");
-                                    
+
                                     // Calculate discount in Rs. from percentage
                                     let discountRs = 0;
                                     if (discountPercent > 0) {
                                         const subtotal = parseFloat(selectedOrder?.total_amount || 0) - parseFloat(selectedOrder?.tax_amount || 0) + parseFloat(selectedOrder?.discount || 0);
                                         discountRs = (subtotal * discountPercent) / 100;
                                     }
-                                    
+
                                     const currentDue = Math.max(0, originalDue - discountRs);
                                     const changeAmount = Math.max(0, parseFloat(paymentAmount || "0") - currentDue);
 
@@ -1937,7 +1937,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                             >
                                                 {isPaying ? <Loader2 className="h-5 w-5 animate-spin" /> :
                                                     paymentMethod === 'QR' ? "Use QR Button Above" :
-                                                    (selectedOrder?.payment_status === 'WAITER RECEIVED' ? "Confirm & Finalize" : "Receive Payment")}
+                                                        (selectedOrder?.payment_status === 'WAITER RECEIVED' ? "Confirm & Finalize" : "Receive Payment")}
                                             </Button>
                                         </div>
                                     );
@@ -1960,7 +1960,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
 
             {/* QR Code Enlarged Modal */}
             <Dialog open={showQRModal} onOpenChange={setShowQRModal}>
-                <DialogContent 
+                <DialogContent
                     className="max-w-[400px] p-0 border-none bg-white rounded-2xl shadow-2xl [&>button]:hidden"
                 >
                     <DialogTitle className="sr-only">QR Code Payment</DialogTitle>
@@ -2293,11 +2293,11 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                     </DialogHeader>
                     <div className="space-y-4 mt-3">
                         <p className="text-sm text-slate-600">
-                            Are you sure you want to delete invoice <span className="font-bold">#{selectedOrder?.invoice_number}</span>? 
+                            Are you sure you want to delete invoice <span className="font-bold">#{selectedOrder?.invoice_number}</span>?
                             <br />
                             <span className="text-xs text-red-600">This action cannot be undone.</span>
                         </p>
-                        
+
                         {/* Delete Reason Input */}
                         <div className="space-y-2">
                             <Label htmlFor="deleteReason" className="text-xs font-bold text-slate-700">
@@ -2313,7 +2313,7 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                 autoFocus
                             />
                         </div>
-                        
+
                         <div className="flex gap-2">
                             <Button
                                 variant="outline"

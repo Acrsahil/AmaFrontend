@@ -94,6 +94,8 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
     const [showReceipt, setShowReceipt] = useState(false);
     const [autoPrint, setAutoPrint] = useState(false);
     const [showChangePassword, setShowChangePassword] = useState(false);
+    const [showPaymentSuccessModal, setShowPaymentSuccessModal] = useState(false);
+    const [receiptData, setReceiptData] = useState<any>(null);
     const [currentUser, setCurrentUser] = useState<any>(() => getCurrentUser());
     const [isUpdatingItem, setIsUpdatingItem] = useState(false);
     const [showAddItemsModal, setShowAddItemsModal] = useState(false);
@@ -594,14 +596,27 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                 notes: discountPercent > 0 ? `${paymentNotes}${paymentNotes ? ' | ' : ''}Discount Applied: Rs.${discountRsForNotes.toFixed(2)}` : paymentNotes
             };
 
-            await addPayment(updatedOrder.id, paymentData);
+            const paymentResponse = await addPayment(updatedOrder.id, paymentData);
+
+            // Fetch the updated order details to get the latest payment status
+            const finalOrder = await fetchInvoiceDetail(updatedOrder.id);
 
             const successMsg = discountPercent > 0 ?
                 `Payment processed! Discount of Rs.${(discountRsForNotes).toFixed(2)} applied to invoice.` :
                 "Payment added successfully";
 
             toast.success(successMsg);
+
+            // Store receipt data for the success modal
+            setReceiptData({
+                order: finalOrder,
+                paymentAmount: actualPayment,
+                paymentMethod: paymentMethod,
+                discountApplied: discountRsForNotes
+            });
+
             setShowDetailModal(false);
+            setShowPaymentSuccessModal(true);
             loadInvoices(1, true); // Refresh list
         } catch (err: any) {
             toast.error(err.message || "Failed to process payment");
@@ -638,6 +653,20 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
         } finally {
             setIsDeleting(false);
         }
+    };
+
+    const handlePrintFromSuccess = async () => {
+        if (!receiptData?.order) return;
+        setShowPaymentSuccessModal(false);
+        setSelectedOrder(receiptData.order);
+        setAutoPrint(true);
+        setShowReceipt(true);
+    };
+
+    const handleNewFromSuccess = () => {
+        setShowPaymentSuccessModal(false);
+        setReceiptData(null);
+        setSelectedOrder(null);
     };
 
     const handlePrint = () => {
@@ -2021,6 +2050,72 @@ export default function CounterOrders({ initialViewMode = 'list' }: { initialVie
                                 {isPaying ? <Loader2 className="h-5 w-5 animate-spin" /> : "Receive Payment"}
                             </Button>
                         </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Payment Success Modal */}
+            <Dialog open={showPaymentSuccessModal} onOpenChange={setShowPaymentSuccessModal}>
+                <DialogContent className="max-w-[90vw] sm:max-w-[400px] p-6 md:p-8 text-center space-y-6 rounded-2xl md:rounded-[2.5rem] border-none shadow-3xl">
+                    <DialogTitle className="sr-only">Payment Success</DialogTitle>
+                    <div className="h-24 w-24 bg-success/10 rounded-full flex items-center justify-center mx-auto text-success border-4 border-success/5 animate-in zoom-in-75 duration-500">
+                        <CheckCircle2 className="h-12 w-12 stroke-[3px]" />
+                    </div>
+
+                    <div className="space-y-2">
+                        <h2 className="text-3xl font-black text-slate-800">Payment Received!</h2>
+                        <p className="text-slate-400 font-medium">Payment has been successfully processed</p>
+                    </div>
+
+                    <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 space-y-3">
+                        <div className="flex justify-between text-sm font-bold">
+                            <span className="text-slate-400 uppercase tracking-widest text-[9px]">Invoice #</span>
+                            <span className="text-slate-800">#{receiptData?.order?.invoice_number || ''}</span>
+                        </div>
+                        <div className="flex justify-between text-sm font-bold">
+                            <span className="text-slate-400 uppercase tracking-widest text-[9px]">Payment Amount</span>
+                            <span className="text-slate-800">Rs.{receiptData?.paymentAmount?.toFixed(2) || '0.00'}</span>
+                        </div>
+                        <div className="flex justify-between text-sm font-bold">
+                            <span className="text-slate-400 uppercase tracking-widest text-[9px]">Payment Method</span>
+                            <span className="text-slate-800 uppercase text-[10px]">{receiptData?.paymentMethod || ''}</span>
+                        </div>
+                        {receiptData?.discountApplied > 0 && (
+                            <div className="pt-3 border-t border-dashed border-slate-200">
+                                <div className="flex justify-between text-sm font-black text-amber-600">
+                                    <span className="uppercase tracking-widest text-[9px]">Discount Applied</span>
+                                    <span>Rs.{receiptData.discountApplied.toFixed(2)}</span>
+                                </div>
+                            </div>
+                        )}
+                        <div className="pt-3 border-t border-dashed border-slate-200">
+                            <div className="flex justify-between text-sm font-black text-slate-600">
+                                <span className="uppercase tracking-widest text-[9px]">Remaining Balance</span>
+                                <span className={cn(
+                                    parseFloat(receiptData?.order?.due_amount || 0) > 0 ? "text-amber-600" : "text-success"
+                                )}>
+                                    Rs.{parseFloat(receiptData?.order?.due_amount || 0).toFixed(2)}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <Button 
+                            variant="outline" 
+                            className="h-12 md:h-14 rounded-xl md:rounded-2xl font-black text-sm md:text-base" 
+                            onClick={handlePrintFromSuccess}
+                        >
+                            <Printer className="h-4 w-4 md:h-5 md:w-5 mr-2" />
+                            Print Bill
+                        </Button>
+                        <Button 
+                            className="h-12 md:h-14 rounded-xl md:rounded-2xl font-black gradient-warm text-sm md:text-base" 
+                            onClick={handleNewFromSuccess}
+                        >
+                            Done
+                            <ChevronRight className="h-4 w-4 md:h-5 md:w-5 ml-2" />
+                        </Button>
                     </div>
                 </DialogContent>
             </Dialog>

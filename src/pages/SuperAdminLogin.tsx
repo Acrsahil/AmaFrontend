@@ -38,7 +38,7 @@ export default function SuperAdminLogin() {
             {/* Header / Branding */}
             <div className="text-center mb-6 animate-in fade-in zoom-in duration-700">
                 <div className="inline-flex items-center justify-center h-16 w-16 md:h-20 md:w-20 rounded-3xl bg-white shadow-warm mb-4 p-1 overflow-hidden border-2 border-primary/10">
-                    <img src="/logos/logo1white.jfif" alt="Ama Bakery Logo" className="h-full w-full object-cover" />
+                    <img src="/logos/logo2brown.jpeg" alt="Ama Bakery Logo" className="h-full w-full object-cover" />
                 </div>
                 <h1 className="text-2xl md:text-4xl font-rockwell tracking-tight text-slate-800 mb-1">Ama Bakery</h1>
                 <p className="text-primary/60 text-[10px] md:text-xs font-black uppercase tracking-[0.3em] mt-0.5 bg-primary/5 px-4 py-1 rounded-full inline-block border border-primary/10">Corporate HQ Gateway</p>

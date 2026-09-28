@@ -1,5 +1,6 @@
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { LOGO_PATH } from "@/config/constants";
 import {
     LayoutDashboard,
     Monitor,
@@ -47,7 +48,7 @@ export function CounterSidebar({ className, onNavigate, isCollapsed, onToggle }:
             )}>
                 <div className={cn("flex items-center", isCollapsed ? "justify-center" : "gap-3")}>
                     <div className="flex h-10 w-10 items-center justify-center rounded-full overflow-hidden border border-white/20 shrink-0">
-                        <img src="/logos/logo2brown.jpeg" alt="AMA BAKERY" className="h-full w-full object-cover" />
+                        <img src={LOGO_PATH} alt="AMA BAKERY" className="h-full w-full object-cover" />
                     </div>
                     {!isCollapsed && (
                         <div className="overflow-hidden">

@@ -1,5 +1,6 @@
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { LOGO_PATH } from "@/config/constants";
 import {
   LayoutDashboard,
   ClipboardList,
@@ -60,7 +61,7 @@ export function AdminSidebar({ className, onNavigate }: AdminSidebarProps) {
       {/* Logo */}
       <div className="flex items-center gap-3 border-b border-sidebar-border px-6 py-5">
         <div className="flex h-12 w-12 items-center justify-center rounded-full overflow-hidden border border-white/20">
-          <img src="/logos/logo2brown.jpeg" alt="AMA BAKERY" className="h-full w-full object-cover" />
+          <img src={LOGO_PATH} alt="AMA BAKERY" className="h-full w-full object-cover" />
         </div>
         <div>
           <h1 className="font-rockwell font-bold text-lg leading-none mb-1">AMA BAKERY</h1>

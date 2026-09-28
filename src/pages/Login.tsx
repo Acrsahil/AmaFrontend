@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { loginUsers, fetchMe } from "../api/index.js";
+import { LOGO_PATH } from "@/config/constants";
 
 import { isLoggedIn, getCurrentUser } from "../auth/auth";
 
@@ -107,11 +108,11 @@ export default function Login() {
 
         <div className="relative z-10 flex flex-col items-center justify-center w-full p-6 lg:p-12 text-white">
           <div className="max-w-md text-center space-y-4 lg:space-y-8">
-            <div className="inline-flex items-center justify-center h-28 w-28 lg:h-44 lg:w-44 rounded-full bg-white p-4 overflow-hidden mb-2 lg:mb-4 transition-transform hover:scale-105 duration-500">
+            <div className="mb-4 flex justify-center">
               <img
-                src="/logos/logo1white.jfif"
+                src={LOGO_PATH}
                 alt="Ama Bakery Logo"
-                className="h-full w-full object-contain"
+                className="h-80 lg:h-[32rem] w-auto object-contain"
               />
             </div>
 

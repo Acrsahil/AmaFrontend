@@ -428,6 +428,25 @@ export async function updateProduct(id, productData) {
   return data.data;
 }
 
+export async function updateProductImage(id, imageFile) {
+  const formData = new FormData();
+  formData.append("image", imageFile);
+  
+  // Use raw fetch instead of apiFetch to handle FormData properly
+  const token = getAccessToken();
+  const res = await fetch(`${API_BASE_URL}/api/products/${id}/`, {
+    method: "PUT",
+    credentials: "include",
+    headers: {
+      ...(token && { Authorization: `Bearer ${token}` }),
+    },
+    body: formData,
+  });
+  const data = await safeJson(res);
+  if (!res.ok) throw new Error(data?.message || "Failed to upload product image");
+  return data.data;
+}
+
 export async function deleteProduct(id) {
   const res = await apiFetch(`/api/products/${id}/`, {
     method: "DELETE",
@@ -441,6 +460,24 @@ export async function fetchCategories() {
   const res = await apiFetch("/api/category/");
   const data = await safeJson(res);
   if (!res.ok) throw new Error(data?.message || "Failed to fetch categories");
+  return data.data;
+}
+
+// Public menu endpoint (no authentication required)
+export async function fetchPublicMenu(branchId = null) {
+  const url = branchId 
+    ? `${API_BASE_URL}/api/public-menu/?branch_id=${branchId}`
+    : `${API_BASE_URL}/api/public-menu/`;
+  
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+  
+  const data = await safeJson(res);
+  if (!res.ok) throw new Error(data?.message || "Failed to fetch public menu");
   return data.data;
 }
 

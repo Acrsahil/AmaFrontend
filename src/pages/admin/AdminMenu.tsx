@@ -39,7 +39,8 @@ import {
     fetchProducts, createProduct, updateProduct, deleteProduct,
     fetchCategories, createCategory, deleteCategory, updateCategory,
     fetchKitchenTypes, createKitchenType, deleteKitchenType, updateKitchenType,
-    fetchSuperCategories, createSuperCategory, updateSuperCategory, deleteSuperCategory
+    fetchSuperCategories, createSuperCategory, updateSuperCategory, deleteSuperCategory,
+    updateProductImage
 } from "../../api/index.js";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -58,6 +59,9 @@ interface Product {
     branch_name: string;
     date_added: string;
     is_available: boolean;
+    image_url?: string;
+    image_public_id?: string;
+    description?: string;
 }
 
 interface KitchenType {
@@ -136,6 +140,11 @@ export default function AdminMenu() {
     const [importLoading, setImportLoading] = useState(false);
 
     const importInputRef = useRef<HTMLInputElement>(null);
+    const imageInputRef = useRef<HTMLInputElement>(null);
+
+    // Product image upload state
+    const [productImageFile, setProductImageFile] = useState<File | null>(null);
+    const [uploadingImage, setUploadingImage] = useState(false);
 
     // Pagination state
     const [page, setPage] = useState(1);
@@ -279,6 +288,7 @@ export default function AdminMenu() {
 
         const payload: any = {
             name: formData.get("name"),
+            description: formData.get("description"),
             cost_price: "0.00",
             selling_price: formData.get("selling_price"),
             product_quantity: 0,
@@ -298,17 +308,40 @@ export default function AdminMenu() {
         }
 
         try {
+            let savedProduct;
             if (editItem) {
                 const updated = await updateProduct(editItem.id, payload);
                 setProducts(prev => prev.map(p => p.id === editItem.id ? updated : p));
+                savedProduct = updated;
                 toast.success("Item updated");
             } else {
                 const newProduct = await createProduct(payload);
                 setProducts(prev => [...prev, newProduct]);
+                savedProduct = newProduct;
                 toast.success("Item added");
             }
+
+            // Handle image upload if a file was selected
+            if (productImageFile && savedProduct?.id) {
+                try {
+                    setUploadingImage(true);
+                    const updatedWithImage = await updateProductImage(savedProduct.id, productImageFile);
+                    setProducts(prev => prev.map(p => p.id === savedProduct.id ? updatedWithImage : p));
+                    toast.success("Product image uploaded");
+                } catch (imgErr: any) {
+                    console.error("Image upload error:", imgErr);
+                    toast.error("Failed to upload image: " + (imgErr.message || "Unknown error"));
+                } finally {
+                    setUploadingImage(false);
+                }
+            }
+
             setIsDialogOpen(false);
             setEditItem(null);
+            setProductImageFile(null);
+            if (imageInputRef.current) {
+                imageInputRef.current.value = "";
+            }
         } catch (err: any) {
             console.error("Product operation error:", err);
             toast.error(err.message || "Operation failed");
@@ -786,7 +819,17 @@ export default function AdminMenu() {
                             </div>
                         </DialogContent>
                     </Dialog>
-                    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                    <Dialog open={isDialogOpen} onOpenChange={(open) => {
+                        setIsDialogOpen(open);
+                        if (!open) {
+                            // Clear states when dialog closes
+                            setEditItem(null);
+                            setProductImageFile(null);
+                            if (imageInputRef.current) {
+                                imageInputRef.current.value = "";
+                            }
+                        }
+                    }}>
                         <DialogTrigger asChild>
                             <Button size="sm" className="font-bold rounded-xl shadow-md active:scale-95 transition-all" onClick={() => {
                                 setEditItem(null);
@@ -815,6 +858,10 @@ export default function AdminMenu() {
                                         <Input id="name" name="name" className="h-14 text-xl font-bold rounded-2xl bg-white/50 backdrop-blur-sm border-2 border-slate-100 focus:border-primary transition-all shadow-inner" placeholder="E.g. Strawberry Muffin" defaultValue={editItem?.name} required />
                                     </div>
                                     <div className="space-y-2">
+                                        <Label htmlFor="description" className="text-[10px] font-black uppercase tracking-widest text-slate-400 pl-1">Description (Optional)</Label>
+                                        <textarea id="description" name="description" className="w-full flex min-h-[80px] rounded-2xl bg-white/50 backdrop-blur-sm border-2 border-slate-100 px-3 py-3 text-sm font-medium focus:border-primary transition-all shadow-inner resize-none focus:outline-none" placeholder="E.g. Freshly baked with real strawberries..." defaultValue={editItem?.description} />
+                                    </div>
+                                    <div className="space-y-2">
                                         <Label htmlFor="selling_price" className="text-[10px] font-black uppercase tracking-widest text-slate-400 pl-1">Selling Value (Rs.)</Label>
                                         <Input
                                             id="selling_price"
@@ -830,6 +877,76 @@ export default function AdminMenu() {
                                             required
                                         />
                                     </div>
+
+                                    {/* Product Image Upload */}
+                                    <div className="space-y-2">
+                                        <Label htmlFor="product_image" className="text-[10px] font-black uppercase tracking-widest text-slate-400 pl-1">
+                                            Product Image (Optional)
+                                        </Label>
+                                        <div className="flex gap-3 items-center">
+                                            <div className="flex-1">
+                                                <input
+                                                    ref={imageInputRef}
+                                                    id="product_image"
+                                                    type="file"
+                                                    accept="image/*"
+                                                    onChange={(e) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (file) {
+                                                            // Validate file size (max 5MB)
+                                                            if (file.size > 5 * 1024 * 1024) {
+                                                                toast.error("Image must be less than 5MB");
+                                                                e.target.value = "";
+                                                                return;
+                                                            }
+                                                            setProductImageFile(file);
+                                                        }
+                                                    }}
+                                                    className="hidden"
+                                                />
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    onClick={() => imageInputRef.current?.click()}
+                                                    className="w-full h-12 rounded-xl border-2 border-dashed border-slate-200 hover:border-primary hover:bg-primary/5 font-bold gap-2 transition-all"
+                                                >
+                                                    <Upload className="h-4 w-4" />
+                                                    {productImageFile ? "Change Image" : "Upload Image"}
+                                                </Button>
+                                            </div>
+                                            {(productImageFile || editItem?.image_url) && (
+                                                <div className="relative group">
+                                                    <img
+                                                        src={
+                                                            productImageFile
+                                                                ? URL.createObjectURL(productImageFile)
+                                                                : editItem?.image_url
+                                                        }
+                                                        alt="Preview"
+                                                        className="h-20 w-20 object-cover rounded-xl border-2 border-slate-200 shadow-sm"
+                                                    />
+                                                    {productImageFile && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setProductImageFile(null);
+                                                                if (imageInputRef.current) {
+                                                                    imageInputRef.current.value = "";
+                                                                }
+                                                            }}
+                                                            className="absolute -top-2 -right-2 h-6 w-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                                                        >
+                                                            <X className="h-3 w-3" />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <p className="text-[10px] text-slate-400 font-medium pl-1">
+                                            For customer menu display. Max 5MB. JPG, PNG, or WEBP.
+                                        </p>
+                                    </div>
+
                                     <div className="grid grid-cols-2 gap-6 items-end">
                                         <div className="space-y-2 relative">
                                             <Label htmlFor="category" className="text-[10px] font-black uppercase tracking-widest text-slate-400 pl-1">Sort into Category</Label>
@@ -1086,6 +1203,9 @@ export default function AdminMenu() {
                                         <div className="flex items-start justify-between mb-3">
                                             <div className="flex-1 mr-4">
                                                 <h3 className="font-bold text-slate-900 text-lg leading-snug group-hover:text-primary transition-colors">{item.name}</h3>
+                                                {item.description && (
+                                                    <p className="text-xs text-slate-500 font-medium mt-1 mb-2 line-clamp-2">{item.description}</p>
+                                                )}
                                                 <p className="text-[11px] uppercase font-black tracking-widest text-slate-400 underline decoration-slate-200 decoration-2 underline-offset-2 mt-1">{item.category_name}</p>
                                             </div>
                                             <div className="text-right flex flex-col items-end gap-1.5">
@@ -1842,6 +1962,9 @@ export default function AdminMenu() {
                                 <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100">
                                     <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary mb-2 block">Product Name</Label>
                                     <div className="text-2xl font-bold text-slate-900">{viewItem.name}</div>
+                                    {viewItem.description && (
+                                        <p className="text-sm text-slate-600 font-medium mt-3 border-t border-slate-100 pt-3">{viewItem.description}</p>
+                                    )}
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">

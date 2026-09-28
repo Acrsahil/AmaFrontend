@@ -3,10 +3,12 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { LOGO_PATH } from "./config/constants";
 
 // Pages
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
+import Menu from "./pages/Menu";
 
 // Waiter Pages
 import TableSelection from "./pages/waiter/TableSelection";
@@ -121,8 +123,8 @@ const App = () => {
   if (initializing) {
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-gradient-cream">
-        <div className="h-20 w-20 bg-primary rounded-3xl shadow-xl flex items-center justify-center animate-bounce mb-4 text-white">
-          <img src="/logos/logo1white.jfif" alt="Logo" className="w-12 h-12 object-contain" />
+        <div className="mb-4">
+          <img src={LOGO_PATH} alt="Logo" className="h-20 w-20 object-contain" />
         </div>
         <p className="font-black text-slate-400 uppercase tracking-[0.3em] text-[10px] animate-pulse">Initializing Secure Session</p>
       </div>
@@ -141,6 +143,9 @@ const App = () => {
           <Routes>
             {/* ✅ MAIN ENTRY */}
             <Route path="/" element={<HomeRedirect />} />
+
+            {/* ✅ PUBLIC MENU */}
+            <Route path="/menu" element={<Menu />} />
 
             {/* ✅ LOGIN */}
             <Route path="/login" element={<Login />} />

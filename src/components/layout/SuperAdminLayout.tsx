@@ -4,6 +4,7 @@ import { SuperAdminSidebar } from "@/components/layout/SuperAdminSidebar";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Menu, LogOut, User as UserIcon, Shield, Key } from "lucide-react";
+import { LOGO_PATH } from "@/config/constants";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -89,7 +90,7 @@ export function SuperAdminLayout() {
                     </Sheet>
                     <div className="flex items-center gap-2">
                         <div className="h-8 w-8 rounded-lg overflow-hidden border border-primary/20 bg-white">
-                            <img src="/logos/logo2brown.jpeg" alt="Ama Bakery" className="h-full w-full object-cover" />
+                            <img src={LOGO_PATH} alt="Ama Bakery" className="h-full w-full object-cover" />
                         </div>
                         <h1 className="font-bold text-base">Ama HQ</h1>
                     </div>

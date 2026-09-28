@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { LOGO_PATH } from "@/config/constants";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,7 +60,7 @@ export function MobileHeader({ title, showBack = false }: MobileHeaderProps) {
           )}
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="h-8 w-8 rounded-xl bg-white p-1 shadow-2xs border border-slate-200/70 shrink-0 overflow-hidden flex items-center justify-center">
-              <img src="/logos/logo1white.jfif" alt="AMA BAKERY" className="h-full w-full object-contain" />
+              <img src="/logos/logo2brown.jpeg" alt="AMA BAKERY" className="h-full w-full object-contain" />
             </div>
             <div className="min-w-0 flex flex-col">
               <h1 className="text-xs md:text-sm font-black text-slate-900 tracking-tight leading-tight truncate">

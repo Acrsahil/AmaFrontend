@@ -3,7 +3,6 @@ import { Outlet } from "react-router-dom";
 import { AdminSidebar } from "./AdminSidebar";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Menu, MapPin, LogOut, User as UserIcon, Key } from "lucide-react";
-import { LOGO_PATH } from "@/config/constants";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -95,7 +94,7 @@ export function AdminLayout() {
 
           <div className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg overflow-hidden border border-primary/20 bg-white">
-              <img src={LOGO_PATH} alt="Ama Bakery" className="h-full w-full object-cover" />
+              <img src="/logos/logo2brown.jpeg" alt="Ama Bakery" className="h-full w-full object-cover" />
             </div>
             <div className="flex flex-col text-left">
               <h1 className="font-bold text-sm leading-none">{branchName}</h1>

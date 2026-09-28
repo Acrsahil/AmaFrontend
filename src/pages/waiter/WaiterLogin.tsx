@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { users } from "@/lib/mockData";
 import { toast } from "sonner";
-import { LOGO_PATH } from "@/config/constants";
 
 export default function WaiterLogin() {
   const navigate = useNavigate();
@@ -95,8 +94,8 @@ export default function WaiterLogin() {
     <div className="min-h-screen gradient-cream flex flex-col p-6">
       {/* Header - Mobile Friendly */}
       <header className="pt-12 pb-10 text-center">
-        <div className="mb-3">
-          <img src={LOGO_PATH} alt="Ama Bakery Logo" className="h-16 w-auto mx-auto object-contain" />
+        <div className="inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-white shadow-warm mb-3 p-1 overflow-hidden">
+          <img src="/logos/logo1white.jfif" alt="Ama Bakery Logo" className="h-full w-full object-cover" />
         </div>
         <h1 className="text-2xl font-black tracking-tight text-foreground">Ama Bakery</h1>
         <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest mt-1">Waiter Login</p>

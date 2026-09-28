@@ -58,7 +58,7 @@ export default function KitchenLogin() {
             {/* Header / Branding */}
             <div className="text-center mb-4 animate-in fade-in zoom-in duration-700">
                 <div className="inline-flex items-center justify-center h-14 w-14 md:h-16 md:w-16 rounded-2xl bg-white shadow-warm mb-3 p-1 overflow-hidden border-2 border-primary/10">
-                    <img src="/logos/logo2brown.jpeg" alt="Ama Bakery Logo" className="h-full w-full object-cover" />
+                    <img src="/logos/logo1white.jfif" alt="Ama Bakery Logo" className="h-full w-full object-cover" />
                 </div>
                 <h1 className="text-2xl md:text-3xl font-rockwell tracking-tight text-slate-800 mb-1">Ama Bakery</h1>
                 <p className="text-orange-500 text-[10px] font-black uppercase tracking-[0.3em] mt-0.5 bg-orange-50 px-3 py-0.5 rounded-full inline-block border border-orange-100">Kitchen Terminal</p>

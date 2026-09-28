@@ -50,7 +50,7 @@ export default function RoleSelection() {
         <div className="text-center mb-8 md:mb-10 animate-in fade-in zoom-in duration-700">
           <div className="relative inline-block group cursor-pointer mb-6">
             <img
-              src="/logos/logo2brown.jpeg"
+              src="/logos/logo1white.jfif"
               alt="Ama Bakery Logo"
               className="relative h-24 w-24 md:h-28 md:w-28 rounded-[2rem] mb-4 object-cover border-4 border-white transform transition-all duration-500 group-hover:scale-105 group-hover:rotate-2"
             />

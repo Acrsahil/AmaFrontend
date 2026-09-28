@@ -27,6 +27,7 @@ export default function Menu() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
+  const [expandedProductId, setExpandedProductId] = useState<number | null>(null);
 
   useEffect(() => {
     loadMenuData();
@@ -60,13 +61,15 @@ export default function Menu() {
     }
   };
 
-  // Filter products based on search and category
-  const filteredProducts = products.filter((product) => {
-    const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory ? product.category === selectedCategory : true;
-    
-    return matchesSearch && matchesCategory;
-  });
+  // Filter and sort products based on search and category
+  const filteredProducts = products
+    .filter((product) => {
+      const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory = selectedCategory ? product.category === selectedCategory : true;
+      
+      return matchesSearch && matchesCategory;
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   if (loading) {
     return (
@@ -87,7 +90,7 @@ export default function Menu() {
           <div className="py-8 space-y-4">
             {/* Logo */}
             <div className="flex justify-center">
-              <div className="h-24 w-24 sm:h-28 sm:w-28 rounded-full bg-gradient-to-br from-[#d19d2a] to-[#b8862a] shadow-xl shadow-[#d19d2a]/30 flex items-center justify-center p-4">
+              <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-full bg-gradient-to-br from-[#d19d2a] to-[#b8862a] flex items-center justify-center p-1.5">
                 <img 
                   src={LOGO_PATH} 
                   alt="AMA Bakery" 
@@ -98,10 +101,10 @@ export default function Menu() {
             
             {/* Title */}
             <div className="text-center">
-              <h1 className="text-4xl sm:text-5xl font-black text-[#78570A] tracking-tight">
-                Our Menu
+              <h1 className="text-5xl sm:text-6xl font-rockwell font-bold text-[#78570A] tracking-tight uppercase">
+                Menu
               </h1>
-              <p className="mt-2 text-[#A17C2F] font-medium">
+              <p className="mt-3 text-base sm:text-lg text-[#A17C2F] font-medium">
                 Discover our delicious offerings
               </p>
             </div>
@@ -176,61 +179,61 @@ export default function Menu() {
             <p className="text-[#A17C2F]">Try adjusting your search or filters</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredProducts.map((product) => (
-              <div
-                key={product.id}
-                className="group bg-white rounded-3xl overflow-hidden border-2 border-[#d19d2a]/20 hover:border-[#d19d2a] transition-all duration-300 hover:shadow-2xl hover:shadow-[#d19d2a]/20 hover:-translate-y-1"
-              >
-                {/* Product Image Placeholder */}
-                <div className="aspect-square bg-gradient-to-br from-[#FFF8E7] to-[#FFF0D1] relative overflow-hidden">
-                  {product.image_url ? (
-                    <img
-                      src={product.image_url}
-                      alt={product.name}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <div className="text-center space-y-2">
-                        <div className="h-20 w-20 rounded-full bg-white shadow-lg shadow-[#d19d2a]/20 mx-auto flex items-center justify-center border-2 border-[#d19d2a]/30">
-                          <span className="text-3xl font-black text-[#d19d2a]">
-                            {product.name.charAt(0)}
-                          </span>
+          <div className="grid grid-cols-2 gap-4 sm:gap-6">
+            {filteredProducts.map((product) => {
+              const isExpanded = expandedProductId === product.id;
+              return (
+                <div
+                  key={product.id}
+                  onClick={() => setExpandedProductId(isExpanded ? null : product.id)}
+                  className={`group bg-white rounded-3xl overflow-hidden border-2 transition-all duration-500 flex flex-col cursor-pointer ${
+                    isExpanded 
+                      ? "border-[#d19d2a] shadow-2xl shadow-[#d19d2a]/40 z-50" 
+                      : "border-[#d19d2a]/20 hover:border-[#d19d2a] hover:shadow-2xl hover:shadow-[#d19d2a]/20 hover:-translate-y-1"
+                  }`}
+                >
+                  {/* Product Image - 70% with 4:3 ratio */}
+                  <div className="aspect-[4/3] bg-gradient-to-br from-[#FFF8E7] to-[#FFF0D1] relative overflow-hidden flex-[0.7]">
+                    {product.image_url ? (
+                      <img
+                        src={product.image_url}
+                        alt={product.name}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <div className="text-center space-y-2">
+                          <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-full bg-white shadow-lg shadow-[#d19d2a]/20 mx-auto flex items-center justify-center border-2 border-[#d19d2a]/30">
+                            <span className="text-2xl sm:text-3xl font-black text-[#d19d2a]">
+                              {product.name.charAt(0)}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
-                  {product.is_available === false && (
-                    <div className="absolute inset-0 bg-[#78570A]/70 backdrop-blur-sm flex items-center justify-center">
-                      <span className="px-4 py-2 bg-white rounded-full text-sm font-bold text-[#78570A]">
-                        Unavailable
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Product Info */}
-                <div className="p-6 space-y-3">
-                  <div>
-                    <h3 className="text-lg font-black text-[#78570A] line-clamp-2 group-hover:text-[#d19d2a] transition-colors">
-                      {product.name}
-                    </h3>
-                    {product.category_name && (
-                      <p className="text-xs font-bold text-[#d19d2a]/60 uppercase tracking-wider mt-1">
-                        {product.category_name}
-                      </p>
+                    )}
+                    {product.is_available === false && (
+                      <div className="absolute inset-0 bg-[#78570A]/70 backdrop-blur-sm flex items-center justify-center">
+                        <span className="px-3 py-1.5 bg-white rounded-full text-xs sm:text-sm font-bold text-[#78570A]">
+                          Unavailable
+                        </span>
+                      </div>
                     )}
                   </div>
 
-                  {product.description && (
-                    <p className="text-sm text-[#A17C2F] line-clamp-2">
-                      {product.description}
-                    </p>
-                  )}
+                  {/* Product Info - 30% */}
+                  <div className="p-3 sm:p-4 space-y-1 sm:space-y-2 flex-[0.3] flex flex-col justify-between">
+                    <div>
+                      <h3 className="text-sm sm:text-base font-black text-[#78570A] line-clamp-1 group-hover:text-[#d19d2a] transition-colors">
+                        {product.name}
+                      </h3>
+                      {product.category_name && (
+                        <p className="text-[10px] sm:text-xs font-bold text-[#d19d2a]/60 uppercase tracking-wider">
+                          {product.category_name}
+                        </p>
+                      )}
+                    </div>
 
-                  <div className="flex items-center justify-between pt-2">
-                    <div className="text-2xl font-black text-[#d19d2a]">
+                    <div className="text-lg sm:text-xl font-black text-[#d19d2a]">
                       Rs. {(() => {
                         const priceValue = product.selling_price || product.price || '0';
                         const numPrice = typeof priceValue === 'number' 
@@ -241,8 +244,8 @@ export default function Menu() {
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </main>

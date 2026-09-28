@@ -1136,6 +1136,7 @@ export default function CounterPOS() {
                                     key={item.id}
                                     onClick={() => addToCart(item)}
                                     className="product-item-button group flex flex-col items-center justify-center bg-primary/20 rounded-md p-1.5 text-center border-2 border-primary/30 hover:border-primary hover:bg-primary/40 active:scale-95 transition-all shadow-sm h-[55px] shadow-primary/5"
+                                    title={item.description}
                                 >
                                     <h3 className="font-bold text-slate-800 text-[10px] sm:text-[11px] leading-tight line-clamp-2 group-hover:text-primary transition-colors tracking-tight uppercase">{item.name}</h3>
                                 </button>

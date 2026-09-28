@@ -61,6 +61,7 @@ interface Product {
     is_available: boolean;
     image_url?: string;
     image_public_id?: string;
+    description?: string;
 }
 
 interface KitchenType {
@@ -140,7 +141,7 @@ export default function AdminMenu() {
 
     const importInputRef = useRef<HTMLInputElement>(null);
     const imageInputRef = useRef<HTMLInputElement>(null);
-    
+
     // Product image upload state
     const [productImageFile, setProductImageFile] = useState<File | null>(null);
     const [uploadingImage, setUploadingImage] = useState(false);
@@ -287,6 +288,7 @@ export default function AdminMenu() {
 
         const payload: any = {
             name: formData.get("name"),
+            description: formData.get("description"),
             cost_price: "0.00",
             selling_price: formData.get("selling_price"),
             product_quantity: 0,
@@ -318,7 +320,7 @@ export default function AdminMenu() {
                 savedProduct = newProduct;
                 toast.success("Item added");
             }
-            
+
             // Handle image upload if a file was selected
             if (productImageFile && savedProduct?.id) {
                 try {
@@ -333,7 +335,7 @@ export default function AdminMenu() {
                     setUploadingImage(false);
                 }
             }
-            
+
             setIsDialogOpen(false);
             setEditItem(null);
             setProductImageFile(null);
@@ -856,6 +858,10 @@ export default function AdminMenu() {
                                         <Input id="name" name="name" className="h-14 text-xl font-bold rounded-2xl bg-white/50 backdrop-blur-sm border-2 border-slate-100 focus:border-primary transition-all shadow-inner" placeholder="E.g. Strawberry Muffin" defaultValue={editItem?.name} required />
                                     </div>
                                     <div className="space-y-2">
+                                        <Label htmlFor="description" className="text-[10px] font-black uppercase tracking-widest text-slate-400 pl-1">Description (Optional)</Label>
+                                        <textarea id="description" name="description" className="w-full flex min-h-[80px] rounded-2xl bg-white/50 backdrop-blur-sm border-2 border-slate-100 px-3 py-3 text-sm font-medium focus:border-primary transition-all shadow-inner resize-none focus:outline-none" placeholder="E.g. Freshly baked with real strawberries..." defaultValue={editItem?.description} />
+                                    </div>
+                                    <div className="space-y-2">
                                         <Label htmlFor="selling_price" className="text-[10px] font-black uppercase tracking-widest text-slate-400 pl-1">Selling Value (Rs.)</Label>
                                         <Input
                                             id="selling_price"
@@ -871,7 +877,7 @@ export default function AdminMenu() {
                                             required
                                         />
                                     </div>
-                                    
+
                                     {/* Product Image Upload */}
                                     <div className="space-y-2">
                                         <Label htmlFor="product_image" className="text-[10px] font-black uppercase tracking-widest text-slate-400 pl-1">
@@ -940,7 +946,7 @@ export default function AdminMenu() {
                                             For customer menu display. Max 5MB. JPG, PNG, or WEBP.
                                         </p>
                                     </div>
-                                    
+
                                     <div className="grid grid-cols-2 gap-6 items-end">
                                         <div className="space-y-2 relative">
                                             <Label htmlFor="category" className="text-[10px] font-black uppercase tracking-widest text-slate-400 pl-1">Sort into Category</Label>
@@ -1197,6 +1203,9 @@ export default function AdminMenu() {
                                         <div className="flex items-start justify-between mb-3">
                                             <div className="flex-1 mr-4">
                                                 <h3 className="font-bold text-slate-900 text-lg leading-snug group-hover:text-primary transition-colors">{item.name}</h3>
+                                                {item.description && (
+                                                    <p className="text-xs text-slate-500 font-medium mt-1 mb-2 line-clamp-2">{item.description}</p>
+                                                )}
                                                 <p className="text-[11px] uppercase font-black tracking-widest text-slate-400 underline decoration-slate-200 decoration-2 underline-offset-2 mt-1">{item.category_name}</p>
                                             </div>
                                             <div className="text-right flex flex-col items-end gap-1.5">
@@ -1953,6 +1962,9 @@ export default function AdminMenu() {
                                 <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100">
                                     <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary mb-2 block">Product Name</Label>
                                     <div className="text-2xl font-bold text-slate-900">{viewItem.name}</div>
+                                    {viewItem.description && (
+                                        <p className="text-sm text-slate-600 font-medium mt-3 border-t border-slate-100 pt-3">{viewItem.description}</p>
+                                    )}
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">

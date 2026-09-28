@@ -431,7 +431,7 @@ export async function updateProduct(id, productData) {
 export async function updateProductImage(id, imageFile) {
   const formData = new FormData();
   formData.append("image", imageFile);
-  
+
   // Use raw fetch instead of apiFetch to handle FormData properly
   const token = getAccessToken();
   const res = await fetch(`${API_BASE_URL}/api/products/${id}/`, {
@@ -465,17 +465,17 @@ export async function fetchCategories() {
 
 // Public menu endpoint (no authentication required)
 export async function fetchPublicMenu(branchId = null) {
-  const url = branchId 
+  const url = branchId
     ? `${API_BASE_URL}/api/public-menu/?branch_id=${branchId}`
     : `${API_BASE_URL}/api/public-menu/`;
-  
+
   const res = await fetch(url, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
     },
   });
-  
+
   const data = await safeJson(res);
   if (!res.ok) throw new Error(data?.message || "Failed to fetch public menu");
   return data.data;
@@ -767,15 +767,15 @@ export async function fetchDeletedInvoices(params = {}) {
   if (params.date) queryParams.append('date', params.date);
   if (params.page) queryParams.append('page', params.page);
   if (params.page_size) queryParams.append('page_size', params.page_size);
-  
+
   const url = `/api/deleted-invoice/${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
   console.log("🗑️ Fetching deleted invoices from:", url);
-  
+
   const res = await apiFetch(url);
   const data = await safeJson(res);
-  
+
   console.log("🗑️ Deleted invoices response:", { status: res.status, ok: res.ok, data });
-  
+
   if (!res.ok) {
     console.error("❌ Deleted invoices API error:", res.status, data);
     throw new Error(data?.error || `HTTP ${res.status}: Failed to fetch deleted invoices`);
@@ -901,6 +901,23 @@ export async function fetchStaffReport(branchId = null, filters = {}) {
   if (!res.ok) throw new Error(data?.message || "Failed to fetch staff report");
   return data;
 }
+
+export async function fetchPaymentMethodInvoices(branchId = null, filters = {}) {
+  let url = branchId
+    ? `/api/calculate/payment-method-invoices/${branchId}/`
+    : `/api/calculate/payment-method-invoices/`;
+
+  if (filters && Object.keys(filters).length > 0) {
+    const params = new URLSearchParams(filters);
+    url += `?${params.toString()}`;
+  }
+
+  const res = await apiFetch(url);
+  const data = await safeJson(res);
+  if (!res.ok) throw new Error(data?.message || "Failed to fetch payment method invoices");
+  return data;
+}
+
 
 /**
  * Manual refresh dashboard (one-time fetch)

@@ -121,18 +121,18 @@ export default function CounterReports() {
   const getSystemCashAmount = () => {
     // Try sales_by_payment_method first (this is what the API actually returns)
     const salesByPayment = reportData?.sales_by_payment_method || [];
-    
-    const cashPayment = salesByPayment.find((pm: any) => 
-      pm.payment_method?.toUpperCase() === 'CASH' || 
+
+    const cashPayment = salesByPayment.find((pm: any) =>
+      pm.payment_method?.toUpperCase() === 'CASH' ||
       pm.method?.toUpperCase() === 'CASH' ||
       pm.type?.toUpperCase() === 'CASH'
     );
-    
+
     // Try different possible field names for amount
     const amount = parseFloat(
-      cashPayment?.total_amount || 
-      cashPayment?.amount || 
-      cashPayment?.total || 
+      cashPayment?.total_amount ||
+      cashPayment?.amount ||
+      cashPayment?.total ||
       cashPayment?.value ||
       0
     );
@@ -145,14 +145,14 @@ export default function CounterReports() {
     if (reportData?.total_orders) return reportData.total_orders;
     if (reportData?.total_month_orders) return reportData.total_month_orders; // API returns this
     if (reportData?.orders_count) return reportData.orders_count;
-    
+
     // Calculate from sales_by_payment_method if order counts are available
     const salesByPayment = reportData?.sales_by_payment_method || [];
     const totalFromPayments = salesByPayment.reduce((sum: number, pm: any) => {
       const orderCount = pm.order_count || pm.orders_count || pm.count || 0;
       return sum + orderCount;
     }, 0);
-    
+
     return totalFromPayments;
   };
 
@@ -161,14 +161,14 @@ export default function CounterReports() {
     if (reportData?.average_order_value) return parseFloat(reportData.average_order_value);
     if (reportData?.avg_order) return parseFloat(reportData.avg_order); // API returns this
     if (reportData?.avg_order_value) return parseFloat(reportData.avg_order_value);
-    
+
     // Calculate manually if needed
-    const totalSales = reportData?.total_sales || 
-                      reportData?.total_month_sales ||
-                      reportData?.sales_by_payment_method?.reduce((sum: number, pm: any) => 
-                        sum + (parseFloat(pm.total_amount || pm.amount || pm.total || 0)), 0) || 0;
+    const totalSales = reportData?.total_sales ||
+      reportData?.total_month_sales ||
+      reportData?.sales_by_payment_method?.reduce((sum: number, pm: any) =>
+        sum + (parseFloat(pm.total_amount || pm.amount || pm.total || 0)), 0) || 0;
     const totalOrders = getTotalOrders();
-    
+
     const avgValue = totalOrders > 0 ? totalSales / totalOrders : 0;
     return avgValue;
   };
@@ -183,7 +183,7 @@ export default function CounterReports() {
         setLoading(false);
         return;
       }
-      
+
       const data = await fetchReportDashboard(branchId, getFilters());
       setReportData(data);
     } catch (error) {
@@ -202,7 +202,7 @@ export default function CounterReports() {
         setStaffLoading(false);
         return;
       }
-      
+
       const data = await fetchStaffReport(branchId, getFilters());
       setStaffData(data?.staff_performance || []);
     } catch (error) {
@@ -239,7 +239,7 @@ export default function CounterReports() {
             <Calculator className="h-4 w-4" />
             Cash Calculator
           </Button>
-          
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="h-11 rounded-xl border-2 font-bold px-4 hover:bg-slate-50 transition-all border-slate-100 shadow-sm gap-2 hover:text-primary">
@@ -330,23 +330,34 @@ export default function CounterReports() {
               {(reportData?.sales_by_payment_method || []).map((pm: any, idx: number) => {
                 const orderCount = pm.order_count || pm.orders_count || pm.count || pm.orders || 0;
                 const totalAmount = pm.total_amount || pm.amount || pm.total || 0;
-                
+
                 return (
                   <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-6 py-4">
                       <span className={cn(
                         "text-[11px] font-black px-2.5 py-1 rounded uppercase tracking-tight",
                         pm.payment_method === "CASH" ? "bg-green-100 text-green-700" :
-                        pm.payment_method === "QR" ? "bg-blue-100 text-blue-700" :
-                        pm.payment_method === "CREDIT" ? "bg-purple-100 text-purple-700" :
-                        pm.payment_method === "CARD" ? "bg-amber-100 text-amber-700" :
-                        "bg-slate-100 text-slate-700"
+                          pm.payment_method === "QR" ? "bg-blue-100 text-blue-700" :
+                            pm.payment_method === "CREDIT" ? "bg-purple-100 text-purple-700" :
+                              pm.payment_method === "CARD" ? "bg-amber-100 text-amber-700" :
+                                "bg-slate-100 text-slate-700"
                       )}>
                         {pm.payment_method}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-right font-bold text-sm text-slate-500">
-                      {orderCount > 0 ? orderCount : '-'}
+                    <td className="px-6 py-4 text-right">
+                      {orderCount > 0 ? (
+                        <div className="flex flex-col items-end">
+                          <span className="font-bold text-sm text-slate-700">{orderCount}</span>
+                          {pm.partial_orders_count > 0 && (
+                            <span className="text-[10px] text-amber-600 font-bold bg-amber-50 px-1.5 rounded uppercase mt-0.5 tracking-tight border border-amber-200" title={`${pm.partial_orders_count} invoices involved a split/partial payment with this method`}>
+                              {pm.partial_orders_count} Split
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="font-bold text-sm text-slate-500">-</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-right font-bold text-sm text-slate-900">Rs.{Number(totalAmount).toLocaleString()}</td>
                   </tr>
@@ -557,8 +568,8 @@ export default function CounterReports() {
               {/* Difference */}
               <div className={cn(
                 "p-4 rounded-xl border-2",
-                calculateTotalCash() === getSystemCashAmount() 
-                  ? "bg-slate-900 border-slate-900" 
+                calculateTotalCash() === getSystemCashAmount()
+                  ? "bg-slate-900 border-slate-900"
                   : "bg-amber-50 border-amber-300"
               )}>
                 <p className={cn(
@@ -571,8 +582,8 @@ export default function CounterReports() {
                   "text-2xl font-black mt-1",
                   calculateTotalCash() === getSystemCashAmount() ? "text-white" : "text-amber-900"
                 )}>
-                  {calculateTotalCash() === getSystemCashAmount() 
-                    ? "✓ Match" 
+                  {calculateTotalCash() === getSystemCashAmount()
+                    ? "✓ Match"
                     : `${calculateTotalCash() > getSystemCashAmount() ? '+' : ''}₹${Math.abs(calculateTotalCash() - getSystemCashAmount()).toLocaleString()}`
                   }
                 </p>
@@ -582,7 +593,7 @@ export default function CounterReports() {
             {/* Denomination Grid */}
             <div className="space-y-3">
               <h3 className="text-xs font-black text-slate-600 uppercase tracking-wider">Count Notes & Coins</h3>
-              
+
               {/* Large Notes (1000, 500) */}
               <div className="grid grid-cols-2 gap-3">
                 {['1000', '500'].map((value) => (

@@ -34,7 +34,7 @@ import {
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { fetchInvoices, addPayment, fetchInvoiceDetail, fetchBranch, fetchWaiterPayments, fetchMe, deleteInvoice } from "@/api/index.js";
+import { fetchInvoices, addPayment, fetchInvoiceDetail, fetchBranch, fetchUsers, fetchWaiterPayments, fetchMe, deleteInvoice } from "@/api/index.js";
 import { getCurrentUser } from "@/auth/auth";
 import { useOrdersWebSocket } from "@/hooks/useOrdersWebSocket";
 
@@ -71,19 +71,31 @@ export default function PaymentCollection() {
 
     try {
       const todayStr = new Date().toISOString().split('T')[0];
-      const [invoiceRes, meRes, waiterPaymentsRes] = await Promise.all([
-        fetchInvoices({ date: todayStr, page_size: 1000 }).catch(err => {
+      const [invoiceRes, meRes, usersRes, waiterPaymentsRes] = await Promise.all([
+        fetchInvoices({ date: todayStr }).catch(err => {
           console.error("fetchInvoices failed:", err);
           return null;
         }),
         fetchMe().catch(() => null),
+        fetchUsers().catch(() => null),
         fetchWaiterPayments().catch(() => null)
       ]);
 
       const data = invoiceRes?.results || (Array.isArray(invoiceRes) ? invoiceRes : []);
 
+      const enrichedInvoices = await Promise.all(
+        (data || []).map(async (inv: any) => {
+          try {
+            return await fetchInvoiceDetail(inv.id);
+          } catch (err) {
+            console.error(`Failed to fetch detail for invoice ${inv.id}:`, err);
+            return inv;
+          }
+        })
+      );
+
       // Keep all active sale orders (both pending and collected today)
-      const validInvoices = data.filter(
+      const validInvoices = enrichedInvoices.filter(
         (o: any) => !o.is_deleted && o.invoice_status !== "CANCELLED" && o.invoice_type === "SALE"
       );
       setOrders(validInvoices);
@@ -92,9 +104,18 @@ export default function PaymentCollection() {
       const user = getCurrentUser();
       let resolvedCashInHand: number | null = null;
 
-      // Direct /api/me/ response
+      // Priority 1: Direct /api/me/ response
       if (meRes && meRes.cash_in_hand !== undefined && meRes.cash_in_hand !== null) {
         resolvedCashInHand = parseFloat(meRes.cash_in_hand) || 0;
+      }
+
+      // Priority 2: User list
+      if (resolvedCashInHand === null && usersRes) {
+        const userList = Array.isArray(usersRes) ? usersRes : (usersRes?.users || usersRes?.results || usersRes?.data || []);
+        const myUser = userList.find((u: any) => String(u.id) === String(user?.id));
+        if (myUser && myUser.cash_in_hand !== undefined && myUser.cash_in_hand !== null) {
+          resolvedCashInHand = parseFloat(myUser.cash_in_hand) || 0;
+        }
       }
 
       if (resolvedCashInHand !== null) {
@@ -324,7 +345,7 @@ export default function PaymentCollection() {
 
   const handleDeleteInvoice = async () => {
     if (!selectedOrder) return;
-
+    
     // Only allow delete for UNPAID invoices
     if (selectedOrder.payment_status === 'PAID' || selectedOrder.payment_status === 'WAITER RECEIVED') {
       toast.error("Cannot delete a paid invoice");
@@ -1303,7 +1324,7 @@ export default function PaymentCollection() {
           </DialogHeader>
           <div className="space-y-4 mt-3">
             <p className="text-sm text-slate-600">
-              Are you sure you want to delete order <span className="font-bold">#{selectedOrder?.invoice_number}</span>?
+              Are you sure you want to delete order <span className="font-bold">#{selectedOrder?.invoice_number}</span>? 
               <br />
               <span className="text-xs">This action cannot be undone.</span>
             </p>

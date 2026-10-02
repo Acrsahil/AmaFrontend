@@ -1,33 +1,11 @@
 import { useState, useEffect } from "react";
-import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import { CounterSidebar } from "@/components/layout/CounterSidebar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { getCurrentUser } from "../../auth/auth";
-
-/** Branch managers use the admin dashboard shell, not the counter terminal routes. */
-const BRANCH_MANAGER_COUNTER_REDIRECTS: Record<string, string> = {
-    "/counter/dashboard": "/admin/dashboard",
-    "/counter/pos": "/admin/dashboard/pos",
-    "/counter/orders": "/admin/dashboard/orders",
-    "/counter/tables": "/admin/dashboard/orders",
-    "/counter/daily-sales": "/admin/dashboard/daily-stats",
-    "/counter/reports": "/admin/dashboard/reports",
-    "/counter/waiter-payments": "/admin/dashboard/orders",
-    "/counter/deleted-invoices": "/admin/dashboard/deleted-invoices",
-};
 
 export function CounterLayout() {
     const location = useLocation();
-    const user = getCurrentUser();
-
-    if (user?.role === "BRANCH_MANAGER") {
-        const redirectTo = BRANCH_MANAGER_COUNTER_REDIRECTS[location.pathname];
-        if (redirectTo) {
-            return <Navigate to={redirectTo} replace />;
-        }
-    }
-
     const isPOSRoute = location.pathname.includes('/counter/pos');
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);

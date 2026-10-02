@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import { AdminSidebar } from "./AdminSidebar";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Menu, MapPin, LogOut, User as UserIcon, Key } from "lucide-react";
@@ -18,12 +18,16 @@ import { ChangePasswordModal } from "../auth/ChangePasswordModal";
 export function AdminLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const location = useLocation();
+  const isEmbeddedPos = location.pathname.includes("/admin/dashboard/pos");
 
   const user = getCurrentUser();
   const branchName = user?.branch_name || "Ama Bakery";
 
   return (
     <div className="min-h-screen bg-slate-50/50">
+      {!isEmbeddedPos && (
+      <>
       {/* Desktop Sidebar */}
       <aside className="fixed left-0 top-0 z-[60] h-screen w-64 hidden md:block">
         <AdminSidebar />
@@ -140,8 +144,10 @@ export function AdminLayout() {
           </DropdownMenu>
         </div>
       </div>
+      </>
+      )}
 
-      <main className="md:ml-64 min-h-screen transition-all duration-200 ease-in-out">
+      <main className={isEmbeddedPos ? "min-h-screen" : "md:ml-64 min-h-screen transition-all duration-200 ease-in-out"}>
         <Outlet />
       </main>
     </div>

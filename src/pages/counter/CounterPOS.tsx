@@ -165,7 +165,7 @@ export default function CounterPOS() {
     // const [activeKeypadField, setActiveKeypadField] = useState<'cash' | 'discount' | 'customer' | 'productSearch' | 'table' | null>(null);
     // const [showKeypad, setShowKeypad] = useState(false);
     // const keyboardRef = useRef<HTMLDivElement>(null);
-    // const backspaceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const backspaceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const backspaceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const stopBackspace = () => {
@@ -905,32 +905,45 @@ export default function CounterPOS() {
         }
     };
 
-    const hideHeader = location.pathname.includes('/admin/dashboard');
+    const isAdminPos = location.pathname.includes("/admin/dashboard/pos");
 
     return (
-        <div className={cn("bg-stone-50 flex flex-col overflow-hidden font-sans", hideHeader ? "h-[calc(100vh-64px)] md:h-[calc(100vh-64px)]" : "h-screen")}>
+        <div className="bg-stone-50 flex flex-col overflow-hidden font-sans h-screen">
             {/* Top Header */}
-            {!hideHeader && (
-                <header className="h-16 bg-white border-b px-4 flex items-center justify-between shrink-0 z-10 gap-4">
+            <header className="h-16 bg-white border-b px-4 flex items-center justify-between shrink-0 z-10 gap-4">
                     <div className="flex items-center gap-2 shrink-0">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="rounded-xl h-10 w-10 bg-slate-100 hover:bg-slate-200 transition-colors"
-                            onClick={() => window.dispatchEvent(new CustomEvent("open-counter-sidebar"))}
-                        >
-                            <Menu className="h-5 w-5 text-slate-700" />
-                        </Button>
-                        {(operator?.role === "ADMIN" || operator?.role === "BRANCH_MANAGER" || operator?.role === "SUPER_ADMIN") && (
+                        {isAdminPos ? (
                             <Button
                                 variant="ghost"
-                                size="icon"
-                                onClick={() => navigate('/admin/dashboard')}
-                                className="mr-2 rounded-xl text-slate-400 hover:text-primary hover:bg-primary/5 h-10 w-10"
-                                title="Back to Admin Dashboard"
+                                className="rounded-xl h-10 px-3 gap-2 text-slate-600 hover:text-primary hover:bg-primary/5"
+                                onClick={() => navigate("/admin/dashboard")}
+                                title="Back to Branch Manager"
                             >
-                                <LayoutDashboard className="h-5 w-5" />
+                                <ChevronLeft className="h-5 w-5" />
+                                <span className="text-sm font-bold hidden sm:inline">Branch Manager</span>
                             </Button>
+                        ) : (
+                            <>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="rounded-xl h-10 w-10 bg-slate-100 hover:bg-slate-200 transition-colors"
+                                    onClick={() => window.dispatchEvent(new CustomEvent("open-counter-sidebar"))}
+                                >
+                                    <Menu className="h-5 w-5 text-slate-700" />
+                                </Button>
+                                {(operator?.role === "ADMIN" || operator?.role === "BRANCH_MANAGER" || operator?.role === "SUPER_ADMIN") && (
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => navigate("/admin/dashboard")}
+                                        className="mr-2 rounded-xl text-slate-400 hover:text-primary hover:bg-primary/5 h-10 w-10"
+                                        title="Back to Admin Dashboard"
+                                    >
+                                        <LayoutDashboard className="h-5 w-5" />
+                                    </Button>
+                                )}
+                            </>
                         )}
                         <h1 className="text-lg md:text-xl font-bold text-slate-800 leading-none hidden md:block mr-2">POS</h1>
                     </div>
@@ -1074,7 +1087,6 @@ export default function CounterPOS() {
                         </DropdownMenu>
                     </div>
                 </header>
-            )}
 
             <ChangePasswordModal
                 isOpen={showChangePassword}

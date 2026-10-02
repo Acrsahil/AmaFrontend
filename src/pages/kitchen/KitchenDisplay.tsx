@@ -50,10 +50,10 @@ function playNotificationSound() {
     // Reset to start so rapid notifications still ring
     const audio = notificationAudioRef.current;
     audio.currentTime = 0;
-    
+
     // Create a user interaction promise to handle autoplay policies
     const playPromise = audio.play();
-    
+
     if (playPromise !== undefined) {
       playPromise
         .then(() => {
@@ -61,30 +61,30 @@ function playNotificationSound() {
         })
         .catch((err) => {
           console.warn("[Notification] Failed to play sound - trying fallback:", err);
-          
+
           // Fallback: Try with a new Audio instance
           try {
             const fallbackAudio = new Audio("/noti.mp3");
             fallbackAudio.volume = 0.8;
             fallbackAudio.play().catch(e => {
               console.warn("[Notification] Fallback audio also failed:", e);
-              
+
               // Last resort: Try Web Audio API beep
               try {
                 const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
                 const oscillator = audioContext.createOscillator();
                 const gainNode = audioContext.createGain();
-                
+
                 oscillator.connect(gainNode);
                 gainNode.connect(audioContext.destination);
-                
+
                 oscillator.frequency.value = 800; // High pitch for notification
                 gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
                 gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-                
+
                 oscillator.start(audioContext.currentTime);
                 oscillator.stop(audioContext.currentTime + 0.5);
-                
+
                 console.log("[Notification] Played Web Audio beep as fallback");
               } catch (webAudioErr) {
                 console.warn("[Notification] All audio methods failed:", webAudioErr);
@@ -149,122 +149,122 @@ export default function KitchenDisplay() {
   const handleWebSocketMessage = useCallback(async (data: any) => {
     // Removed setTimeout delay - process immediately for instant updates
     if (wsRefreshTimerRef.current) clearTimeout(wsRefreshTimerRef.current);
-    
+
     console.log("[WS] Message received:", data.type, data.invoice_id);
 
-      // Skip WebSocket merge if we're in the middle of a manual reload
-      // This prevents the race condition where WebSocket overwrites our updates
-      if (isManualReloadRef.current) {
-        console.log("[WS] Skipping merge - manual reload in progress");
-        return;
-      }
+    // Skip WebSocket merge if we're in the middle of a manual reload
+    // This prevents the race condition where WebSocket overwrites our updates
+    if (isManualReloadRef.current) {
+      console.log("[WS] Skipping merge - manual reload in progress");
+      return;
+    }
 
-      if (data.invoice_id) {
-        try {
-          // Fetch the invoice details to check items and their kitchen types
-          const updatedInvoice = await fetchInvoiceDetail(data.invoice_id);
-          if (!updatedInvoice) {
-            console.log("[WS] Invoice details not found, skipping.");
+    if (data.invoice_id) {
+      try {
+        // Fetch the invoice details to check items and their kitchen types
+        const updatedInvoice = await fetchInvoiceDetail(data.invoice_id);
+        if (!updatedInvoice) {
+          console.log("[WS] Invoice details not found, skipping.");
+          return;
+        }
+
+        // Filter out null/undefined items (e.g. ones stripped by the backend serializer for this kitchen type)
+        const relevantItems = (updatedInvoice.items || []).filter(Boolean);
+
+        const currentUser = getCurrentUser();
+        const userKitchenId = currentUser?.kitchentype_id;
+
+        // If the user is a restricted kitchen, decide if they should be notified
+        if (userKitchenId) {
+          const hasItemsForMyKitchen = relevantItems.length > 0;
+          const isCurrentlyDisplayed = orders.some(o => o.invoiceId === Number(data.invoice_id) || o.invoiceId === String(data.invoice_id));
+
+          // If it has NO items for our kitchen, and it is NOT currently displayed, ignore it completely
+          if (!hasItemsForMyKitchen && !isCurrentlyDisplayed) {
+            console.log(`[WS] Invoice ${data.invoice_id} has no items for kitchen ${userKitchenId} and is not displayed. Ignoring.`);
             return;
           }
 
-          // Filter out null/undefined items (e.g. ones stripped by the backend serializer for this kitchen type)
-          const relevantItems = (updatedInvoice.items || []).filter(Boolean);
-
-          const currentUser = getCurrentUser();
-          const userKitchenId = currentUser?.kitchentype_id;
-
-          // If the user is a restricted kitchen, decide if they should be notified
-          if (userKitchenId) {
-            const hasItemsForMyKitchen = relevantItems.length > 0;
-            const isCurrentlyDisplayed = orders.some(o => o.invoiceId === Number(data.invoice_id) || o.invoiceId === String(data.invoice_id));
-
-            // If it has NO items for our kitchen, and it is NOT currently displayed, ignore it completely
-            if (!hasItemsForMyKitchen && !isCurrentlyDisplayed) {
-              console.log(`[WS] Invoice ${data.invoice_id} has no items for kitchen ${userKitchenId} and is not displayed. Ignoring.`);
-              return;
-            }
-
-            // Decide to ring and notify only if there are items for our kitchen
-            if (hasItemsForMyKitchen) {
-              // If it's a completely new order for this kitchen (not currently displayed on screen)
-              if (!isCurrentlyDisplayed) {
-                playNotificationSound();
-                toast.success("New Order Received!", {
-                  description: `Order #${updatedInvoice.invoice_number || updatedInvoice.id} has been placed`,
-                  icon: <Bell className="h-5 w-5 text-primary" />,
-                });
-              } else {
-                // If it is already displayed on our kitchen screen, check if any of our items actually changed
-                const existingOrderCards = orders.filter(
-                  o => String(o.invoiceId) === String(data.invoice_id)
-                );
-                const existingKitchenItems = existingOrderCards.flatMap(o => o.items || []);
-
-                let itemsChanged = false;
-                if (relevantItems.length !== existingKitchenItems.length) {
-                  itemsChanged = true;
-                } else {
-                  for (const newItem of relevantItems) {
-                    const existingItem = existingKitchenItems.find(
-                      (ei: any) => Number(ei.id) === Number(newItem.id)
-                    );
-                    if (!existingItem) {
-                      itemsChanged = true;
-                      break;
-                    }
-                    const newStatus = (newItem.status || 'PENDING').toUpperCase();
-                    const existingStatus = (existingItem.status || 'PENDING').toUpperCase();
-                    if (
-                      Number(existingItem.quantity) !== Number(newItem.quantity) ||
-                      existingStatus !== newStatus
-                    ) {
-                      itemsChanged = true;
-                      break;
-                    }
-                  }
-                }
-
-                if (itemsChanged) {
-                  console.log(`[WS] Items changed for kitchen ${userKitchenId}. Playing bell sound.`);
-                  playNotificationSound();
-                } else {
-                  console.log(`[WS] Items unchanged for kitchen ${userKitchenId}. Skipping bell sound.`);
-                }
-              }
-            }
-          } else {
-            // General admin / manager user who sees everything
-            playNotificationSound();
-            if (data.type === "invoice_created") {
+          // Decide to ring and notify only if there are items for our kitchen
+          if (hasItemsForMyKitchen) {
+            // If it's a completely new order for this kitchen (not currently displayed on screen)
+            if (!isCurrentlyDisplayed) {
+              playNotificationSound();
               toast.success("New Order Received!", {
                 description: `Order #${updatedInvoice.invoice_number || updatedInvoice.id} has been placed`,
                 icon: <Bell className="h-5 w-5 text-primary" />,
               });
+            } else {
+              // If it is already displayed on our kitchen screen, check if any of our items actually changed
+              const existingOrderCards = orders.filter(
+                o => String(o.invoiceId) === String(data.invoice_id)
+              );
+              const existingKitchenItems = existingOrderCards.flatMap(o => o.items || []);
+
+              let itemsChanged = false;
+              if (relevantItems.length !== existingKitchenItems.length) {
+                itemsChanged = true;
+              } else {
+                for (const newItem of relevantItems) {
+                  const existingItem = existingKitchenItems.find(
+                    (ei: any) => Number(ei.id) === Number(newItem.id)
+                  );
+                  if (!existingItem) {
+                    itemsChanged = true;
+                    break;
+                  }
+                  const newStatus = (newItem.status || 'PENDING').toUpperCase();
+                  const existingStatus = (existingItem.status || 'PENDING').toUpperCase();
+                  if (
+                    Number(existingItem.quantity) !== Number(newItem.quantity) ||
+                    existingStatus !== newStatus
+                  ) {
+                    itemsChanged = true;
+                    break;
+                  }
+                }
+              }
+
+              if (itemsChanged) {
+                console.log(`[WS] Items changed for kitchen ${userKitchenId}. Playing bell sound.`);
+                playNotificationSound();
+              } else {
+                console.log(`[WS] Items unchanged for kitchen ${userKitchenId}. Skipping bell sound.`);
+              }
             }
           }
-
-          // Process the update / insert into state
-          console.log("[WS] Merging invoice updates:", data.invoice_id);
-          if (handleInvoiceUpdateRef.current) {
-            handleInvoiceUpdateRef.current(data.invoice_id);
-          } else {
-            loadDataRef.current?.();
+        } else {
+          // General admin / manager user who sees everything
+          playNotificationSound();
+          if (data.type === "invoice_created") {
+            toast.success("New Order Received!", {
+              description: `Order #${updatedInvoice.invoice_number || updatedInvoice.id} has been placed`,
+              icon: <Bell className="h-5 w-5 text-primary" />,
+            });
           }
-          return;
-        } catch (error) {
-          console.error("[WS] Error processing invoice details:", error);
-          // Fallback: just load data normally
-          loadDataRef.current?.();
-          return;
         }
-      }
 
-      // Fallback for general updates without invoice_id
-      if (data.type === "invoice_updated") {
-        console.log("[WS] General update received, reloading...");
+        // Process the update / insert into state
+        console.log("[WS] Merging invoice updates:", data.invoice_id);
+        if (handleInvoiceUpdateRef.current) {
+          handleInvoiceUpdateRef.current(data.invoice_id);
+        } else {
+          loadDataRef.current?.();
+        }
+        return;
+      } catch (error) {
+        console.error("[WS] Error processing invoice details:", error);
+        // Fallback: just load data normally
         loadDataRef.current?.();
+        return;
       }
+    }
+
+    // Fallback for general updates without invoice_id
+    if (data.type === "invoice_updated") {
+      console.log("[WS] General update received, reloading...");
+      loadDataRef.current?.();
+    }
   }, [orders]);
 
   // Get current user and branch
@@ -321,20 +321,6 @@ export default function KitchenDisplay() {
       const basicInvoices = invoiceRes.results || invoiceRes;
       console.log("[loadData] Basic invoices:", basicInvoices?.length || 0);
 
-      // Fetch full details for all invoices returned for today
-      // Filtering will happen after we have full status info
-      const detailedInvoices = await Promise.all(
-        (basicInvoices || []).map(async (inv: any) => {
-          try {
-            return await fetchInvoiceDetail(inv.id);
-          } catch (err) {
-            console.error(`Failed to fetch detail for invoice ${inv.id}:`, err);
-            return inv;
-          }
-        })
-      );
-      console.log("[loadData] Detailed invoices:", detailedInvoices?.length || 0);
-
       const productsMap = (productData || []).reduce((acc: any, p: any) => {
         if (p && p.id) {
           acc[String(p.id)] = p;
@@ -344,7 +330,7 @@ export default function KitchenDisplay() {
 
       // Group items by status and create separate order cards for each status
       console.log("[loadData] Filtering invoices...");
-      const filteredInvoices = detailedInvoices.filter((inv: any) => {
+      const filteredInvoices = basicInvoices.filter((inv: any) => {
         const isActive = inv && inv.is_active;
         const hasValidStatus = inv && (inv.invoice_status === 'PENDING' || inv.invoice_status === 'READY' || inv.invoice_status === 'COMPLETED');
         console.log(`[loadData] Invoice ${inv?.id}: active=${isActive}, status=${inv?.invoice_status}, valid=${hasValidStatus}`);

@@ -434,7 +434,7 @@ export default function CounterReports() {
               </div>
               <div className="h-[250px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={topItems.slice(0, 5)}>
+                  <BarChart data={topItems}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="product_name" tick={{ fontSize: 11, fontWeight: 600 }} />
                     <YAxis tick={{ fontSize: 11 }} />

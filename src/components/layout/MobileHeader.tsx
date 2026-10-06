@@ -22,7 +22,8 @@ import {
   ArrowLeft,
   KeyRound,
   LogOut,
-  ChevronDown
+  ChevronDown,
+  User
 } from "lucide-react";
 import { getCurrentUser, logout } from "@/auth/auth";
 import { ChangePasswordModal } from "../auth/ChangePasswordModal";
@@ -59,8 +60,8 @@ export function MobileHeader({ title, showBack = false }: MobileHeaderProps) {
             </Button>
           )}
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="h-8 w-8 rounded-xl bg-white p-1 shadow-2xs border border-slate-200/70 shrink-0 overflow-hidden flex items-center justify-center">
-              <img src="/logos/logo2brown.jpeg" alt="AMA BAKERY" className="h-full w-full object-contain" />
+            <div className="h-8 w-8 rounded-full shadow-sm border border-white/20 shrink-0 overflow-hidden flex items-center justify-center bg-[#3B2A20]">
+              <img src={LOGO_PATH} alt="AMA BAKERY" className="h-full w-full object-cover" />
             </div>
             <div className="min-w-0 flex flex-col">
               <h1 className="text-xs md:text-sm font-black text-slate-900 tracking-tight leading-tight truncate">
@@ -80,8 +81,8 @@ export function MobileHeader({ title, showBack = false }: MobileHeaderProps) {
                 className="flex items-center gap-2 h-9 pl-2 pr-2.5 rounded-full bg-white border border-slate-200/80 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm active:scale-95 group focus:outline-none"
                 title="Account & Session"
               >
-                <div className="h-6 w-6 rounded-full bg-gradient-to-tr from-primary to-orange-400 text-white flex items-center justify-center text-[10px] font-black shadow-xs shrink-0">
-                  {(user?.username || "W")[0].toUpperCase()}
+                <div className="h-6 w-6 rounded-full bg-slate-900 flex items-center justify-center text-white shrink-0 shadow-sm">
+                  <User className="h-3.5 w-3.5" />
                 </div>
                 <span className="text-[11px] font-bold text-slate-700 max-w-[80px] truncate">
                   {user?.username || "Waiter"}

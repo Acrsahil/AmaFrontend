@@ -30,7 +30,10 @@ type ViewMode = "grid" | "list";
 
 export default function OrderStatus() {
   const navigate = useNavigate();
+  // allOrders  = full paginated list (for list-view history, mine/all tab)
+  // gridOrders = active_only fetch (for table grid — always ALL waiters, never paginated)
   const [allOrders, setAllOrders] = useState<any[]>([]);
+  const [gridOrders, setGridOrders] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -65,13 +68,26 @@ export default function OrderStatus() {
   const [showTableOrdersModal, setShowTableOrdersModal] = useState(false);
   const [modalTableOrders, setModalTableOrders] = useState<any[]>([]);
 
-  // Fetch all invoices for today with a large page_size to get everything in one request
-  const fetchAllInvoicePages = useCallback(async (params: Record<string, string>) => {
-    const res = await fetchInvoices({ ...params, page_size: '200' });
-    // fetchInvoices returns paginated object { results, next, ... } or a plain array
-    return Array.isArray(res) ? res : (res.results || []);
-  }, []);
+  // ── Grid data: fetch ONLY active/unpaid orders via active_only=true ──────
+  // This bypasses pagination entirely — the server returns only the small set
+  // of orders that physically occupy a table right now, from ALL waiters.
+  const loadGridOrders = useCallback(async () => {
+    try {
+      const response = await fetchInvoices({
+        active_only: 'true',
+        page_size: '5000',  // Effectively no limit for active orders
+        date: dateFilter,
+      });
+      const data = Array.isArray(response) ? response : (response.results || []);
+      const valid = data.filter((inv: any) => inv.invoice_type === 'SALE' && !inv.is_deleted);
+      valid.sort((a: any, b: any) => b.id - a.id);
+      setGridOrders(valid);
+    } catch (err) {
+      console.error('WAITER: Failed to load grid orders', err);
+    }
+  }, [dateFilter]);
 
+  // ── List data: full paginated fetch for order history (mine/all tab) ──────
   const loadInvoices = useCallback(async (pageNumber: number = 1, isReset: boolean = false) => {
     if (isReset) {
       setLoading(true);
@@ -82,7 +98,7 @@ export default function OrderStatus() {
     try {
       const params: any = {
         page: pageNumber,
-        page_size: 1000,  // Large page size to get all today's orders
+        page_size: 1000,
         date: dateFilter
       };
       const response = await fetchInvoices(params);
@@ -93,29 +109,19 @@ export default function OrderStatus() {
         const validOrders = data.filter((inv: any) =>
           inv.invoice_type === 'SALE' && !inv.is_deleted
         );
-        // Sort by ID descending (newest first)
         validOrders.sort((a: any, b: any) => b.id - a.id);
 
         if (isReset) {
           setAllOrders(validOrders);
-          // If there's more data on next page, auto-load it for table view accuracy
-          if (nextUrl && viewMode === 'grid') {
-            console.log('🔄 WAITER: Auto-loading more pages for table view...');
-            loadInvoices(pageNumber + 1, false);
-          }
+          if (nextUrl) loadInvoices(pageNumber + 1, false);
         } else {
-          // DEDUPLICATE: Merge new orders with existing, remove duplicates by ID
           setAllOrders(prev => {
             const combined = [...prev, ...validOrders];
             const uniqueMap = new Map();
             combined.forEach(order => uniqueMap.set(order.id, order));
             return Array.from(uniqueMap.values()).sort((a: any, b: any) => b.id - a.id);
           });
-          // Continue auto-loading if in table view and more pages exist
-          if (nextUrl && viewMode === 'grid') {
-            console.log('🔄 WAITER: Auto-loading next page for table view...');
-            loadInvoices(pageNumber + 1, false);
-          }
+          if (nextUrl) loadInvoices(pageNumber + 1, false);
         }
         setHasMore(!!nextUrl);
         if (!isReset) setPage(pageNumber);
@@ -130,7 +136,7 @@ export default function OrderStatus() {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [dateFilter, viewMode]);
+  }, [dateFilter]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -142,8 +148,11 @@ export default function OrderStatus() {
         fetchTables()
       ]);
 
-      // Load fresh invoice data using Counter's exact method
-      await loadInvoices(1, true);
+      // Load fresh invoice data: two parallel fetches for different purposes
+      await Promise.all([
+        loadInvoices(1, true),   // list view: full history, paginated
+        loadGridOrders(),         // grid view: active/unpaid only, always complete
+      ]);
 
       setNotifications((notifs.results || notifs || []).filter((n: any) => !n.is_read));
       setProducts(prodData.results || prodData || []);
@@ -165,39 +174,37 @@ export default function OrderStatus() {
     } finally {
       setLoading(false);
     }
-  }, [loadInvoices]);
+  }, [loadInvoices, loadGridOrders]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // Ensure data is loaded on mount and when accessing component
-  useEffect(() => {
-    if (allOrders.length === 0) {
-      loadData();
-    }
-  }, [allOrders.length, loadData]);
+  // For viewMode, track previous viewMode to avoid double fetching on mount
+  const prevViewModeRef = useRef<ViewMode>(viewMode);
 
   // Refresh data when switching to table view to avoid stale cache
   useEffect(() => {
-    if (viewMode === 'grid') {
-      // Force refresh when switching to table view to get latest occupancy
-      loadInvoices(1, true);
-      // Also ensure floors are loaded for table view
-      if (floors.length === 0) {
-        loadData(); // Load floors and other essential data
+    if (prevViewModeRef.current !== viewMode) {
+      prevViewModeRef.current = viewMode;
+      if (viewMode === 'grid') {
+        // On switch to grid: refresh both list AND grid occupancy
+        loadInvoices(1, true);
+        loadGridOrders();
+        if (floors.length === 0) loadData();
       }
     }
-  }, [viewMode, loadInvoices, loadData, floors.length]);
+  }, [viewMode, loadInvoices, loadGridOrders, loadData, floors.length]);
 
   // Refresh data when window regains focus (user returns from other pages)
   useEffect(() => {
     const handleFocus = () => {
       console.log('Window focus - refreshing waiter data');
       loadInvoices(1, true);
+      loadGridOrders(); // Always refresh grid occupancy on focus
     };
 
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  }, [loadInvoices]);
+  }, [loadInvoices, loadGridOrders]);
 
   // Cleanup WebSocket timer - COPIED FROM COUNTER
   useEffect(() => {
@@ -226,13 +233,16 @@ export default function OrderStatus() {
     })));
   }, [selectedFloor]);
 
-  // WebSocket live refresh - COPIED FROM COUNTER LOGIC
+  // WebSocket live refresh
   const wsRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useOrdersWebSocket(
     useCallback((data) => {
       if (wsRefreshTimerRef.current) clearTimeout(wsRefreshTimerRef.current);
-      wsRefreshTimerRef.current = setTimeout(() => loadInvoices(1, true), 500); // Use loadInvoices like Counter
-      
+      wsRefreshTimerRef.current = setTimeout(() => {
+        loadInvoices(1, true);  // refresh list view
+        loadGridOrders();        // refresh grid occupancy (active orders)
+      }, 500);
+
       if (data.type === "invoice_updated" && data.status === "READY") {
         fetchInvoiceDetail(data.invoice_id)
           .then((order) => {
@@ -261,7 +271,7 @@ export default function OrderStatus() {
           })
           .catch(() => { });
       }
-    }, [loadData, currentUser?.id]),
+    }, [loadInvoices, loadGridOrders, currentUser?.id]),
     currentUser?.branch_id
   );
 
@@ -293,31 +303,24 @@ export default function OrderStatus() {
     return acc;
   }, []);
 
-  // Grid view: ALWAYS use ALL active orders regardless of mine/all tab, so
-  // every waiter sees the true physical occupancy of every table on the floor.
-  // The My/All tab only filters the list view below.
-  const allActiveOrders = allOrders.filter(o => {
+  // Grid view: use gridOrders fetched with active_only=true from backend.
+  // This set comes directly from the server filtered to unpaid/active SALE
+  // orders across ALL waiters — no pagination truncation possible.
+  const allActiveOrders = gridOrders.filter(o => {
+    // Belt-and-suspenders: also exclude anything the backend might have
+    // missed (shouldn't happen, but keeps the grid safe).
     if (o?.invoice_status === "COMPLETED" || o?.invoice_status === "CANCELLED") return false;
-    
-    // Exclude CREADIT orders - they are settled and don't occupy tables
     if (o.payment_status === 'CREADIT') return false;
-    
-    // Exclude orders with CREDIT payment method - tables should not be occupied
     const hasCreditPayment = (
       (o.payment_methods_list || o.payment_methods || []).some((m: string) => m?.toUpperCase() === 'CREDIT') ||
       (o.payment_details || []).some((p: any) => p.payment_method?.toUpperCase() === 'CREDIT') ||
       o.payment_method?.toUpperCase() === 'CREDIT'
     );
     if (hasCreditPayment) return false;
-    
-    // Exclude fully paid orders by counter - synced with counter logic
     const isFullyPaidByCounter = o.payment_status === 'PAID' && o.received_by_counter;
     if (isFullyPaidByCounter) return false;
-    
-    // Exclude PAID orders where due_amount is 0 (settled)
     const isPaidNoDue = o.payment_status === 'PAID' && parseFloat(o.due_amount || 0) <= 0;
     if (isPaidNoDue) return false;
-    
     return true;
   });
   const tableOrderMap: Record<number, any[]> = {};
@@ -351,19 +354,19 @@ export default function OrderStatus() {
       const unpaidOrders = orders.filter((o: any) => {
         // Exclude fully paid
         if (o.payment_status === 'PAID') return false;
-        
+
         // Exclude CREDIT/ONLINE paid with no due amount
         const paymentMethods = o.payment_methods_list || o.payment_methods || [];
         const isPaidWithCredit = paymentMethods.includes('CREDIT') || paymentMethods.includes('ONLINE');
         const hasDueAmount = parseFloat(o.due_amount || 0) > 0;
-        
+
         if (isPaidWithCredit && !hasDueAmount) return false;
-        
+
         // Include all other unpaid orders
         return true;
       });
       console.log('💰 Unpaid orders for table', tableNum, ':', unpaidOrders);
-      
+
       if (unpaidOrders.length === 0) {
         // All orders are paid - table is available, start new order
         console.log('✅ All orders paid - starting new order');
@@ -502,7 +505,7 @@ export default function OrderStatus() {
         ) : viewMode === "grid" ? (
 
           /* ══ GRID VIEW ══════════════════════════════════════════════════════════ */
-          
+
           // Show loading if floors haven't been loaded yet or if orders are being refreshed
           floors.length === 0 || (loading && allOrders.length === 0) ? (
             <div className="flex flex-col items-center justify-center py-16">
@@ -510,158 +513,158 @@ export default function OrderStatus() {
               <p className="text-gray-400 text-sm">Loading table data...</p>
             </div>
           ) : (
-          <div className="px-3 space-y-3">
+            <div className="px-3 space-y-3">
 
-            {/* Floor selector */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="w-full flex items-center gap-3 bg-white rounded-2xl border border-[#D1D1D6] px-4 py-3.5 hover:bg-[#F9F9F9] active:bg-[#F2F2F7] transition-all">
-                  <div className="h-8 w-8 rounded-xl bg-[#F2F2F7] flex items-center justify-center shrink-0">
-                    <Layers className="h-4 w-4 text-[#1D1D1F]" />
-                  </div>
-                  <div className="flex-1 text-left">
-                    <p className="text-[10px] text-[#8E8E93] font-semibold uppercase tracking-wider leading-none mb-0.5">Floor</p>
-                    <p className="text-[15px] font-semibold text-[#1D1D1F] leading-none">{selectedFloor?.name || "Select Floor"}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-[#8E8E93] font-medium">
-                      {selectedFloor?.table_count || 0} tables
-                    </span>
-                    <ChevronDown className="h-4 w-4 text-[#8E8E93]" />
-                  </div>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-[calc(100vw-1.5rem)] max-w-2xl rounded-2xl p-2 shadow-xl border border-[#D1D1D6]">
-                <DropdownMenuLabel className="text-[10px] uppercase tracking-widest font-semibold text-[#8E8E93] px-3 py-2">Select Floor</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {floors.map(floor => (
-                  <DropdownMenuItem
-                    key={floor.id}
-                    className="h-12 rounded-xl focus:bg-[#F2F2F7] focus:text-[#1D1D1F] cursor-pointer"
-                    onClick={() => handleFloorChange(floor)}
-                  >
-                    <Layers className="h-4 w-4 mr-3 text-[#8E8E93]" />
-                    <span className="font-semibold text-[#1D1D1F]">{floor.name}</span>
-                    <span className="ml-auto text-[11px] bg-[#F2F2F7] text-[#8E8E93] px-2 py-0.5 rounded-full font-medium">
-                      {floor.table_count} tables
-                    </span>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+              {/* Floor selector */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="w-full flex items-center gap-3 bg-white rounded-2xl border border-[#D1D1D6] px-4 py-3.5 hover:bg-[#F9F9F9] active:bg-[#F2F2F7] transition-all">
+                    <div className="h-8 w-8 rounded-xl bg-[#F2F2F7] flex items-center justify-center shrink-0">
+                      <Layers className="h-4 w-4 text-[#1D1D1F]" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="text-[10px] text-[#8E8E93] font-semibold uppercase tracking-wider leading-none mb-0.5">Floor</p>
+                      <p className="text-[15px] font-semibold text-[#1D1D1F] leading-none">{selectedFloor?.name || "Select Floor"}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-[#8E8E93] font-medium">
+                        {selectedFloor?.table_count || 0} tables
+                      </span>
+                      <ChevronDown className="h-4 w-4 text-[#8E8E93]" />
+                    </div>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-[calc(100vw-1.5rem)] max-w-2xl rounded-2xl p-2 shadow-xl border border-[#D1D1D6]">
+                  <DropdownMenuLabel className="text-[10px] uppercase tracking-widest font-semibold text-[#8E8E93] px-3 py-2">Select Floor</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {floors.map(floor => (
+                    <DropdownMenuItem
+                      key={floor.id}
+                      className="h-12 rounded-xl focus:bg-[#F2F2F7] focus:text-[#1D1D1F] cursor-pointer"
+                      onClick={() => handleFloorChange(floor)}
+                    >
+                      <Layers className="h-4 w-4 mr-3 text-[#8E8E93]" />
+                      <span className="font-semibold text-[#1D1D1F]">{floor.name}</span>
+                      <span className="ml-auto text-[11px] bg-[#F2F2F7] text-[#8E8E93] px-2 py-0.5 rounded-full font-medium">
+                        {floor.table_count} tables
+                      </span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
 
-            {/* Table grid */}
-            {allTableDefs.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-                <Layers className="h-12 w-12 mb-3 opacity-20" />
-                <p className="text-sm">No tables on this floor</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-3 gap-2">
-                {allTableDefs.map(table => {
-                  const orders = tableOrderMap[table.number] || [];
-                  const hasAnyOrders = orders.length > 0;
-                  
-                  // A table is OCCUPIED if it has any unpaid orders (matches Counter logic)
-                  // Treat CREDIT payments as paid (no due amount)
-                  const hasUnpaidOrders = hasAnyOrders && orders.some((o: any) => {
-                    // If paid in full, not occupied
-                    if (o.payment_status === 'PAID') return false;
-                    
-                    // If paid with CREDIT and no due amount, consider as paid
-                    const paymentMethods = o.payment_methods_list || o.payment_methods || [];
-                    const isPaidWithCredit = paymentMethods.includes('CREDIT') || paymentMethods.includes('ONLINE');
-                    const hasDueAmount = parseFloat(o.due_amount || 0) > 0;
-                    
-                    if (isPaidWithCredit && !hasDueAmount) return false;
-                    
-                    // Otherwise, it's unpaid
-                    return true;
-                  });
-                  
-                  const isReady = orders.some((o: any) => o.invoice_status === "READY");
-                  
-                  // Only sum amounts from UNPAID orders (excluding CREDIT with no due)
-                  const totalAmount = orders
-                    .filter((o: any) => {
+              {/* Table grid */}
+              {allTableDefs.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+                  <Layers className="h-12 w-12 mb-3 opacity-20" />
+                  <p className="text-sm">No tables on this floor</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  {allTableDefs.map(table => {
+                    const orders = tableOrderMap[table.number] || [];
+                    const hasAnyOrders = orders.length > 0;
+
+                    // A table is OCCUPIED if it has any unpaid orders (matches Counter logic)
+                    // Treat CREDIT payments as paid (no due amount)
+                    const hasUnpaidOrders = hasAnyOrders && orders.some((o: any) => {
+                      // If paid in full, not occupied
+                      if (o.payment_status === 'PAID') return false;
+
+                      // If paid with CREDIT and no due amount, consider as paid
+                      const paymentMethods = o.payment_methods_list || o.payment_methods || [];
+                      const isPaidWithCredit = paymentMethods.includes('CREDIT') || paymentMethods.includes('ONLINE');
+                      const hasDueAmount = parseFloat(o.due_amount || 0) > 0;
+
+                      if (isPaidWithCredit && !hasDueAmount) return false;
+
+                      // Otherwise, it's unpaid
+                      return true;
+                    });
+
+                    const isReady = orders.some((o: any) => o.invoice_status === "READY");
+
+                    // Only sum amounts from UNPAID orders (excluding CREDIT with no due)
+                    const totalAmount = orders
+                      .filter((o: any) => {
+                        if (o.payment_status === 'PAID') return false;
+                        const paymentMethods = o.payment_methods_list || o.payment_methods || [];
+                        const isPaidWithCredit = paymentMethods.includes('CREDIT') || paymentMethods.includes('ONLINE');
+                        const hasDueAmount = parseFloat(o.due_amount || 0) > 0;
+                        if (isPaidWithCredit && !hasDueAmount) return false;
+                        return true;
+                      })
+                      .reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
+
+                    // Count only UNPAID orders for display
+                    const unpaidOrderCount = orders.filter((o: any) => {
                       if (o.payment_status === 'PAID') return false;
                       const paymentMethods = o.payment_methods_list || o.payment_methods || [];
                       const isPaidWithCredit = paymentMethods.includes('CREDIT') || paymentMethods.includes('ONLINE');
                       const hasDueAmount = parseFloat(o.due_amount || 0) > 0;
                       if (isPaidWithCredit && !hasDueAmount) return false;
                       return true;
-                    })
-                    .reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
-                  
-                  // Count only UNPAID orders for display
-                  const unpaidOrderCount = orders.filter((o: any) => {
-                    if (o.payment_status === 'PAID') return false;
-                    const paymentMethods = o.payment_methods_list || o.payment_methods || [];
-                    const isPaidWithCredit = paymentMethods.includes('CREDIT') || paymentMethods.includes('ONLINE');
-                    const hasDueAmount = parseFloat(o.due_amount || 0) > 0;
-                    if (isPaidWithCredit && !hasDueAmount) return false;
-                    return true;
-                  }).length;
+                    }).length;
 
-                  return (
-                    <button
-                      key={table.id}
-                      onClick={() => handleTableTap(table.number)}
-                      className={cn(
-                        "relative flex flex-col items-center justify-center rounded-2xl border transition-all active:scale-[0.96] py-4 px-2 min-h-[96px]",
-                        isReady
-                          ? "bg-[#1D1D1F] border-[#1D1D1F] shadow-lg"
-                          : hasUnpaidOrders
-                            ? "bg-[#FFF9C4] border-[#F0C000]"  // Yellow for unpaid orders
-                            : "bg-white border-[#D1D1D6] hover:border-[#8E8E93]"  // White/Available
-                      )}
-                    >
-                      {/* Ready pulse dot */}
-                      {isReady && (
-                        <span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-[#30D158] animate-pulse" />
-                      )}
+                    return (
+                      <button
+                        key={table.id}
+                        onClick={() => handleTableTap(table.number)}
+                        className={cn(
+                          "relative flex flex-col items-center justify-center rounded-2xl border transition-all active:scale-[0.96] py-4 px-2 min-h-[96px]",
+                          isReady
+                            ? "bg-[#1D1D1F] border-[#1D1D1F] shadow-lg"
+                            : hasUnpaidOrders
+                              ? "bg-[#FFF9C4] border-[#F0C000]"  // Yellow for unpaid orders
+                              : "bg-white border-[#D1D1D6] hover:border-[#8E8E93]"  // White/Available
+                        )}
+                      >
+                        {/* Ready pulse dot */}
+                        {isReady && (
+                          <span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-[#30D158] animate-pulse" />
+                        )}
 
-                      <span className={cn(
-                        "text-[24px] font-bold leading-none mb-1 tabular-nums",
-                        isReady ? "text-white" : "text-[#78570A]"
-                      )}>{table.number}</span>
-
-                      <span className={cn(
-                        "text-[9px] font-semibold uppercase tracking-widest",
-                        isReady ? "text-[#30D158]" : hasUnpaidOrders ? "text-[#78570A]/70" : "text-[#C7C7CC]"
-                      )}>
-                        {isReady ? "READY" : hasUnpaidOrders ? "OCCUPIED" : "FREE"}
-                      </span>
-
-                      {hasAnyOrders && (
                         <span className={cn(
-                          "mt-1.5 text-[11px] font-semibold tabular-nums",
-                          isReady ? "text-white/70" : "text-[#78570A]/80"
-                        )}>
-                          Rs.{totalAmount.toFixed(0)}
-                          {unpaidOrderCount > 1 && <span className="ml-1 px-1 bg-black/10 rounded font-bold">({unpaidOrderCount})</span>}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+                          "text-[24px] font-bold leading-none mb-1 tabular-nums",
+                          isReady ? "text-white" : "text-[#78570A]"
+                        )}>{table.number}</span>
 
-            {/* Legend */}
-            <div className="flex items-center justify-center gap-5 py-1">
-              {[
-                { color: "bg-[#D1D1D6]", label: "Free" },
-                { color: "bg-[#F0C000]", label: "Occupied" },
-                { color: "bg-[#30D158]", label: "Ready" },
-              ].map(l => (
-                <div key={l.label} className="flex items-center gap-1.5">
-                  <span className={cn("h-2 w-2 rounded-full", l.color)} />
-                  <span className="text-[11px] text-[#8E8E93] font-medium">{l.label}</span>
+                        <span className={cn(
+                          "text-[9px] font-semibold uppercase tracking-widest",
+                          isReady ? "text-[#30D158]" : hasUnpaidOrders ? "text-[#78570A]/70" : "text-[#C7C7CC]"
+                        )}>
+                          {isReady ? "READY" : hasUnpaidOrders ? "OCCUPIED" : "FREE"}
+                        </span>
+
+                        {hasAnyOrders && (
+                          <span className={cn(
+                            "mt-1.5 text-[11px] font-semibold tabular-nums",
+                            isReady ? "text-white/70" : "text-[#78570A]/80"
+                          )}>
+                            Rs.{totalAmount.toFixed(0)}
+                            {unpaidOrderCount > 1 && <span className="ml-1 px-1 bg-black/10 rounded font-bold">({unpaidOrderCount})</span>}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
-              ))}
+              )}
+
+              {/* Legend */}
+              <div className="flex items-center justify-center gap-5 py-1">
+                {[
+                  { color: "bg-[#D1D1D6]", label: "Free" },
+                  { color: "bg-[#F0C000]", label: "Occupied" },
+                  { color: "bg-[#30D158]", label: "Ready" },
+                ].map(l => (
+                  <div key={l.label} className="flex items-center gap-1.5">
+                    <span className={cn("h-2 w-2 rounded-full", l.color)} />
+                    <span className="text-[11px] text-[#8E8E93] font-medium">{l.label}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
           )
 
         ) : (

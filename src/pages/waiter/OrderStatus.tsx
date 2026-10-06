@@ -306,10 +306,14 @@ export default function OrderStatus() {
   // Grid view: use gridOrders fetched with active_only=true from backend.
   // This set comes directly from the server filtered to unpaid/active SALE
   // orders across ALL waiters — no pagination truncation possible.
+  //
+  // IMPORTANT: Do NOT filter by invoice_status here!
+  // Counter doesn't either — a table is occupied until PAYMENT is settled,
+  // not until food is served. invoice_status=COMPLETED just means food was
+  // picked up; the customer is still sitting at the table eating.
   const allActiveOrders = gridOrders.filter(o => {
-    // Belt-and-suspenders: also exclude anything the backend might have
-    // missed (shouldn't happen, but keeps the grid safe).
-    if (o?.invoice_status === "COMPLETED" || o?.invoice_status === "CANCELLED") return false;
+    // Only exclude truly dead orders
+    if (o?.invoice_status === "CANCELLED") return false;
     if (o.payment_status === 'CREADIT') return false;
     const hasCreditPayment = (
       (o.payment_methods_list || o.payment_methods || []).some((m: string) => m?.toUpperCase() === 'CREDIT') ||

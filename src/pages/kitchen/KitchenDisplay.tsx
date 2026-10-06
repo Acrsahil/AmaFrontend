@@ -303,7 +303,7 @@ export default function KitchenDisplay() {
       const kitchenTypeId = currentUser?.kitchentype_id;
 
       const [invoiceRes, productsResponse, categoryData, floorData] = await Promise.all([
-        fetchInvoices({ date: new Date().toLocaleDateString('en-CA') }),
+        fetchInvoices({ date: new Date().toLocaleDateString('en-CA'), page_size: 1000 }),
         fetchProducts({ page_size: 1000 }),
         fetchCategories(),
         fetchTables()
@@ -331,7 +331,7 @@ export default function KitchenDisplay() {
       // Group items by status and create separate order cards for each status
       console.log("[loadData] Filtering invoices...");
       const filteredInvoices = basicInvoices.filter((inv: any) => {
-        const isActive = inv && inv.is_active;
+        const isActive = inv && (inv.is_active !== false);
         const hasValidStatus = inv && (inv.invoice_status === 'PENDING' || inv.invoice_status === 'READY' || inv.invoice_status === 'COMPLETED');
         console.log(`[loadData] Invoice ${inv?.id}: active=${isActive}, status=${inv?.invoice_status}, valid=${hasValidStatus}`);
         return isActive && hasValidStatus;
@@ -496,7 +496,7 @@ export default function KitchenDisplay() {
         return;
       }
 
-      const isActive = updatedInvoice.is_active;
+      const isActive = updatedInvoice.is_active !== false;
       const hasValidStatus = updatedInvoice.invoice_status === 'PENDING' || updatedInvoice.invoice_status === 'READY' || updatedInvoice.invoice_status === 'COMPLETED';
 
       const currentUser = getCurrentUser();

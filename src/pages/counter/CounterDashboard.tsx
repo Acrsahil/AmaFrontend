@@ -213,33 +213,49 @@ export default function CounterDashboard() {
 
                     {/* Custom Date Range Popover identical to Branch Manager */}
                     {timeframe === "custom" && (
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <Button variant="outline" className={cn("h-9 rounded-xl border font-bold px-3 border-slate-200 shadow-sm gap-1.5 text-xs", !dateRange.from && "text-muted-foreground")}>
-                                    <CalendarIcon className="h-3.5 w-3.5" />
-                                    {dateRange.from ? (
-                                        dateRange.to ? (
-                                            <>{format(dateRange.from, "MMM dd")} - {format(dateRange.to, "MMM dd")}</>
-                                        ) : (
-                                            format(dateRange.from, "MMM dd")
-                                        )
-                                    ) : (
-                                        "Pick Dates"
-                                    )}
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0 border shadow-2xl rounded-3xl overflow-hidden z-[110]" align="end">
-                                <Calendar
-                                    initialFocus
-                                    mode="range"
-                                    defaultMonth={dateRange.from}
-                                    selected={{ from: dateRange.from, to: dateRange.to }}
-                                    onSelect={(range: any) => setDateRange({ from: range?.from, to: range?.to })}
-                                    numberOfMonths={2}
-                                    className="p-4"
-                                />
-                            </PopoverContent>
-                        </Popover>
+                        <div className="flex items-center gap-2">
+                            {/* Start Date Picker */}
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" className={cn("h-9 rounded-xl border font-bold px-3 border-slate-200 shadow-sm gap-1.5 text-xs bg-white", !dateRange.from && "text-muted-foreground")}>
+                                        <CalendarIcon className="h-3.5 w-3.5" />
+                                        {dateRange.from ? format(dateRange.from, "MMM dd, yyyy") : "Start Date"}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0 border shadow-2xl rounded-3xl overflow-hidden z-[110]" align="end">
+                                    <Calendar
+                                        initialFocus
+                                        mode="single"
+                                        defaultMonth={dateRange.from || new Date()}
+                                        selected={dateRange.from}
+                                        onSelect={(date) => setDateRange(prev => ({ ...prev, from: date }))}
+                                        className="p-4"
+                                    />
+                                </PopoverContent>
+                            </Popover>
+
+                            <span className="text-slate-400 font-bold">-</span>
+
+                            {/* End Date Picker */}
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" className={cn("h-9 rounded-xl border font-bold px-3 border-slate-200 shadow-sm gap-1.5 text-xs bg-white", !dateRange.to && "text-muted-foreground")}>
+                                        <CalendarIcon className="h-3.5 w-3.5" />
+                                        {dateRange.to ? format(dateRange.to, "MMM dd, yyyy") : "End Date"}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0 border shadow-2xl rounded-3xl overflow-hidden z-[110]" align="end">
+                                    <Calendar
+                                        initialFocus
+                                        mode="single"
+                                        defaultMonth={dateRange.to || dateRange.from || new Date()}
+                                        selected={dateRange.to}
+                                        onSelect={(date) => setDateRange(prev => ({ ...prev, to: date }))}
+                                        className="p-4"
+                                    />
+                                </PopoverContent>
+                            </Popover>
+                        </div>
                     )}
 
                     <DropdownMenu>
@@ -457,7 +473,7 @@ export default function CounterDashboard() {
                                                     'CREDIT': 'hsl(199, 89%, 48%)',   // Cyan
                                                     'PENDING': 'hsl(0, 84%, 60%)',    // Red
                                                 };
-                                                
+
                                                 const data = (() => {
                                                     const methods = (dashboardData?.sales_by_payment_method || [])
                                                         .map((p: any) => ({
@@ -483,7 +499,7 @@ export default function CounterDashboard() {
                                                 ));
                                             })()}
                                         </Pie>
-                                        <Tooltip 
+                                        <Tooltip
                                             formatter={(value: any, name: string) => [`Rs.${Number(value).toLocaleString()}`, name]}
                                             contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', fontWeight: 'bold' }}
                                         />

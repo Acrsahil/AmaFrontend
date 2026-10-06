@@ -528,25 +528,49 @@ export default function AdminReports() {
 
           {/* Custom date picker */}
           {timeframe === "custom" && (
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className={cn("h-10 rounded-xl border-2 font-bold px-3 text-xs border-slate-100 shadow-sm gap-1.5", !dateRange.from && "text-muted-foreground")}>
-                  <CalendarIcon className="h-3.5 w-3.5" />
-                  {dateRange.from ? (dateRange.to ? `${format(dateRange.from, "MMM d")} – ${format(dateRange.to, "MMM d, y")}` : format(dateRange.from, "MMM d, y")) : "Pick Dates"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0 border-none shadow-2xl rounded-3xl overflow-hidden" align="end">
-                <Calendar
-                  initialFocus
-                  mode="range"
-                  defaultMonth={dateRange.from}
-                  selected={{ from: dateRange.from, to: dateRange.to }}
-                  onSelect={(range: any) => setDateRange({ from: range?.from, to: range?.to })}
-                  numberOfMonths={2}
-                  className="p-4"
-                />
-              </PopoverContent>
-            </Popover>
+            <div className="flex items-center gap-2">
+              {/* Start Date Picker */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className={cn("h-10 rounded-xl border-2 font-bold px-3 text-xs border-slate-100 shadow-sm gap-1.5", !dateRange.from && "text-muted-foreground")}>
+                    <CalendarIcon className="h-3.5 w-3.5" />
+                    {dateRange.from ? format(dateRange.from, "MMM d, yyyy") : "Start Date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 border-none shadow-2xl rounded-3xl overflow-hidden" align="end">
+                  <Calendar
+                    initialFocus
+                    mode="single"
+                    defaultMonth={dateRange.from || new Date()}
+                    selected={dateRange.from}
+                    onSelect={(date) => setDateRange(prev => ({ ...prev, from: date }))}
+                    className="p-4"
+                  />
+                </PopoverContent>
+              </Popover>
+
+              <span className="text-slate-400 font-bold">-</span>
+
+              {/* End Date Picker */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className={cn("h-10 rounded-xl border-2 font-bold px-3 text-xs border-slate-100 shadow-sm gap-1.5", !dateRange.to && "text-muted-foreground")}>
+                    <CalendarIcon className="h-3.5 w-3.5" />
+                    {dateRange.to ? format(dateRange.to, "MMM d, yyyy") : "End Date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 border-none shadow-2xl rounded-3xl overflow-hidden" align="end">
+                  <Calendar
+                    initialFocus
+                    mode="single"
+                    defaultMonth={dateRange.to || dateRange.from || new Date()}
+                    selected={dateRange.to}
+                    onSelect={(date) => setDateRange(prev => ({ ...prev, to: date }))}
+                    className="p-4"
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
           )}
 
           {/* Active filter chips */}

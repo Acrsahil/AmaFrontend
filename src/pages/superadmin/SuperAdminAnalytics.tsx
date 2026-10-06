@@ -149,17 +149,49 @@ export default function SuperAdminAnalytics() {
                     </DropdownMenu>
 
                     {timeframe === "custom" && (
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <Button variant="outline" className={cn("h-11 rounded-2xl border-slate-200 bg-white shadow-sm font-bold px-5 gap-3", !dateRange.from && "text-muted-foreground")}>
-                                    <CalendarIcon className="h-4 w-4" />
-                                    {dateRange.from ? (dateRange.to ? `${format(dateRange.from, "MMM dd")} - ${format(dateRange.to, "MMM dd")}` : format(dateRange.from, "MMM dd")) : "Pick Dates"}
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0 border-none shadow-2xl rounded-3xl" align="end">
-                                <Calendar mode="range" selected={{ from: dateRange.from, to: dateRange.to }} onSelect={(range: any) => setDateRange({ from: range?.from, to: range?.to })} numberOfMonths={2} className="p-4" />
-                            </PopoverContent>
-                        </Popover>
+                        <div className="flex items-center gap-2">
+                            {/* Start Date Picker */}
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" className={cn("h-11 rounded-2xl border-slate-200 bg-white shadow-sm font-bold px-5 gap-3", !dateRange.from && "text-muted-foreground")}>
+                                        <CalendarIcon className="h-4 w-4" />
+                                        {dateRange.from ? format(dateRange.from, "MMM dd, yyyy") : "Start Date"}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0 border-none shadow-2xl rounded-3xl" align="end">
+                                    <Calendar
+                                        initialFocus
+                                        mode="single"
+                                        defaultMonth={dateRange.from || new Date()}
+                                        selected={dateRange.from}
+                                        onSelect={(date) => setDateRange(prev => ({ ...prev, from: date }))}
+                                        className="p-4"
+                                    />
+                                </PopoverContent>
+                            </Popover>
+
+                            <span className="text-slate-400 font-bold">-</span>
+
+                            {/* End Date Picker */}
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" className={cn("h-11 rounded-2xl border-slate-200 bg-white shadow-sm font-bold px-5 gap-3", !dateRange.to && "text-muted-foreground")}>
+                                        <CalendarIcon className="h-4 w-4" />
+                                        {dateRange.to ? format(dateRange.to, "MMM dd, yyyy") : "End Date"}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0 border-none shadow-2xl rounded-3xl" align="end">
+                                    <Calendar
+                                        initialFocus
+                                        mode="single"
+                                        defaultMonth={dateRange.to || dateRange.from || new Date()}
+                                        selected={dateRange.to}
+                                        onSelect={(date) => setDateRange(prev => ({ ...prev, to: date }))}
+                                        className="p-4"
+                                    />
+                                </PopoverContent>
+                            </Popover>
+                        </div>
                     )}
                 </div>
             </div>

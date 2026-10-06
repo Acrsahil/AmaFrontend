@@ -245,33 +245,49 @@ export default function AdminDashboard() {
 
           {/* Custom Date Range Popover */}
           {timeframe === "custom" && (
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className={cn("h-10 sm:h-11 rounded-xl border-2 font-bold px-4 border-slate-100 shadow-sm gap-2", !dateRange.from && "text-muted-foreground")}>
-                  <CalendarIcon className="h-4 w-4" />
-                  {dateRange.from ? (
-                    dateRange.to ? (
-                      <>{format(dateRange.from, "MMM dd")} - {format(dateRange.to, "MMM dd")}</>
-                    ) : (
-                      format(dateRange.from, "MMM dd")
-                    )
-                  ) : (
-                    "Pick Dates"
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0 border-none shadow-2xl rounded-3xl overflow-hidden" align="end">
-                <Calendar
-                  initialFocus
-                  mode="range"
-                  defaultMonth={dateRange.from}
-                  selected={{ from: dateRange.from, to: dateRange.to }}
-                  onSelect={(range: any) => setDateRange({ from: range?.from, to: range?.to })}
-                  numberOfMonths={2}
-                  className="p-4"
-                />
-              </PopoverContent>
-            </Popover>
+            <div className="flex items-center gap-2">
+              {/* Start Date Picker */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className={cn("h-10 sm:h-11 rounded-xl border-2 font-bold px-4 border-slate-100 shadow-sm gap-2", !dateRange.from && "text-muted-foreground")}>
+                    <CalendarIcon className="h-4 w-4" />
+                    {dateRange.from ? format(dateRange.from, "MMM dd, yyyy") : "Start Date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 border-none shadow-2xl rounded-3xl overflow-hidden" align="end">
+                  <Calendar
+                    initialFocus
+                    mode="single"
+                    defaultMonth={dateRange.from || new Date()}
+                    selected={dateRange.from}
+                    onSelect={(date) => setDateRange(prev => ({ ...prev, from: date }))}
+                    className="p-4"
+                  />
+                </PopoverContent>
+              </Popover>
+
+              <span className="text-slate-400 font-bold">-</span>
+
+              {/* End Date Picker */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className={cn("h-10 sm:h-11 rounded-xl border-2 font-bold px-4 border-slate-100 shadow-sm gap-2", !dateRange.to && "text-muted-foreground")}>
+                    <CalendarIcon className="h-4 w-4" />
+                    {dateRange.to ? format(dateRange.to, "MMM dd, yyyy") : "End Date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 border-none shadow-2xl rounded-3xl overflow-hidden" align="end">
+                  <Calendar
+                    initialFocus
+                    mode="single"
+                    defaultMonth={dateRange.to || dateRange.from || new Date()}
+                    selected={dateRange.to}
+                    onSelect={(date) => setDateRange(prev => ({ ...prev, to: date }))}
+                    className="p-4"
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
           )}
         </div>
       </div>
@@ -537,15 +553,15 @@ export default function AdminDashboard() {
                     {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </td>
                   <td className="px-6 py-4">
-                    <StatusBadge 
-                      status={(order.payment_status || "PENDING").toLowerCase()} 
+                    <StatusBadge
+                      status={(order.payment_status || "PENDING").toLowerCase()}
                       className="h-6 px-2 text-[9px]"
                       label={
                         (order.payment_status || '').toLowerCase() === 'creadit'
                           ? `Credited by ${order.received_by_counter_name || order.received_by_waiter_name || order.created_by_name || 'User'}`
                           : (order.payment_status || '').toLowerCase() === 'waiter received'
-                          ? `Received by ${order.received_by_waiter_name || 'Waiter'}`
-                          : undefined
+                            ? `Received by ${order.received_by_waiter_name || 'Waiter'}`
+                            : undefined
                       }
                     />
                   </td>
@@ -593,14 +609,14 @@ export default function AdminDashboard() {
                 <div className="grid grid-cols-2 gap-4 text-xs font-bold uppercase tracking-widest text-slate-400">
                   <div>
                     <p>Status</p>
-                    <StatusBadge 
+                    <StatusBadge
                       status={selectedOrder.payment_status.toLowerCase()}
                       label={
                         selectedOrder.payment_status.toLowerCase() === 'creadit'
                           ? `Credited by ${selectedOrder.received_by_counter_name || selectedOrder.received_by_waiter_name || selectedOrder.created_by_name || 'User'}`
                           : selectedOrder.payment_status.toLowerCase() === 'waiter received'
-                          ? `Received by ${selectedOrder.received_by_waiter_name || 'Waiter'}`
-                          : undefined
+                            ? `Received by ${selectedOrder.received_by_waiter_name || 'Waiter'}`
+                            : undefined
                       }
                     />
                   </div>
